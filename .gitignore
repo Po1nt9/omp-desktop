@@ -58,3 +58,4 @@ temp/
 
 # Local agent / IDE workspaces
 .claude/
+.superpowers/
