@@ -15,6 +15,12 @@ function requireValue(actual, expected, field) {
   if (actual !== expected) throw new Error(`${field} must be ${expected}`);
 }
 
+function requirePublicationState(actual, field) {
+  if (actual !== "planned" && actual !== "published") {
+    throw new Error(`${field} must be planned or published`);
+  }
+}
+
 function git(directory, args) {
   return execFileSync("git", ["-C", directory, ...args], {
     encoding: "utf8",
@@ -36,13 +42,13 @@ export function validateUpstreams(directory) {
   requireValue(data.grokApp?.importCommit, GROK_BASE, "grokApp.importCommit");
   requireValue(data.schemaVersion, 1, "schemaVersion");
   requireValue(data.desktop?.repository, DESKTOP_REPOSITORY, "desktop.repository");
-  requireValue(data.desktop?.publicationState, "planned", "desktop.publicationState");
+  requirePublicationState(data.desktop?.publicationState, "desktop.publicationState");
   requireValue(data.grokApp?.remote, GROK_REMOTE, "grokApp.remote");
   requireValue(data.grokApp?.importedAt, "2026-07-28", "grokApp.importedAt");
   requireValue(data.grokApp?.historyMode, "two-parent-merge", "grokApp.historyMode");
   requireValue(data.omp?.officialRemote, OMP_OFFICIAL_REMOTE, "omp.officialRemote");
   requireValue(data.omp?.forkRemote, OMP_FORK_REMOTE, "omp.forkRemote");
-  requireValue(data.omp?.forkPublicationState, "planned", "omp.forkPublicationState");
+  requirePublicationState(data.omp?.forkPublicationState, "omp.forkPublicationState");
   requireValue(data.omp?.submodulePath, OMP_PATH, "omp.submodulePath");
   requireValue(data.omp?.pinnedCommit, OMP_BASE, "omp.pinnedCommit");
   requireValue(data.omp?.officialBaseCommit, OMP_BASE, "omp.officialBaseCommit");
@@ -62,7 +68,16 @@ export function checkRepository(root) {
   const data = validateUpstreams(provenanceDirectory);
   validatePatchLedger(provenanceDirectory);
 
-  requireValue(optionalRemote(root, "origin"), null, "superproject origin while desktop publication is planned");
+  const superprojectOrigin = optionalRemote(root, "origin");
+  if (data.desktop.publicationState === "published") {
+    requireValue(
+      superprojectOrigin,
+      data.desktop.repository,
+      "superproject origin while desktop publication is published",
+    );
+  } else {
+    requireValue(superprojectOrigin, null, "superproject origin while desktop publication is planned");
+  }
   requireValue(git(root, ["remote", "get-url", "grok-app-upstream"]), data.grokApp.remote, "grok-app-upstream remote");
   git(root, ["merge-base", "--is-ancestor", data.grokApp.importCommit, "HEAD"]);
 
@@ -81,11 +96,18 @@ export function checkRepository(root) {
     ".gitmodules submodule URL",
   );
 
-  return { publicationConcerns: ["desktop.repository", "omp.forkRemote"] };
+  const publicationConcerns = [];
+  if (data.desktop.publicationState === "planned") publicationConcerns.push("desktop.repository");
+  if (data.omp.forkPublicationState === "planned") publicationConcerns.push("omp.forkRemote");
+  return { publicationConcerns };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const result = checkRepository(process.cwd());
   console.log("Provenance checks passed: frozen records, remotes, gitlink, and submodule checkout match.");
-  console.log(`Publication pending: ${result.publicationConcerns.join(", ")}`);
+  if (result.publicationConcerns.length > 0) {
+    console.log(`Publication pending: ${result.publicationConcerns.join(", ")}`);
+  } else {
+    console.log("Publication verified: desktop.repository and omp.forkRemote are published.");
+  }
 }

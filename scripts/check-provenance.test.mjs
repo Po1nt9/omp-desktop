@@ -63,13 +63,23 @@ async function writeUpstreams(t, mutate) {
   return directory;
 }
 
-async function makeRepositoryFixture(t) {
+async function makeRepositoryFixture(
+  t,
+  { desktopPublicationState = "published", ompForkPublicationState = "published", addOrigin = true } = {},
+) {
   const directory = await makeTempDirectory(t);
   const fixture = path.join(directory, "repository");
 
   execFileSync("git", ["clone", "--no-recurse-submodules", root, fixture], { stdio: "pipe" });
   runGit(fixture, "remote", "remove", "origin");
+  if (addOrigin) runGit(fixture, "remote", "add", "origin", desktopRemote);
   runGit(fixture, "remote", "add", "grok-app-upstream", grokRemote);
+
+  const upstreams = baseline();
+  upstreams.desktop.publicationState = desktopPublicationState;
+  upstreams.omp.forkPublicationState = ompForkPublicationState;
+  await writeFile(path.join(fixture, "provenance", "upstreams.json"), JSON.stringify(upstreams));
+
   runGit(
     fixture,
     "-c",
@@ -117,17 +127,32 @@ test("rejects an incorrect patch ledger base commit", async (t) => {
   assert.throws(() => validatePatchLedger(directory), /omp-patches\.baseCommit/);
 });
 
-test("requires publication records to remain honest while repositories are unpublished", async (t) => {
-  const directory = await writeUpstreams(t, (data) => {
+test("accepts both planned and published publication records", async (t) => {
+  const publishedDirectory = await writeUpstreams(t, (data) => {
     data.desktop.publicationState = "published";
+    data.omp.forkPublicationState = "published";
   });
-  assert.throws(() => validateUpstreams(directory), /desktop\.publicationState/);
+  assert.doesNotThrow(() => validateUpstreams(publishedDirectory));
+
+  const plannedDirectory = await writeUpstreams(t, () => {});
+  assert.doesNotThrow(() => validateUpstreams(plannedDirectory));
 });
 
-test("accepts a network-free local repository fixture", async (t) => {
+test("accepts published repositories with the expected superproject origin", async (t) => {
   const { fixture } = await makeRepositoryFixture(t);
   const result = checkRepository(fixture);
-  assert.deepEqual(result.publicationConcerns, ["desktop.repository", "omp.forkRemote"]);
+  assert.deepEqual(result.publicationConcerns, []);
+});
+
+test("rejects a missing superproject origin while desktop publication is published", async (t) => {
+  const { fixture } = await makeRepositoryFixture(t, { addOrigin: false });
+  assert.throws(() => checkRepository(fixture), /superproject origin while desktop publication is published/);
+});
+
+test("rejects an incorrect superproject origin while desktop publication is published", async (t) => {
+  const { fixture } = await makeRepositoryFixture(t);
+  runGit(fixture, "remote", "set-url", "origin", "https://example.invalid/omp-desktop.git");
+  assert.throws(() => checkRepository(fixture), /superproject origin while desktop publication is published/);
 });
 
 test("rejects an incorrect committed gitlink", async (t) => {
@@ -171,7 +196,9 @@ test("rejects an incorrect .gitmodules URL", async (t) => {
 });
 
 test("rejects an unexpected superproject origin while publication is planned", async (t) => {
-  const { fixture } = await makeRepositoryFixture(t);
-  runGit(fixture, "remote", "add", "origin", desktopRemote);
+  const { fixture } = await makeRepositoryFixture(t, {
+    desktopPublicationState: "planned",
+    ompForkPublicationState: "planned",
+  });
   assert.throws(() => checkRepository(fixture), /superproject origin while desktop publication is planned/);
 });

@@ -4,11 +4,13 @@
 
 ## Remote roles and publication state
 
-- The desktop superproject's intended `origin` is the writable team repository. It is not configured yet because that repository is still planned, not published.
+- The desktop superproject's `origin` is the published writable team repository recorded by `desktop.repository`.
 - Superproject `grok-app-upstream` points to the read-only Grok App upstream.
-- Submodule `origin` is configured to the planned writable team Fork URL. The URL is recorded locally, but remote publication is not yet complete.
+- Submodule `origin` is the published writable team Fork recorded by `omp.forkRemote`.
 - Submodule `upstream` points to the read-only official OMP repository.
 
-The checker validates local remote configuration, the committed gitlink, the checked-out submodule commit, and both frozen JSON records without contacting GitHub. A successful local check can therefore still report publication concerns. Remote publication remains a separate release prerequisite.
+The checker validates publication-state-dependent local remote configuration, the committed gitlink, the checked-out submodule commit, and both frozen JSON records without contacting GitHub. When desktop publication is `published`, superproject `origin` must exactly match `desktop.repository`; while it is `planned`, any unexpected `origin` is rejected. OMP publication continues to be validated locally through the `.gitmodules` URL and nested repository remotes.
+
+Both recorded repositories are now published, and the pinned OMP commit is available from the Fork. The Task 14 remote-publication blocker is resolved.
 
 Every OMP commit that is not part of official upstream history requires an entry in `omp-patches.json` describing the local patch.

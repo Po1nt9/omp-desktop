@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "desktop": {
     "repository": "https://github.com/Po1nt9/omp-desktop.git",
-    "publicationState": "planned"
+    "publicationState": "published"
   },
   "grokApp": {
     "remote": "https://github.com/RongleCat/grok-app.git",
@@ -13,7 +13,7 @@
   "omp": {
     "officialRemote": "https://github.com/can1357/oh-my-pi.git",
     "forkRemote": "https://github.com/Po1nt9/oh-my-pi.git",
-    "forkPublicationState": "planned",
+    "forkPublicationState": "published",
     "submodulePath": "runtime/oh-my-pi",
     "pinnedCommit": "667111575ebba136dadfd6989379e7f67e0d40d9",
     "officialBaseCommit": "667111575ebba136dadfd6989379e7f67e0d40d9"
