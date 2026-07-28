@@ -269,7 +269,7 @@ import {
   SIDEBAR_SESSION_ROW_GAP,
   SIDEBAR_SESSION_ROW_HEIGHT,
 } from "@/lib/virtualList";
-import { GrokLogo } from "@/components/GrokLogo";
+import { OmpLogo } from "@/components/OmpLogo";
 import { SetupWizard, type SetupCliInfo } from "@/components/SetupWizard";
 import {
   ComposerEditor,
@@ -408,11 +408,8 @@ import {
   resolveWelcomeBrandKind,
   saveCachedSuperGrokBrand,
   superGrokBrandKind,
-} from "@/lib/accountUi";
-import {
-  SuperGrokMark,
   type SuperGrokBrandKind,
-} from "@/components/SuperGrokMark";
+} from "@/lib/accountUi";
 import { Tip } from "@/components/ui/tooltip";
 import {
   WindowControls,
@@ -8762,7 +8759,7 @@ export default function App() {
           <div className="setup-gate__center">
             <div className="setup-hero">
               <div className="setup-logo setup-logo--spin">
-                <GrokLogo size={44} />
+                <OmpLogo size={44} />
               </div>
               <h1 className="setup-title">{tr("setup.title")}</h1>
               <p className="setup-subtitle">{tr("setup.detecting")}</p>
@@ -9211,8 +9208,8 @@ export default function App() {
           {/* Row 2: brand + search (Codex: title left, search right) */}
           <div className="sidebar-brand-row">
             <div className="sidebar-brand-row__left">
-              <GrokLogo size={20} />
-              <span>Grok</span>
+              <OmpLogo size={20} />
+              <span>OMP</span>
             </div>
             <Tip label={tr("sidebar.search")}>
               <button
@@ -10494,17 +10491,7 @@ export default function App() {
           >
             {welcomeSession && welcomeBrandKind ? (
               <div className="composer-welcome-mark">
-                <SuperGrokMark
-                  kind={welcomeBrandKind}
-                  title={
-                    customRouteActive
-                      ? "SuperGrok"
-                      : account?.billing?.subscriptionTier?.trim() ||
-                        (welcomeBrandKind === "heavy"
-                          ? "SuperGrok Heavy"
-                          : "SuperGrok")
-                  }
-                />
+                <OmpLogo size={64} />
               </div>
             ) : null}
             {perm ? (

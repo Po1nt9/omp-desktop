@@ -28,7 +28,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 /// Product AUMID — must match `identifier` in tauri.conf.json / NSIS shortcuts.
-const APP_USER_MODEL_ID: &str = "com.grokapp.desktop";
+const APP_USER_MODEL_ID: &str = "io.github.po1nt9.omp-desktop";
 
 /// Call once early in process startup (before or right after creating the main window).
 pub fn set_process_app_user_model_id() {

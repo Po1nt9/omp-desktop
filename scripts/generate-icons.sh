@@ -1,47 +1,27 @@
 #!/usr/bin/env bash
-# Generate Tauri app icons + tray icons from two separate sources.
-# Do NOT mix pipelines:
-#   App dock / .exe / .icns  ←  icon (1).png | icon-source.png | icon.png
-#   Menu bar / system tray  ←  docs/svg/logo.svg  (black template, retina 36px)
+# Generate Tauri app icons + tray icons from a single original master.
+#   All artwork (app dock/.exe/.icns + menu-bar tray)  ←  src-tauri/icons/omp-mark.svg
+# OMP Desktop ships one original black/white/orange geometric mark; do not
+# reintroduce per-surface sources.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ICONS="$ROOT/src-tauri/icons"
-SVG="$ROOT/docs/svg/logo.svg"
-# Prefer explicit master artwork; fall back to existing icon.png / icon-source.png
-SRC_APP=""
-for candidate in \
-  "$ICONS/icon (1).png" \
-  "$ICONS/icon-source.png" \
-  "$ICONS/icon.png"
-do
-  if [[ -f "$candidate" ]]; then
-    SRC_APP="$candidate"
-    break
-  fi
-done
+SVG="$ICONS/omp-mark.svg"
 
-if [[ -z "$SRC_APP" ]]; then
-  echo "Missing app icon source: icon (1).png, icon-source.png, or icon.png" >&2
-  exit 1
-fi
 if [[ ! -f "$SVG" ]]; then
-  echo "Missing tray source: docs/svg/logo.svg" >&2
+  echo "Missing master mark: $SVG" >&2
   exit 1
 fi
 
 command -v sips >/dev/null || { echo "sips required (macOS)" >&2; exit 1; }
-if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
-  echo "ImageMagick (magick/convert) required for SVG → tray PNG" >&2
-  exit 1
-fi
-IM=magick
-command -v magick >/dev/null 2>&1 || IM=convert
+command -v iconutil >/dev/null || { echo "iconutil required (macOS)" >&2; exit 1; }
+command -v python3 >/dev/null || { echo "python3 required" >&2; exit 1; }
 
-# Keep a stable master copy for regenerations (skip no-op self-copy)
-if [[ "$(cd "$(dirname "$SRC_APP")" && pwd)/$(basename "$SRC_APP")" != "$ICONS/icon-source.png" ]]; then
-  cp "$SRC_APP" "$ICONS/icon-source.png"
-fi
+# ── Rasterize the SVG master to a 1024px RGBA source ────────────────────────
 MASTER="$ICONS/icon-source.png"
+sips -s format png "$SVG" --out "$MASTER" >/dev/null
+# sips keeps intrinsic SVG size; normalize to 1024 so every derivative is sharp.
+sips -z 1024 1024 "$MASTER" >/dev/null
 
 # App icons (full-color artwork)
 sips -z 512 512 "$MASTER" --out "$ICONS/icon.png" >/dev/null
@@ -72,78 +52,55 @@ done
 iconutil -c icns "$ICONSET" -o "$ICONS/icon.icns"
 rm -rf "$ICONSET"
 
-$IM "$MASTER" -define icon:auto-resize=256,128,64,48,32,24,16 "$ICONS/icon.ico"
-
-# ── Tray / menu-bar from logo.svg ───────────────────────────────────────────
-# tray-icon crate sizes the NSImage to 18pt tall. Embed 36px (@2x) so retina
-# is sharp. Pad content ~14% so the mark doesn't fill the bar as a solid blob.
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
-python3 - <<'PY' "$SVG" "$TMP/logo-black.svg"
-import re, sys
+# .ico — Windows multi-resolution icon via PIL
+python3 - <<'PY' "$ICONS" "$MASTER"
+import sys
 from pathlib import Path
-t = Path(sys.argv[1]).read_text()
-t = t.replace("currentColor", "#000000")
-t = re.sub(r'\sclass="[^"]*"', "", t)
-Path(sys.argv[2]).write_text(t)
+from PIL import Image
+
+icons, master = Path(sys.argv[1]), Path(sys.argv[2])
+src = Image.open(master).convert("RGBA")
+sizes = [256, 128, 64, 48, 32, 24, 16]
+frames = [src.resize((s, s), Image.Resampling.LANCZOS) for s in sizes]
+frames[0].save(icons / "icon.ico", format="ICO", sizes=[(s, s) for s in sizes], append_images=frames[1:])
 PY
 
-$IM -background none -density 400 "$TMP/logo-black.svg" -resize 512x512 "$TMP/hi.png"
-
-python3 - <<'PY' "$TMP" "$ICONS"
+# ── Tray / menu-bar from the same master ─────────────────────────────────────
+# tray-icon crate sizes the NSImage to 18pt tall. Embed 36px (@2x) so retina
+# is sharp. The OMP mark already has its own dark rounded field, so render it
+# faithfully without forcing a flat-black silhouette.
+python3 - <<'PY' "$ICONS" "$MASTER"
 from pathlib import Path
 import sys
 from PIL import Image
 
-tmp, icons = Path(sys.argv[1]), Path(sys.argv[2])
-hi = Image.open(tmp / "hi.png").convert("RGBA")
-pix = hi.load()
-w, h = hi.size
-xs, ys = [], []
-for y in range(h):
-    for x in range(w):
-        if pix[x, y][3] > 8:
-            xs.append(x)
-            ys.append(y)
-if not xs:
-    raise SystemExit("SVG raster empty — check logo.svg / currentColor")
-x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-m = 4
-crop = hi.crop((max(0, x0 - m), max(0, y0 - m), min(w, x1 + 1 + m), min(h, y1 + 1 + m)))
-
-def pack(src: Image.Image, size: int, pad_ratio: float) -> Image.Image:
-    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    inner = max(1, int(round(size * (1.0 - 2 * pad_ratio))))
-    cw, ch = src.size
-    scale = min(inner / cw, inner / ch)
-    nw = max(1, int(round(cw * scale)))
-    nh = max(1, int(round(ch * scale)))
-    resized = src.resize((nw, nh), Image.Resampling.LANCZOS)
-    _r, _g, _b, a = resized.split()
-    a = a.point(lambda v: min(255, int(v * 1.15)) if v > 12 else 0)
-    black = Image.new("L", resized.size, 0)
-    resized = Image.merge("RGBA", (black, black, black, a))
-    ox, oy = (size - nw) // 2, (size - nh) // 2
-    canvas.alpha_composite(resized, (ox, oy))
-    return canvas
+icons, master = Path(sys.argv[1]), Path(sys.argv[2])
+src = Image.open(master).convert("RGBA")
 
 outs = {
-    "tray-icon.png": (36, 0.14),
-    "tray-icon@2x.png": (36, 0.14),
-    "tray-icon-18.png": (18, 0.14),
-    "tray-16.png": (16, 0.12),
-    "tray-32.png": (32, 0.12),
-    "tray-source.png": (128, 0.10),
+    "tray-icon.png": (36, 0.0),
+    "tray-icon@2x.png": (36, 0.0),
+    "tray-icon-18.png": (18, 0.0),
+    "tray-16.png": (16, 0.0),
+    "tray-32.png": (32, 0.0),
+    "tray-source.png": (128, 0.0),
 }
-for name, (sz, pad) in outs.items():
-    im = pack(crop, sz, pad)
-    im.save(icons / name, "PNG")
-    n = sum(1 for p in im.getdata() if p[3] > 20)
+for name, (sz, pad_ratio) in outs.items():
+    inner = max(1, int(round(sz * (1.0 - 2 * pad_ratio))))
+    resized = src.resize((inner, inner), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", (sz, sz), (0, 0, 0, 0))
+    ox = oy = (sz - inner) // 2
+    canvas.alpha_composite(resized, (ox, oy))
+    canvas.save(icons / name, "PNG")
+    n = sum(1 for p in canvas.getdata() if p[3] > 20)
     print(f"{name}: {sz}x{sz} opaque={n}")
     if sz <= 36 and n < 40:
         raise SystemExit(f"{name} looks too empty (opaque={n})")
 PY
 
-echo "OK — app icons from: $SRC_APP"
-echo "OK — tray icons from: $SVG (36px @2x for 18pt menu bar)"
-echo "Remember: dock uses icon*.png/icns/ico; tray uses tray-*.png only."
+# Public / assets logo (square app mark for web surfaces)
+cp "$ICONS/icon.png" "$ROOT/public/logo.png"
+cp "$ICONS/128x128@2x.png" "$ROOT/assets/logo.png"
+
+echo "OK — all artwork generated from: omp-mark.svg"
+echo "dock/exe: icon*.png/icns/ico; tray: tray-*.png; web: public/logo.png, assets/logo.png"

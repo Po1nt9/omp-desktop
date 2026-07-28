@@ -1,17 +1,17 @@
 {
-  "name": "grok-app",
+  "name": "omp-desktop",
   "private": true,
   "version": "0.1.9",
-  "description": "Desktop workbench for Grok Build CLI (English-first)",
+  "description": "Open-source desktop Agent application powered by OMP",
   "author": "RongleCat",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/RongleCat/grok-app.git"
+    "url": "git+https://github.com/Po1nt9/omp-desktop.git"
   },
-  "homepage": "https://github.com/RongleCat/grok-app",
+  "homepage": "https://github.com/Po1nt9/omp-desktop#readme",
   "bugs": {
-    "url": "https://github.com/RongleCat/grok-app/issues"
+    "url": "https://github.com/Po1nt9/omp-desktop/issues"
   },
   "type": "module",
   "scripts": {

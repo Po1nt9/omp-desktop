@@ -1,12 +1,15 @@
 [package]
-name = "grok-app"
+name = "omp-desktop"
 version = "0.1.9"
-description = "Grok — desktop workbench for Grok Build CLI"
-authors = ["RongleCat"]
+description = "Open-source desktop Agent application powered by OMP"
+authors = ["Po1nt9", "RongleCat"]
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/Po1nt9/omp-desktop"
+homepage = "https://github.com/Po1nt9/omp-desktop"
 
 [lib]
-name = "grok_app_lib"
+name = "omp_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -64,17 +64,19 @@ describe("window chrome", () => {
     expect(body).toMatch(/ensure_main_window_shell_integration/);
     expect(body).toMatch(/set_main_window_skip_taskbar/);
     const conf = JSON.parse(readFileSync(CONF_PATH, "utf8")) as { identifier?: string };
-    expect(conf.identifier).toBe("com.grokapp.desktop");
-    expect(body).toContain("com.grokapp.desktop");
+    expect(conf.identifier).toBe("io.github.po1nt9.omp-desktop");
+    expect(body).toContain("io.github.po1nt9.omp-desktop");
   });
 
-  it("base product identity is Grok", () => {
+  it("base product identity is OMP Desktop", () => {
     const conf = JSON.parse(readFileSync(CONF_PATH, "utf8")) as {
       productName?: string;
+      identifier?: string;
       app: { windows: Array<{ title?: string }> };
     };
-    expect(conf.productName).toBe("Grok");
-    expect(conf.app.windows[0]!.title).toBe("Grok");
+    expect(conf.productName).toBe("OMP Desktop");
+    expect(conf.identifier).toBe("io.github.po1nt9.omp-desktop");
+    expect(conf.app.windows[0]?.title).toBe("OMP Desktop");
   });
 
   it("uses window-vibrancy for native frosted glass on macOS", () => {

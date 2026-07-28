@@ -1,0 +1,4 @@
+74fa5503828002011dfdf07fcce1c004291a87ea34fced1f7bbdd25c0c225c67  src-tauri/icons/omp-mark.svg
+e616c1a254f24388e5c641a7fce9c7716ffc2ae4dabc4d680c8c59b8950eba86  public/logo.png
+8ff08a3a9a86a9f5826fe3c8e4ce5e5968561259cec29e93e0eca1ba1b98f5d3  src-tauri/icons/icon.icns
+91e14811141f6f16efccd54690547b2c92996cbe3331679231dea611f11be3de  src-tauri/icons/icon.ico

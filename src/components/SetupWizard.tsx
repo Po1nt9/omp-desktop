@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { GrokLogo } from "@/components/GrokLogo";
+import { OmpLogo } from "@/components/OmpLogo";
 import { Select } from "@/components/Select";
 import { Spinner } from "@/components/ui/spinner";
 import * as api from "@/lib/api";
@@ -390,7 +390,7 @@ export function SetupWizard({
               (installing || probing ? " setup-logo--spin" : " setup-logo--pulse")
             }
           >
-            <GrokLogo size={44} />
+            <OmpLogo size={44} />
           </div>
           <h1 className="setup-title">{tr("setup.title")}</h1>
           <p className="setup-subtitle">{tr("setup.subtitle")}</p>

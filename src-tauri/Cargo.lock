@@ -1723,7 +1723,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "grok-app"
+name = "omp-desktop"
 version = "0.1.9"
 dependencies = [
  "arboard",

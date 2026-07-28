@@ -1258,22 +1258,21 @@ html.platform-mac[data-theme="light"] .settings-page__content {
   transform-origin: center center;
 }
 
-/* Brand mark: theme via currentColor (dark → light glyph, light → dark glyph) */
-.g-icon--grok-mark,
-.grok-logo {
+/* Original OMP brand mark preserves its fixed near-black, off-white, and orange palette. */
+.g-icon--omp-mark,
+.omp-logo {
   color: var(--text-primary);
 }
 
-.g-icon--grok-mark svg,
-.grok-logo svg {
+.g-icon--omp-mark svg,
+.omp-logo svg {
   display: block;
   width: 100%;
   height: 100%;
-  fill: currentColor;
 }
 
-.sidebar-brand-row__left .grok-logo,
-.sidebar-brand-row__left .g-icon--grok-mark {
+.sidebar-brand-row__left .omp-logo,
+.sidebar-brand-row__left .g-icon--omp-mark {
   color: inherit;
 }
 
@@ -1325,7 +1324,7 @@ html.platform-mac[data-theme="light"] .settings-page__content {
   animation: g-icon-nudge 0.4s cubic-bezier(0.34, 1.2, 0.64, 1) 1;
 }
 
-@keyframes grok-mark-spin {
+@keyframes omp-mark-spin {
   from {
     transform: rotate(0deg);
   }
@@ -1439,7 +1438,7 @@ html.platform-mac[data-theme="light"] .settings-page__content {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .g-icon--grok-mark svg,
+  .g-icon--omp-mark svg,
   .nav-item:hover .g-icon--anim svg,
   .nav-new:hover .g-icon--anim svg,
   .brand__collapse:hover .g-icon--anim svg,
@@ -1614,7 +1613,7 @@ html.platform-mac[data-theme="light"] .settings-page__content {
   letter-spacing: -0.02em;
 }
 
-.brand .grok-logo {
+.brand .omp-logo {
   color: var(--text-primary);
   flex-shrink: 0;
 }
@@ -7119,54 +7118,10 @@ button.settings-wallpaper__preview:hover:not(:disabled) {
   contain: layout style;
 }
 
-/* SuperGrok / SuperGrok Heavy wordmarks (theme via data-theme tokens).
- * Inline SVG — no image fetch; paint should be immediate once mounted. */
-.supergrok-mark {
+/* Original OMP welcome mark. */
+.composer-welcome-mark .omp-logo {
   display: block;
-  height: auto;
-  max-width: min(280px, 72vw);
-  color: var(--text-primary);
-  /* Avoid FOUC-style fade; logo should snap in */
-  opacity: 1;
-}
-
-.supergrok-mark--standard {
-  width: min(168px, 48vw);
-}
-
-.supergrok-mark--heavy {
-  width: min(280px, 78vw);
-}
-
-.supergrok-mark__ink {
-  fill: currentColor;
-}
-
-/* HEAVY pill — matches official light/dark treatment (Image reference) */
-.supergrok-mark__badge {
-  fill: #313235;
-}
-
-.supergrok-mark__badge-stroke {
-  fill: none;
-  stroke: transparent;
-  stroke-width: 1;
-}
-
-.supergrok-mark__badge-text {
-  fill: #b5b5b5;
-}
-
-[data-theme="light"] .supergrok-mark__badge {
-  fill: #f3f3f1;
-}
-
-[data-theme="light"] .supergrok-mark__badge-stroke {
-  stroke: rgba(0, 0, 0, 0.06);
-}
-
-[data-theme="light"] .supergrok-mark__badge-text {
-  fill: #646362;
+  flex-shrink: 0;
 }
 
 /* Context bar + composer share width; tight gap when bar is present */

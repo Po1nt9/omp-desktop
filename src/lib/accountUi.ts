@@ -5,7 +5,7 @@ import type {
   AccountStatus,
   BillingSnapshot,
 } from "./api";
-import type { SuperGrokBrandKind } from "@/components/SuperGrokMark";
+export type SuperGrokBrandKind = "supergrok" | "heavy";
 
 export function accountDisplayName(
   profile: AccountProfile,

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">OMP</title>
+  <rect width="512" height="512" rx="112" fill="#111318"/>
+  <path d="M104 152h112v208H104zM136 184v144h48V184z" fill="#f3f4f6" fill-rule="evenodd"/>
+  <path d="M232 152h48l40 76 40-76h48v208h-48V240l-40 72-40-72v120h-48z" fill="#f06a3c"/>
+  <path d="M424 152h-48v208h48V248h24c40 0 64-18 64-48s-24-48-64-48zm0 40h22c12 0 18 3 18 8s-6 8-18 8h-22z" transform="translate(-24)" fill="#f3f4f6"/>
+</svg>
