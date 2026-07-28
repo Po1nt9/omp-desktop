@@ -8,9 +8,9 @@ export type MessageKey = keyof typeof en;
 
 const en = {
   // App chrome
-  "app.name": "Grok",
+  "app.name": "OMP",
   "app.tagline": "MIT · Unofficial · Sister project grok-go",
-  "app.versionFooter": "Grok v0.1.9 · MIT · Unofficial · Sister project grok-go",
+  "app.versionFooter": "OMP v0.1.9 · MIT · Unofficial · Sister project grok-go",
 
   // Window chrome (Windows self-drawn controls)
   "window.minimize": "Minimize",
@@ -134,7 +134,7 @@ const en = {
   "message.nodes.prev": "Previous message",
   "message.nodes.next": "Next message",
   "message.nodes.user": "You",
-  "message.nodes.assistant": "Grok",
+  "message.nodes.assistant": "OMP",
   "message.nodes.count": "{current} / {total}",
 
   // Main
@@ -1193,7 +1193,7 @@ const en = {
   "account.importChatOk": "Imported “{title}”",
   "account.importChatFailed": "Import failed",
 
-  "onboarding.welcome": "Welcome to Grok",
+  "onboarding.welcome": "Welcome to OMP",
   "onboarding.body":
     "MIT · Unofficial. Pick an account path, or skip into the shell.",
   "onboarding.official": "Official login / Official key",
@@ -1210,7 +1210,7 @@ const en = {
   "onboarding.continue": "Continue",
 
   // First-run setup gate (full-screen wizard)
-  "setup.title": "Welcome to Grok",
+  "setup.title": "Welcome to OMP",
   "setup.subtitle": "MIT · Unofficial desktop workbench for Grok Build",
   "setup.step.runtime": "Runtime",
   "setup.step.account": "Account",
@@ -1261,7 +1261,7 @@ const en = {
   "setup.ready.cliOk": "Grok Build",
   "setup.ready.authOk": "Account connected",
   "setup.ready.authSkip": "Account later",
-  "setup.ready.enter": "Enter Grok",
+  "setup.ready.enter": "Enter OMP",
   "setup.error": "Something went wrong",
   "setup.networkHint": "Network error — try another mirror or the manual command.",
 
@@ -2121,9 +2121,9 @@ const en = {
 } as const;
 
 const zh: Record<MessageKey, string> = {
-  "app.name": "Grok",
+  "app.name": "OMP",
   "app.tagline": "MIT · 非 xAI 官方 · 姐妹项目 grok-go",
-  "app.versionFooter": "Grok v0.1.9 · MIT · 非 xAI 官方 · 姐妹项目 grok-go",
+  "app.versionFooter": "OMP v0.1.9 · MIT · 非 xAI 官方 · 姐妹项目 grok-go",
 
   "window.minimize": "最小化",
   "window.maximize": "最大化",
@@ -2242,7 +2242,7 @@ const zh: Record<MessageKey, string> = {
   "message.nodes.prev": "上一条消息",
   "message.nodes.next": "下一条消息",
   "message.nodes.user": "你",
-  "message.nodes.assistant": "Grok",
+  "message.nodes.assistant": "OMP",
   "message.nodes.count": "{current} / {total}",
 
   "main.rightPane": "文件栏",
@@ -3270,7 +3270,7 @@ const zh: Record<MessageKey, string> = {
   "account.importChatOk": "已导入「{title}」",
   "account.importChatFailed": "导入失败",
 
-  "onboarding.welcome": "欢迎使用 Grok",
+  "onboarding.welcome": "欢迎使用 OMP",
   "onboarding.body": "MIT · 非 xAI 官方。选择一种账户方式，或跳过先进壳。",
   "onboarding.official": "登录官方 / Official key",
   "onboarding.officialHint": "浏览器 OAuth 或粘贴 key（永不写入日志）",
@@ -3285,7 +3285,7 @@ const zh: Record<MessageKey, string> = {
   "onboarding.skip": "跳过",
   "onboarding.continue": "继续",
 
-  "setup.title": "欢迎使用 Grok",
+  "setup.title": "欢迎使用 OMP",
   "setup.subtitle": "MIT · 非官方 · 本机 Grok Build 桌面指挥台",
   "setup.step.runtime": "运行时",
   "setup.step.account": "账户",
@@ -3336,7 +3336,7 @@ const zh: Record<MessageKey, string> = {
   "setup.ready.cliOk": "Grok Build",
   "setup.ready.authOk": "账户已连接",
   "setup.ready.authSkip": "账户稍后配置",
-  "setup.ready.enter": "进入 Grok",
+  "setup.ready.enter": "进入 OMP",
   "setup.error": "出错了",
   "setup.networkHint": "网络异常 — 可换镜像或使用手动命令。",
 

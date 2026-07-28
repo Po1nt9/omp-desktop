@@ -2,9 +2,9 @@
 import type { MessageKey } from "./messages";
 
 export const zhTW: Record<MessageKey, string> = {
-  "app.name": "Grok",
+  "app.name": "OMP",
   "app.tagline": "MIT · 非 xAI 官方 · 姊妹專案 grok-go",
-  "app.versionFooter": "Grok v0.1.9 · MIT · 非 xAI 官方 · 姊妹專案 grok-go",
+  "app.versionFooter": "OMP v0.1.9 · MIT · 非 xAI 官方 · 姊妹專案 grok-go",
 
   "window.minimize": "最小化",
   "window.maximize": "最大化",
@@ -123,7 +123,7 @@ export const zhTW: Record<MessageKey, string> = {
   "message.nodes.prev": "上一則訊息",
   "message.nodes.next": "下一則訊息",
   "message.nodes.user": "你",
-  "message.nodes.assistant": "Grok",
+  "message.nodes.assistant": "OMP",
   "message.nodes.count": "{current} / {total}",
 
   "main.rightPane": "檔案欄",
@@ -1151,7 +1151,7 @@ export const zhTW: Record<MessageKey, string> = {
   "account.importChatOk": "已匯入「{title}」",
   "account.importChatFailed": "匯入失敗",
 
-  "onboarding.welcome": "歡迎使用 Grok",
+  "onboarding.welcome": "歡迎使用 OMP",
   "onboarding.body": "MIT · 非 xAI 官方。選擇一種帳戶方式，或跳過先進入介面。",
   "onboarding.official": "登入官方 / Official key",
   "onboarding.officialHint": "瀏覽器 OAuth 或貼上 key（永不寫入日誌）",
@@ -1166,7 +1166,7 @@ export const zhTW: Record<MessageKey, string> = {
   "onboarding.skip": "跳過",
   "onboarding.continue": "繼續",
 
-  "setup.title": "歡迎使用 Grok",
+  "setup.title": "歡迎使用 OMP",
   "setup.subtitle": "MIT · 非官方 · 本機 Grok Build 桌面控制台",
   "setup.step.runtime": "執行環境",
   "setup.step.account": "帳戶",
@@ -1217,7 +1217,7 @@ export const zhTW: Record<MessageKey, string> = {
   "setup.ready.cliOk": "Grok Build",
   "setup.ready.authOk": "帳戶已連線",
   "setup.ready.authSkip": "帳戶稍後設定",
-  "setup.ready.enter": "進入 Grok",
+  "setup.ready.enter": "進入 OMP",
   "setup.error": "出錯了",
   "setup.networkHint": "網路異常 — 可換鏡像或使用手動指令。",
 
