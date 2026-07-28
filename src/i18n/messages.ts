@@ -190,6 +190,9 @@ const en = {
   "error.deck.cliTooOld.problem": "Grok CLI is too old",
   "error.deck.cliTooOld.cause":
     "The installed grok CLI rejects flags this app depends on. Upgrade the CLI, then restart sessions.",
+  "error.deck.runtimeUnavailable.problem": "OMP Runtime is not connected in this build.",
+  "error.deck.runtimeUnavailable.cause":
+    "Agent execution is fail-closed until a later plan wires up the OMP runtime.",
   "error.deck.timeout.problem": "This turn timed out",
   "error.deck.timeout.cause":
     "The agent stopped after a long wait. Retry — image or heavy tools may need more time.",
@@ -2297,6 +2300,9 @@ const zh: Record<MessageKey, string> = {
   "error.deck.cliTooOld.problem": "Grok CLI 版本过低",
   "error.deck.cliTooOld.cause":
     "当前 grok CLI 不认识应用依赖的参数。请升级 CLI 后重启会话。",
+  "error.deck.runtimeUnavailable.problem": "当前构建未连接 OMP Runtime。",
+  "error.deck.runtimeUnavailable.cause":
+    "Agent 执行处于 fail-closed 状态，待后续方案接入 OMP runtime。",
   "error.deck.timeout.problem": "本轮执行超时",
   "error.deck.timeout.cause":
     "等待过久已中止。可重试；生图等长任务可能需要更久。",

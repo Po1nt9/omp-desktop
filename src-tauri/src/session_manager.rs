@@ -1,4 +1,4 @@
-//! Host session manager: real ACP default; mock only if GROK_APP_ACP=mock.
+//! Host session manager: fail-closed ACP shell with optional mock transport.
 //!
 //! Process policy (I01–I03) — multi-session, no monopoly:
 //! - One ACP process per App session (live / background-busy / parked-ready).
@@ -28,7 +28,7 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::acp_client::{
-    should_abort_provider_retry, AcpClient, AcpEvent, AskUserOutcome, PermissionOutcome,
+    runtime_unavailable_error, should_abort_provider_retry, AcpClient, AcpEvent, PermissionOutcome,
     StreamKind, HOST_PROVIDER_MAX_RETRIES,
 };
 use crate::cli_probe;
@@ -226,9 +226,15 @@ struct LiveSession {
     provider_retry_aborted: bool,
     /// After session/new (load failed), first prompt should carry journal history.
     needs_history_bootstrap: bool,
-    /// Pending `_x.ai/exit_plan_mode` JSON-RPC id awaiting user Approve / revise.
+    /// Pending plan-gate JSON-RPC id awaiting user Approve / revise.
+    /// Always `None` in Plan 1 (no private extension is wired up).
+    // Plan 2: will be restored when OMP extension protocol defines plan/ask-user methods
+    #[allow(dead_code)]
     pending_plan_rpc_id: Option<u64>,
-    /// Pending `_x.ai/ask_user_question` JSON-RPC id awaiting user answers.
+    /// Pending ask-user-question JSON-RPC id awaiting user answers.
+    /// Always `None` in Plan 1 (no private extension is wired up).
+    // Plan 2: will be restored when OMP extension protocol defines plan/ask-user methods
+    #[allow(dead_code)]
     pending_ask_user_rpc_id: Option<u64>,
     /// Last user/agent activity (send, stream, permission, connect).
     last_activity: Instant,
@@ -2064,7 +2070,7 @@ impl SessionManager {
         if AcpClient::use_mock() {
             "mock_acp".into()
         } else {
-            "grok_agent_stdio".into()
+            crate::acp_client::BACKEND_ID.into()
         }
     }
 
@@ -2746,7 +2752,7 @@ impl SessionManager {
                         s.model_id = Some(prefs.model_id.clone());
                         s.effort = Some(prefs.effort.clone());
                         s.product_mode = Some(prefs.mode.clone());
-                        s.backend = "grok_agent_stdio".into();
+                        s.backend = crate::acp_client::BACKEND_ID.into();
                         s.needs_history_bootstrap = need_bootstrap;
                         Self::touch_activity_locked(s);
                         meta = s.meta.clone();
@@ -2808,7 +2814,7 @@ impl SessionManager {
                     if let Some(s) = guard.as_mut() {
                         let _ = s.fsm.connect_failed(AgentError::new(
                             AgentErrorCode::CliNotFound,
-                            "Mock: CLI not found (GROK_APP_ACP=mock demo)",
+                            "Mock: CLI not found (mock transport demo)",
                         ));
                         s.backend = "mock_acp".into();
                     }
@@ -2897,7 +2903,6 @@ impl SessionManager {
             AcpEvent::Stream { .. } => "stream",
             AcpEvent::ToolCall { .. } => "tool_call",
             AcpEvent::Plan { .. } => "plan",
-            AcpEvent::AskUserQuestion { .. } => "ask_user",
             AcpEvent::PermissionRequest { .. } => "permission",
             AcpEvent::PromptComplete { .. } => "prompt_complete",
             AcpEvent::RetryState { .. } => "retry_state",
@@ -2918,7 +2923,6 @@ impl SessionManager {
                 | AcpEvent::PromptComplete { .. }
                 | AcpEvent::PermissionRequest { .. }
                 | AcpEvent::Plan { .. }
-                | AcpEvent::AskUserQuestion { .. }
                 | AcpEvent::Error { .. }
                 | AcpEvent::ProcessExited { .. }
         )
@@ -3461,37 +3465,6 @@ impl SessionManager {
                         "rpcId": rpc_id,
                         "toolCallId": tool_call_id,
                         "waiting": rpc_id.is_none(),
-                    }),
-                );
-            }
-            AcpEvent::AskUserQuestion {
-                rpc_id,
-                tool_call_id,
-                questions,
-                raw: _,
-            } => {
-                let app_sid = {
-                    let mut guard = self.inner.lock();
-                    if let Some(s) = guard.as_mut() {
-                        if Self::is_session_load_replay(s.prompt_in_flight) {
-                            tracing::debug!(
-                                "acp ask_user dropped: no prompt in flight (replay)"
-                            );
-                            return;
-                        }
-                        s.pending_ask_user_rpc_id = Some(rpc_id);
-                        s.app_session_id.clone()
-                    } else {
-                        return;
-                    }
-                };
-                let _ = app.emit(
-                    "session://ask_user",
-                    serde_json::json!({
-                        "rpcId": rpc_id,
-                        "sessionId": app_sid,
-                        "toolCallId": tool_call_id,
-                        "questions": questions,
                     }),
                 );
             }
@@ -4764,7 +4737,7 @@ impl SessionManager {
         let attachments = attachments.filter(|items| !items.is_empty());
         let target = session_id.as_deref();
 
-        let (backend, app_sid, turn_id, acp) = {
+        let (backend, app_sid, turn_id, _acp) = {
             if let Some(t) = target {
                 let guard = self.inner.lock();
                 if let Some(s) = guard.as_ref().filter(|s| s.app_session_id == t) {
@@ -4785,7 +4758,8 @@ impl SessionManager {
         };
 
         if backend != "mock_acp" && !AcpClient::use_mock() {
-            acp.ok_or("ACP client missing")?.interject(&text).await?;
+            // Plan 1 fail-closed: no Agent runtime is available.
+            return Err(runtime_unavailable_error().message);
         }
 
         let created_at = chrono::Utc::now();
@@ -5307,80 +5281,34 @@ impl SessionManager {
         }
     }
 
-    /// Resolve pending `_x.ai/exit_plan_mode` (Approve & build / request changes / abandon).
+    /// Resolve pending plan approval (Approve & build / request changes / abandon).
     ///
-    /// `decision`: "approved" | "cancelled" | "abandoned"
-    /// Optional `feedback` is sent only with cancelled (revise).
+    /// Plan 1 fail-closed: the plan-mode reverse-request binding has been
+    /// removed. Returns the stable `runtime_unavailable` error.
     pub async fn resolve_plan(
         &self,
-        app: AppHandle,
-        decision: String,
-        feedback: Option<String>,
-        rpc_id: Option<u64>,
-        session_id: Option<String>,
+        _app: AppHandle,
+        _decision: String,
+        _feedback: Option<String>,
+        _rpc_id: Option<u64>,
+        _session_id: Option<String>,
     ) -> Result<SessionSnapshot, String> {
-        let target = self.resolve_target_session(session_id)?;
-        let (acp, id) = self
-            .with_session_mut(&target, |s| {
-                Self::touch_activity_locked(s);
-                let id = rpc_id.or(s.pending_plan_rpc_id.take());
-                (s.acp.clone(), id)
-            })
-            .ok_or("no session")?;
-        let id = id.ok_or_else(|| "no pending plan approval".to_string())?;
-        let acp = acp.ok_or_else(|| "ACP client missing".to_string())?;
-        acp.respond_exit_plan_mode(id, &decision, feedback).await?;
-        let empty_run = self
-            .with_session_mut(&target, |s| {
-                Self::try_finish_deferred_prompt_complete(s).flatten()
-            })
-            .flatten();
-        self.emit_for_session(&app, &target);
-        Self::emit_empty_run_if_any(&app, empty_run);
-        Ok(self.snapshot())
+        Err(runtime_unavailable_error().message)
     }
 
-    /// Resolve pending `_x.ai/ask_user_question` (answers or cancel).
+    /// Resolve pending ask-user question (answers or cancel).
     ///
-    /// `decision`: "accepted" | "cancelled"
-    /// `answers`: object map of question text → answer string (required for accepted).
+    /// Plan 1 fail-closed: the ask-user reverse-request binding has been
+    /// removed. Returns the stable `runtime_unavailable` error.
     pub async fn resolve_ask_user(
         &self,
-        app: AppHandle,
-        decision: String,
-        answers: Option<serde_json::Value>,
-        rpc_id: Option<u64>,
-        session_id: Option<String>,
+        _app: AppHandle,
+        _decision: String,
+        _answers: Option<serde_json::Value>,
+        _rpc_id: Option<u64>,
+        _session_id: Option<String>,
     ) -> Result<SessionSnapshot, String> {
-        let target = self.resolve_target_session(session_id)?;
-        let (acp, id) = self
-            .with_session_mut(&target, |s| {
-                let id = rpc_id.or(s.pending_ask_user_rpc_id.take());
-                // Clear pending id even if rpc_id was explicit.
-                if rpc_id.is_some() {
-                    s.pending_ask_user_rpc_id = None;
-                }
-                (s.acp.clone(), id)
-            })
-            .ok_or("no session")?;
-        let id = id.ok_or_else(|| "no pending ask_user_question".to_string())?;
-        let acp = acp.ok_or_else(|| "ACP client missing".to_string())?;
-        let outcome = match decision.as_str() {
-            "accepted" | "answered" | "accept" => {
-                let answers = answers.unwrap_or_else(|| serde_json::json!({}));
-                AskUserOutcome::Accepted { answers }
-            }
-            _ => AskUserOutcome::Cancelled,
-        };
-        acp.respond_ask_user_question(id, outcome).await?;
-        let empty_run = self
-            .with_session_mut(&target, |s| {
-                Self::try_finish_deferred_prompt_complete(s).flatten()
-            })
-            .flatten();
-        self.emit_for_session(&app, &target);
-        Self::emit_empty_run_if_any(&app, empty_run);
-        Ok(self.snapshot())
+        Err(runtime_unavailable_error().message)
     }
 
     /// Clear the live focus slot without aborting mid-turn work.

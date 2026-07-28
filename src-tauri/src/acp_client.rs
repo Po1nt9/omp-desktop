@@ -1,9 +1,13 @@
-//! Real ACP client: spawn `grok agent stdio`, JSON-RPC line framing.
-//! Default production transport. Mock only when GROK_APP_ACP=mock.
+//! ACP client transport: JSON-RPC line framing + pending-request management.
+//!
+//! Plan 1 fail-closed shell: the runtime is unavailable, so every spawn /
+//! connect path returns `RuntimeUnavailable`. The standard ACP wire builders,
+//! pure decoders, and protocol decode tests remain as the stable contract for
+//! a later plan that wires up an OMP runtime. No process spawn or
+//! private-extension binding remains.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -12,7 +16,7 @@ use parking_lot::Mutex as ParkingMutex;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-use tokio::process::{Child, Command};
+use tokio::process::Child;
 use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
 use tracing::{debug, error, info, warn};
 
@@ -38,21 +42,15 @@ pub enum AcpEvent {
         status: String,
         raw: Value,
     },
-    /// Live plan entries notification (sessionUpdate plan) and/or exit_plan_mode gate.
+    /// Live plan entries notification (sessionUpdate plan).
     Plan {
         entries: Value,
-        /// Markdown / text body when available (exit_plan_mode planContent).
+        /// Markdown / text body when available (planContent).
         body: Option<String>,
-        /// Pending JSON-RPC id for `_x.ai/exit_plan_mode` (reply required).
+        /// Reserved for plan-gate reverse-requests; always `None` in Plan 1
+        /// (no private extension is wired up).
         rpc_id: Option<u64>,
         tool_call_id: Option<String>,
-    },
-    /// Agent reverse-request `_x.ai/ask_user_question` (questionnaire / choices).
-    AskUserQuestion {
-        rpc_id: u64,
-        tool_call_id: Option<String>,
-        questions: Vec<AskUserQuestionItem>,
-        raw: Value,
     },
     PermissionRequest {
         rpc_id: u64,
@@ -67,9 +65,8 @@ pub enum AcpEvent {
         /// True only for the `session/prompt` RPC result — the real end of the
         /// turn, ordered after every chunk the agent sent.
         ///
-        /// The `_x.ai/session/prompt_complete` *notification* fires early
-        /// (tools still open, or more text still coming), so it must not be
-        /// treated as terminal.
+        /// Early-completion notifications from private extensions are no longer
+        /// wired up in Plan 1, so this is always `true` on the live path.
         authoritative: bool,
     },
     /// Provider/API retry loop (sessionUpdate = retry_state). Host caps retries.
@@ -139,20 +136,6 @@ const PROMPT_WAIT_SLICE_SECS: u64 = 5;
 /// Legacy alias used in docs/comments — idle silence window for prompt RPC.
 #[allow(dead_code)]
 const PROMPT_TIMEOUT_SECS: u64 = PROMPT_IDLE_TIMEOUT_SECS;
-/// After `_x.ai/session/prompt_complete`, wait this long for the real JSON-RPC
-/// `session/prompt` result/error before treating the turn as successfully done.
-/// Official subscription failures often emit prompt_complete first, then error.
-/// Quiet window after an early `prompt_complete` before the pending
-/// `session/prompt` waiter is released without an RPC result.
-///
-/// This is an **idle** window, not a deadline: every inbound `session/update`
-/// re-arms it. The agent routinely fires `_x.ai/session/prompt_complete` while
-/// it is still streaming the answer, and resolving the RPC on a fixed timer
-/// ended the turn mid-answer — the host then dropped every later chunk as
-/// replay, so the journal kept only a prefix and the chat looked stuck.
-/// Prompt wait uses the same idle idea (`PROMPT_IDLE_TIMEOUT_SECS`) plus an
-/// absolute ceiling (`PROMPT_ABSOLUTE_TIMEOUT_SECS`).
-const PROMPT_COMPLETE_FALLBACK_GRACE_MS: u64 = 3000;
 
 /// Whether a `session/prompt` wait should fail for silence or absolute age.
 ///
@@ -174,15 +157,6 @@ fn prompt_wait_should_timeout(
         return Some("idle");
     }
     None
-}
-
-/// Pure decision for the `prompt_complete` fallback: release the waiter only
-/// when the agent has been quiet for `grace` since its last session update.
-fn prompt_fallback_due(last_update: Option<Instant>, grace: Duration, now: Instant) -> bool {
-    match last_update {
-        None => true,
-        Some(t) => now.saturating_duration_since(t) >= grace,
-    }
 }
 
 pub struct AcpClient {
@@ -207,447 +181,73 @@ pub struct AcpClient {
     last_update_at: ParkingMutex<Option<Instant>>,
 }
 
-/// Options applied at agent process start (CLI flags).
+/// Spawn options retained as a parameter type for the fail-closed spawn
+/// stubs. No fields are consumed in Plan 1.
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct SpawnOptions {
     pub model_id: Option<String>,
     pub effort: Option<String>,
-    /// App permission policy id (ask / accept_edits / …).
     pub permission_policy: Option<String>,
 }
 
-/// Map App policy → CLI `--permission-mode` value.
-pub fn cli_permission_mode(policy: &str) -> &'static str {
-    use crate::permission::PermissionPolicy;
-    match PermissionPolicy::parse(policy) {
-        PermissionPolicy::AcceptEdits => "acceptEdits",
-        PermissionPolicy::DontAsk => "dontAsk",
-        PermissionPolicy::AlwaysApprove => "bypassPermissions",
-        // Host session allow-list is applied in-process; CLI still asks.
-        PermissionPolicy::AllowForSession
-        | PermissionPolicy::AllowOnce
-        | PermissionPolicy::Deny
-        | PermissionPolicy::Ask => "default",
-    }
+/// Stable backend identifier for the fail-closed shell.
+pub const BACKEND_ID: &str = "runtime_unavailable";
+
+/// Stable runtime-unavailable error for every execution / spawn path.
+pub fn runtime_unavailable_error() -> AgentError {
+    AgentError::new(
+        AgentErrorCode::RuntimeUnavailable,
+        "Agent runtime is unavailable (fail-closed shell).",
+    )
 }
-
-/// Pure spawn plan for the OS-level sandbox profile.
-///
-/// `--sandbox` is a **top-level** `grok` flag (not under `agent` / `stdio`),
-/// and the CLI also reads `GROK_SANDBOX`. When the profile is off/empty we
-/// apply neither so the agent stays unrestricted (CLI default).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SandboxSpawnSpec {
-    pub profile: String,
-}
-
-impl SandboxSpawnSpec {
-    /// Build from a settings value. `None` means do not pass sandbox flags/env.
-    pub fn from_setting(profile: &str) -> Option<Self> {
-        let p = profile.trim();
-        if p.is_empty() || p.eq_ignore_ascii_case("off") {
-            return None;
-        }
-        Some(Self {
-            profile: p.to_ascii_lowercase(),
-        })
-    }
-
-    /// Top-level CLI args: `["--sandbox", "<profile>"]` (before `agent`).
-    pub fn cli_args(&self) -> [String; 2] {
-        ["--sandbox".into(), self.profile.clone()]
-    }
-
-    /// Env var name + value for `GROK_SANDBOX`.
-    pub fn env_pair(&self) -> (String, String) {
-        ("GROK_SANDBOX".into(), self.profile.clone())
-    }
-}
-
-/// Pure helper used by spawn + unit tests: args + env when sandbox is on.
-pub fn sandbox_spawn_flags(profile: &str) -> Option<(Vec<String>, (String, String))> {
-    let spec = SandboxSpawnSpec::from_setting(profile)?;
-    Some((spec.cli_args().to_vec(), spec.env_pair()))
-}
-
-pub const MAX_AGENT_TURNS_CAP: u32 = 200;
-pub const MIN_AGENT_TURNS: u32 = 1;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaxTurnsSpawnSpec {
-    pub turns: u32,
-}
-
-impl MaxTurnsSpawnSpec {
-    pub fn from_setting(raw: Option<u32>) -> Option<Self> {
-        let n = raw?;
-        if n == 0 {
-            return None;
-        }
-        Some(Self {
-            turns: n.clamp(MIN_AGENT_TURNS, MAX_AGENT_TURNS_CAP),
-        })
-    }
-
-    pub fn cli_args(&self) -> [String; 2] {
-        ["--max-turns".into(), self.turns.to_string()]
-    }
-}
-
-pub fn normalize_max_agent_turns(raw: Option<u32>) -> Option<u32> {
-    MaxTurnsSpawnSpec::from_setting(raw).map(|s| s.turns)
-}
-
-pub fn max_turns_cli_args(raw: Option<u32>) -> Option<Vec<String>> {
-    let spec = MaxTurnsSpawnSpec::from_setting(raw)?;
-    Some(spec.cli_args().to_vec())
-}
-
-pub fn disable_web_search_spawn_flags(disable: bool) -> Vec<&'static str> {
-    if disable {
-        vec!["--disable-web-search"]
-    } else {
-        vec![]
-    }
-}
-
-pub fn no_plan_spawn_flags(plan_enabled: bool) -> Vec<&'static str> {
-    if plan_enabled {
-        vec![]
-    } else {
-        vec!["--no-plan"]
-    }
-}
-
-pub fn leader_spawn_flag(use_leader: bool) -> &'static str {
-    if use_leader {
-        "--leader"
-    } else {
-        "--no-leader"
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AgentSpawnSpec {
-    pub name: String,
-}
-
-impl AgentSpawnSpec {
-    pub fn from_setting(raw: &str) -> Option<Self> {
-        let name = crate::agents_catalog::normalize_preferred_agent(raw)?;
-        Some(Self { name })
-    }
-
-    pub fn cli_args(&self) -> [String; 2] {
-        ["--agent".into(), self.name.clone()]
-    }
-}
-
-pub fn preferred_agent_spawn_flags(raw: &str) -> Option<Vec<String>> {
-    crate::agents_catalog::agent_spawn_cli_args(raw)
-}
-
 
 impl AcpClient {
-    pub fn use_mock() -> bool {
-        std::env::var("GROK_APP_ACP")
-            .map(|v| v.eq_ignore_ascii_case("mock"))
-            .unwrap_or(false)
-    }
-
+    /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
+    /// `RuntimeUnavailable` error without touching a process.
     pub fn spawn(
-        cli_path: PathBuf,
-        cwd: PathBuf,
+        _cli_path: PathBuf,
+        _cwd: PathBuf,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
-        Self::spawn_with_options(cli_path, cwd, SpawnOptions::default())
+        Err(runtime_unavailable_error())
     }
 
+    /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
+    /// `RuntimeUnavailable` error without touching a process.
     pub fn spawn_with_options(
-        cli_path: PathBuf,
-        cwd: PathBuf,
-        opts: SpawnOptions,
+        _cli_path: PathBuf,
+        _cwd: PathBuf,
+        _opts: SpawnOptions,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
-        let settings = crate::store::load_settings();
-        Self::spawn_with_home(cli_path, cwd, &settings.session_data_mode, opts)
+        Err(runtime_unavailable_error())
     }
 
-    /// Spawn `grok agent stdio` with GROK_HOME from session_data_mode.
+    /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
+    /// `RuntimeUnavailable` error without touching a process.
     pub fn spawn_with_home(
-        cli_path: PathBuf,
-        cwd: PathBuf,
-        session_data_mode: &str,
-        opts: SpawnOptions,
+        _cli_path: PathBuf,
+        _cwd: PathBuf,
+        _session_data_mode: &str,
+        _opts: SpawnOptions,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
-        // API mode: if an ACP server address is configured, connect over TCP
-        // instead of spawning a local CLI. The server drives an agent running
-        // elsewhere (WSL/SSH/container) but speaks the identical ACP protocol.
-        if let Some(addr) = crate::store::load_settings()
-            .acp_server_addr
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            return Self::connect_tcp(addr, cwd);
-        }
-
-        if !cli_path.exists() {
-            return Err(AgentError::new(
-                AgentErrorCode::CliNotFound,
-                format!("CLI not found: {}", cli_path.display()),
-            ));
-        }
-
-        // Gate on CLI version BEFORE spawning (NEW-03). The flag set below is
-        // 0.2.x-specific; an older CLI rejects it and dies, which the user only
-        // ever sees as AGENT_CRASHED with no hint that the CLI is the problem.
-        // Unknown/unparseable versions pass through — fail open, not closed.
-        if let Some(raw) = crate::cli_probe::read_version_of(&cli_path) {
-            if crate::cli_probe::cli_version_supported(&raw) == Some(false) {
-                return Err(AgentError::new(
-                    AgentErrorCode::CliTooOld,
-                    format!(
-                        "grok CLI {} is older than the required {}",
-                        crate::cli_probe::extract_version_token(&raw)
-                            .unwrap_or_else(|| raw.trim().to_string()),
-                        crate::cli_probe::min_cli_version_str()
-                    ),
-                ));
-            }
-        }
-
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
-
-        // GUI apps often inherit a sparse PATH; keep absolute cli_path but enrich PATH
-        // so nested tools (npx, node, git) resolve when the agent shells out.
-        //
-        // Flag placement (CLI 0.2.x):
-        //   `grok agent [OPTIONS] stdio`  — model / effort / always-approve are **agent** options
-        //   Flags after `stdio` are rejected (`unexpected argument '--model'`).
-        //   `--permission-mode` is top-level `grok` only — not accepted by `grok agent`;
-        //   Host enforces permission policy on session/request_permission; YOLO uses --always-approve.
-        let grok_home = crate::paths::resolve_agent_grok_home(session_data_mode);
-        let _ = std::fs::create_dir_all(&grok_home);
-        if session_data_mode != "shared" {
-            // Official → sync OIDC; custom → strip auth.json (api_key only).
-            crate::providers::prepare_route_auth_for_agent();
-            if let Some(ref pol) = opts.permission_policy {
-                let _ = crate::agent_prefs::sync_permission_to_agent_profile(
-                    session_data_mode,
-                    pol,
-                );
-            }
-        }
-
-        // Composer may hold a catalog id while the active channel is a custom
-        // provider — resolve to the route id Grok Build actually understands.
-        let spawn_model = crate::providers::agent_spawn_model_id(
-            opts.model_id.as_deref().unwrap_or(""),
-        );
-
-        // Flag placement (CLI 0.2.x):
-        //   top-level: `grok --no-auto-update [--sandbox PROFILE] agent …`
-        //   agent opts: `--model` / `--reasoning-effort` / `--always-approve` before `stdio`
-        // Skip background update checks so ACP handshakes are not delayed on launch.
-        // `--sandbox` is top-level only (not accepted by `grok agent` / `stdio`);
-        // also set GROK_SANDBOX so nested tools inherit the same profile.
-        let settings = crate::store::load_settings();
-        let sandbox = SandboxSpawnSpec::from_setting(&settings.sandbox_profile);
-        let max_turns = MaxTurnsSpawnSpec::from_setting(settings.max_agent_turns);
-        let preferred_agent = AgentSpawnSpec::from_setting(&settings.preferred_agent);
-        let subagents_enabled = settings.subagents_enabled;
-        let memory_enabled = settings.experimental_memory;
-        let use_leader = settings.use_leader;
-        let plan_enabled = settings.plan_enabled;
-        let disable_web = settings.disable_web_search;
-
-        if session_data_mode != "shared" {
-            let _ = crate::agent_subagents::sync_subagents_to_agent_profile(
-                session_data_mode,
-                subagents_enabled,
-            );
-            let _ = crate::agent_memory::sync_memory_to_agent_profile(
-                session_data_mode,
-                memory_enabled,
-            );
-        }
-
-        let mut cmd = Command::new(&cli_path);
-        cmd.arg("--no-auto-update");
-        if let Some(ref sb) = sandbox {
-            for a in sb.cli_args() {
-                cmd.arg(a);
-            }
-        }
-        if let Some(ref mt) = max_turns {
-            for a in mt.cli_args() {
-                cmd.arg(a);
-            }
-        }
-        for f in disable_web_search_spawn_flags(disable_web) {
-            cmd.arg(f);
-        }
-        for f in no_plan_spawn_flags(plan_enabled) {
-            cmd.arg(f);
-        }
-        if let Some(ref agent) = preferred_agent {
-            for a in agent.cli_args() {
-                cmd.arg(a);
-            }
-        }
-        crate::agent_subagents::apply_subagents_to_command(&mut cmd, subagents_enabled);
-        crate::agent_memory::apply_memory_to_command(&mut cmd, memory_enabled);
-        cmd.arg("agent");
-        cmd.arg(leader_spawn_flag(use_leader));
-        if !spawn_model.is_empty() {
-            cmd.args(["--model", &spawn_model]);
-        }
-        if let Some(ref e) = opts.effort {
-            let e = e.trim();
-            if matches!(e, "high" | "medium" | "low") {
-                cmd.args(["--reasoning-effort", e]);
-            }
-        }
-        if let Some(ref pol) = opts.permission_policy {
-            if cli_permission_mode(pol) == "bypassPermissions" {
-                cmd.arg("--always-approve");
-            }
-        }
-        cmd.arg("stdio");
-        cmd.current_dir(&cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        crate::process_util::apply_no_window_tokio(&mut cmd);
-        if let Some(path) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path);
-        }
-        cmd.env("GROK_HOME", &grok_home);
-        // Route agent traffic through the configured proxy (NEW-02). Windows
-        // system proxy is registry-only and never reaches children as env vars.
-        crate::proxy::apply_to_tokio_command(&mut cmd);
-        if let Some(ref sb) = sandbox {
-            let (k, v) = sb.env_pair();
-            cmd.env(k, v);
-        }
-        tracing::info!(
-            "acp: spawn home={} mode={} sandbox={:?} max_turns={:?} leader={} subagents={} memory={}",
-            grok_home.display(),
-            session_data_mode,
-            sandbox.as_ref().map(|s| s.profile.as_str()),
-            max_turns.as_ref().map(|m| m.turns),
-            use_leader,
-            subagents_enabled,
-            memory_enabled
-        );
-
-        let mut child = cmd.spawn().map_err(|e| {
-            AgentError::new(
-                AgentErrorCode::CliNotFound,
-                format!("failed to spawn grok agent stdio: {e}"),
-            )
-        })?;
-
-        let stdin = child.stdin.take().ok_or_else(|| {
-            AgentError::new(AgentErrorCode::AgentCrashed, "no stdin on child")
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            AgentError::new(AgentErrorCode::AgentCrashed, "no stdout on child")
-        })?;
-        let stderr = child.stderr.take().ok_or_else(|| {
-            AgentError::new(AgentErrorCode::AgentCrashed, "no stderr on child")
-        })?;
-
-        let client = Arc::new(Self {
-            child: AsyncMutex::new(Some(child)),
-            stdin: AsyncMutex::new(Some(Box::new(stdin) as Box<dyn AsyncWrite + Unpin + Send>)),
-            next_id: AtomicU64::new(1),
-            pending: ParkingMutex::new(HashMap::new()),
-            event_tx: event_tx.clone(),
-            agent_session_id: ParkingMutex::new(None),
-            cli_path,
-            cwd,
-            stopped: AtomicBool::new(false),
-            reader_alive: AtomicBool::new(true),
-            stderr_tail: ParkingMutex::new(Vec::new()),
-            last_update_at: ParkingMutex::new(None),
-        });
-
-        client.start_read_loop(Box::new(stdout));
-
-        // stderr reader (separate tee + ring buffer)
-        {
-            let c = Arc::clone(&client);
-            tokio::spawn(async move {
-                let mut reader = BufReader::new(stderr);
-                let mut line = String::new();
-                loop {
-                    line.clear();
-                    match reader.read_line(&mut line).await {
-                        Ok(0) => break,
-                        Ok(_) => {
-                            let t = line.trim_end().to_string();
-                            if !t.is_empty() {
-                                c.push_stderr(&t);
-                                let _ = c.event_tx.send(AcpEvent::Stderr { line: t });
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-            });
-        }
-
-        Ok((client, event_rx))
+        Err(runtime_unavailable_error())
     }
 
-    /// **API mode.** Connect to a remote ACP server over TCP (host:port)
-    /// instead of spawning `grok agent stdio`. The server speaks the exact
-    /// same newline-delimited JSON-RPC ACP protocol on the socket — this lets
-    /// the app drive an agent running elsewhere (a WSL/SSH/container agent, a
-    /// shared build host, or a `socat`-fronted CLI). No child process, no
-    /// stderr stream; the read half is wired to the same line reader.
-    ///
-    /// Sync (uses a blocking connect + `from_std`) to match `spawn_with_home`;
-    /// must be called from within the Tokio runtime.
+    /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
+    /// `RuntimeUnavailable` error without connecting to a remote server.
     pub fn connect_tcp(
-        addr: &str,
-        cwd: PathBuf,
+        _addr: &str,
+        _cwd: PathBuf,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
-        let std_stream = std::net::TcpStream::connect(addr).map_err(|e| {
-            AgentError::new(
-                AgentErrorCode::CliNotFound,
-                format!("failed to connect ACP server {addr}: {e}"),
-            )
-        })?;
-        std_stream.set_nonblocking(true).map_err(|e| {
-            AgentError::new(AgentErrorCode::AgentCrashed, format!("socket setup: {e}"))
-        })?;
-        let stream = TcpStream::from_std(std_stream).map_err(|e| {
-            AgentError::new(AgentErrorCode::AgentCrashed, format!("socket adopt: {e}"))
-        })?;
-        let _ = stream.set_nodelay(true);
-        let (read_half, write_half) = stream.into_split();
+        Err(runtime_unavailable_error())
+    }
 
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
-        let client = Arc::new(Self {
-            child: AsyncMutex::new(None),
-            stdin: AsyncMutex::new(Some(
-                Box::new(write_half) as Box<dyn AsyncWrite + Unpin + Send>
-            )),
-            next_id: AtomicU64::new(1),
-            pending: ParkingMutex::new(HashMap::new()),
-            event_tx,
-            agent_session_id: ParkingMutex::new(None),
-            cli_path: PathBuf::from(format!("tcp://{addr}")),
-            cwd,
-            stopped: AtomicBool::new(false),
-            reader_alive: AtomicBool::new(true),
-            stderr_tail: ParkingMutex::new(Vec::new()),
-            last_update_at: ParkingMutex::new(None),
-        });
-        client.start_read_loop(Box::new(read_half));
-        Ok((client, event_rx))
+    /// Whether mock ACP mode is enabled via `GROK_APP_MOCK_ACP` env var.
+    /// Mock mode bypasses the fail-closed spawn for local development/testing.
+    pub fn use_mock() -> bool {
+        std::env::var("GROK_APP_MOCK_ACP")
+            .map(|v| !v.is_empty() && v != "0" && v != "false")
+            .unwrap_or(false)
     }
 
     /// Spawn the transport read loop over any `AsyncRead` (child stdout or the
@@ -783,90 +383,11 @@ impl AcpClient {
                 return;
             }
 
-            // Grok Build plan gate / ask-user (wire method has leading `_`).
-            // Params are FLAT: { sessionId, toolCallId, planContent } — not nested.
-            // See minos grok_driver + agent-client-protocol ext_method.
-            if let Some(bare) = method.strip_prefix('_') {
-                if bare == "x.ai/exit_plan_mode" || bare == "x.ai/ask_user_question" {
-                    let rpc_id = req_id.unwrap_or(0);
-                    let params = msg.get("params").cloned().unwrap_or(Value::Null);
-                    if bare == "x.ai/exit_plan_mode" {
-                        let plan_content = params
-                            .get("planContent")
-                            .or_else(|| params.get("plan_content"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        let tool_call_id = params
-                            .get("toolCallId")
-                            .or_else(|| params.get("tool_call_id"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string());
-                        info!(
-                            "acp exit_plan_mode id={rpc_id} plan_chars={}",
-                            plan_content.as_ref().map(|s| s.len()).unwrap_or(0)
-                        );
-                        let _ = self.event_tx.send(AcpEvent::Plan {
-                            entries: params
-                                .get("entries")
-                                .cloned()
-                                .unwrap_or(json!([])),
-                            body: plan_content,
-                            rpc_id: Some(rpc_id),
-                            tool_call_id,
-                        });
-                    } else {
-                        // ask_user_question: surface UI; reply via respond_ask_user_question.
-                        let parsed = parse_ask_user_question_params(&params);
-                        info!(
-                            "acp ask_user_question id={rpc_id} questions={} tool_call={:?}",
-                            parsed.questions.len(),
-                            parsed.tool_call_id
-                        );
-                        if parsed.questions.is_empty() {
-                            // Nothing to show — cancel so the agent does not hang.
-                            warn!("ask_user_question id={rpc_id}: empty questions, auto-cancel");
-                            let reply = json!({
-                                "jsonrpc": "2.0",
-                                "id": rpc_id,
-                                "result": { "outcome": "cancelled" }
-                            });
-                            if let Err(e) = self.write_line(&reply).await {
-                                warn!("failed to auto-cancel empty ask_user_question: {e}");
-                            }
-                        } else {
-                            let _ = self.event_tx.send(AcpEvent::AskUserQuestion {
-                                rpc_id,
-                                tool_call_id: parsed.tool_call_id,
-                                questions: parsed.questions,
-                                raw: params,
-                            });
-                        }
-                    }
-                    return;
-                }
-            }
-
             // True notifications: no id. (If id is present, must reply — never swallow.)
             if req_id.is_none() {
-                // Official + xAI-extended session updates (retry_state, chunks, tools…).
-                if method == "session/update" || method == "_x.ai/session/update" {
+                // Standard ACP session updates (retry_state, chunks, tools, plan…).
+                if method == "session/update" {
                     self.handle_session_update(msg.get("params").unwrap_or(&Value::Null));
-                } else if method == "_x.ai/session/prompt_complete" {
-                    // UI signal only — do NOT immediately Ok-complete session/prompt.
-                    // Official path may still send a JSON-RPC *error* for the same id
-                    // shortly after prompt_complete; completing early swallows that error.
-                    let stop = msg
-                        .pointer("/params/stopReason")
-                        .or_else(|| msg.pointer("/params/stop_reason"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("end_turn")
-                        .to_string();
-                    let _ = self.event_tx.send(AcpEvent::PromptComplete {
-                        stop_reason: stop.clone(),
-                        authoritative: false,
-                    });
-                    // Grace period: free waiters only if the RPC result never arrives.
-                    self.schedule_prompt_complete_fallback(stop);
                 } else {
                     debug!("acp notification ignored method={method}");
                 }
@@ -898,57 +419,8 @@ impl AcpClient {
             .any(|p| p.method == "session/prompt")
     }
 
-    /// Release the `session/prompt` waiter only once the agent has actually gone
-    /// quiet after its early `prompt_complete`.
-    ///
-    /// The agent fires `prompt_complete` before the answer is finished, so a
-    /// fixed timer resolved the RPC while chunks were still arriving. That
-    /// ended the turn early and every later chunk was discarded as replay —
-    /// a truncated journal and a chat frozen mid-answer. Each `session/update`
-    /// re-arms the window; idle + absolute prompt waits still cap a wedged RPC.
-    fn schedule_prompt_complete_fallback(self: &Arc<Self>, stop_reason: String) {
-        let this = Arc::clone(self);
-        tokio::spawn(async move {
-            let grace = Duration::from_millis(PROMPT_COMPLETE_FALLBACK_GRACE_MS);
-            loop {
-                tokio::time::sleep(grace).await;
-                // Real RPC result landed (or the turn was cancelled) — nothing to free.
-                if !this.has_pending_prompt() {
-                    return;
-                }
-                let last = *this.last_update_at.lock();
-                if prompt_fallback_due(last, grace, Instant::now()) {
-                    break;
-                }
-                debug!(
-                    "acp prompt_complete fallback re-armed: agent still streaming after early complete"
-                );
-            }
-            this.complete_pending_prompt_fallback(&stop_reason);
-        });
-    }
-
-    /// If agent never returned a session/prompt result after prompt_complete, free waiters.
-    fn complete_pending_prompt_fallback(&self, stop_reason: &str) {
-        let mut pending = self.pending.lock();
-        let prompt_ids: Vec<u64> = pending
-            .iter()
-            .filter(|(_, p)| p.method == "session/prompt")
-            .map(|(id, _)| *id)
-            .collect();
-        for id in prompt_ids {
-            if let Some(p) = pending.remove(&id) {
-                info!(
-                    "acp completing session/prompt id={id} via delayed prompt_complete fallback (no RPC result yet)"
-                );
-                let _ = p.tx.send(Ok(json!({ "stopReason": stop_reason })));
-            }
-        }
-    }
-
     fn handle_session_update(&self, params: &Value) {
-        // Proof of life for the turn: re-arms the `prompt_complete` fallback so
-        // an early completion notification cannot cut the answer short.
+        // Proof of life for the turn: re-arms the prompt idle timer.
         *self.last_update_at.lock() = Some(Instant::now());
         let events = decode_session_update(params);
         if events.is_empty() {
@@ -1376,8 +848,8 @@ impl AcpClient {
     }
 
     /// Initialize + auth, then open a session.
-    /// Prefer `session/load` when `resume_session_id` is set (Grok persists agent
-    /// sessions under GROK_HOME). Fall back to `session/new`.
+    /// Prefer `session/load` when `resume_session_id` is set (runtime persists
+    /// agent sessions under its home directory). Fall back to `session/new`.
     /// Returns `(session_id, resumed)`.
     pub async fn initialize_and_open_session(
         &self,
@@ -1423,8 +895,8 @@ impl AcpClient {
     /// switching App sessions without respawning CLI.
     /// Returns `(session_id, resumed)`.
     ///
-    /// Injects **enabled** MCP servers (App Extensions prefs + `grok mcp list`)
-    /// into `mcpServers` so independent GROK_HOME and shared mode both see tools.
+    /// Injects **enabled** MCP servers (App Extensions prefs + runtime MCP list)
+    /// into `mcpServers` so independent and shared mode both see tools.
     pub async fn open_session(
         &self,
         resume_session_id: Option<&str>,
@@ -1477,7 +949,7 @@ impl AcpClient {
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
                     let _ = self.event_tx.send(AcpEvent::State {
-                        backend: "grok_agent_stdio".into(),
+                        backend: BACKEND_ID.into(),
                         agent_session_id: Some(sid.clone()),
                         model_id,
                     });
@@ -1522,7 +994,7 @@ impl AcpClient {
             .map(|s| s.to_string());
 
         let _ = self.event_tx.send(AcpEvent::State {
-            backend: "grok_agent_stdio".into(),
+            backend: BACKEND_ID.into(),
             agent_session_id: Some(sid.clone()),
             model_id,
         });
@@ -1566,13 +1038,13 @@ impl AcpClient {
             .and_then(|v| v.as_str())
         {
             let _ = self.event_tx.send(AcpEvent::State {
-                backend: "grok_agent_stdio".into(),
+                backend: BACKEND_ID.into(),
                 agent_session_id: Some(sid),
                 model_id: Some(mid.to_string()),
             });
         } else {
             let _ = self.event_tx.send(AcpEvent::State {
-                backend: "grok_agent_stdio".into(),
+                backend: BACKEND_ID.into(),
                 agent_session_id: Some(sid),
                 model_id: Some(model_id.to_string()),
             });
@@ -1669,27 +1141,6 @@ impl AcpClient {
         Ok(())
     }
 
-    /// Inject guidance into the active prompt without cancelling the turn.
-    /// Grok Build extension: `_x.ai/interject`.
-    pub async fn interject(&self, text: &str) -> Result<(), String> {
-        let text = text.trim();
-        if text.is_empty() {
-            return Err("empty interjection".into());
-        }
-        let sid = self
-            .agent_session_id
-            .lock()
-            .clone()
-            .ok_or_else(|| "no agent session".to_string())?;
-        self.request(
-            "_x.ai/interject",
-            wire_session_interject_params(&sid, text),
-        )
-        .await
-        .map(|_| ())
-        .map_err(|e| format!("_x.ai/interject: {e}"))
-    }
-
     /// Cancel in-flight prompt (ACP notification — no id).
     pub async fn cancel(&self) -> Result<(), String> {
         let sid = self
@@ -1769,48 +1220,6 @@ impl AcpClient {
         self.write_line(&msg).await
     }
 
-    /// Reply to `_x.ai/exit_plan_mode` reverse-request.
-    /// Wire body: `{ "outcome": "approved"|"cancelled"|"abandoned", "feedback"?: string }`.
-    pub async fn respond_exit_plan_mode(
-        &self,
-        rpc_id: u64,
-        outcome: &str,
-        feedback: Option<String>,
-    ) -> Result<(), String> {
-        let result = wire_exit_plan_mode_result(outcome, feedback);
-        let outcome_s = result
-            .get("outcome")
-            .and_then(|v| v.as_str())
-            .unwrap_or("cancelled")
-            .to_string();
-        let msg = wire_jsonrpc_result(rpc_id, result);
-        info!("acp → exit_plan_mode reply id={rpc_id} outcome={outcome_s}");
-        self.write_line(&msg).await
-    }
-
-    /// Reply to `_x.ai/ask_user_question` reverse-request.
-    ///
-    /// Wire (internally-tagged `AskUserQuestionExtResponse`):
-    /// - `{ "outcome": "accepted", "answers": { "<question>": "<answer>" }, "partial_answers": {} }`
-    /// - `{ "outcome": "cancelled" }` when the user dismisses
-    pub async fn respond_ask_user_question(
-        &self,
-        rpc_id: u64,
-        outcome: AskUserOutcome,
-    ) -> Result<(), String> {
-        let result = wire_ask_user_result(&outcome);
-        let msg = wire_jsonrpc_result(rpc_id, result.clone());
-        info!(
-            "acp → ask_user_question reply id={rpc_id} outcome={}",
-            if matches!(result.get("outcome").and_then(|v| v.as_str()), Some("accepted")) {
-                "accepted"
-            } else {
-                "cancelled"
-            }
-        );
-        self.write_line(&msg).await
-    }
-
     pub fn agent_session_id(&self) -> Option<String> {
         self.agent_session_id.lock().clone()
     }
@@ -1826,14 +1235,6 @@ impl AcpClient {
 #[derive(Debug, Clone)]
 pub enum PermissionOutcome {
     Selected { option_id: String },
-    Cancelled,
-}
-
-/// Client reply to `_x.ai/ask_user_question`.
-#[derive(Debug, Clone)]
-pub enum AskUserOutcome {
-    /// Map of question text → selected label(s) and/or free-text answer.
-    Accepted { answers: Value },
     Cancelled,
 }
 
@@ -1856,14 +1257,6 @@ pub fn wire_session_prompt_params(session_id: &str, text: &str) -> Value {
     })
 }
 
-/// Host → agent `_x.ai/interject` params.
-pub fn wire_session_interject_params(session_id: &str, text: &str) -> Value {
-    json!({
-        "sessionId": session_id,
-        "text": text,
-    })
-}
-
 /// Host → agent `session/cancel` notification params.
 pub fn wire_session_cancel_params(session_id: &str) -> Value {
     json!({ "sessionId": session_id })
@@ -1881,38 +1274,6 @@ pub fn wire_permission_result(outcome: &PermissionOutcome) -> Value {
         PermissionOutcome::Cancelled => json!({
             "outcome": { "outcome": "cancelled" }
         }),
-    }
-}
-
-/// Normalize + build `_x.ai/exit_plan_mode` reply body.
-pub fn wire_exit_plan_mode_result(outcome: &str, feedback: Option<String>) -> Value {
-    let outcome = match outcome {
-        "approved" | "cancelled" | "abandoned" => outcome,
-        "approve" | "yes" | "accept" => "approved",
-        "abandon" | "quit" => "abandoned",
-        _ => "cancelled",
-    };
-    let mut result = json!({ "outcome": outcome });
-    if outcome == "cancelled" {
-        if let Some(fb) = feedback.filter(|s| !s.trim().is_empty()) {
-            result
-                .as_object_mut()
-                .unwrap()
-                .insert("feedback".into(), Value::String(fb));
-        }
-    }
-    result
-}
-
-/// `_x.ai/ask_user_question` reply body.
-pub fn wire_ask_user_result(outcome: &AskUserOutcome) -> Value {
-    match outcome {
-        AskUserOutcome::Accepted { answers } => json!({
-            "outcome": "accepted",
-            "answers": answers,
-            "partial_answers": {},
-        }),
-        AskUserOutcome::Cancelled => json!({ "outcome": "cancelled" }),
     }
 }
 
@@ -2175,222 +1536,6 @@ pub fn decode_session_update(params: &Value) -> Vec<AcpEvent> {
     out
 }
 
-/// One choice inside an ask-user question.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AskUserOption {
-    pub id: String,
-    pub label: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-/// One question presented by the agent.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AskUserQuestionItem {
-    pub id: String,
-    pub question: String,
-    #[serde(default)]
-    pub options: Vec<AskUserOption>,
-    #[serde(default)]
-    pub multi_select: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct ParsedAskUserQuestion {
-    pub tool_call_id: Option<String>,
-    pub questions: Vec<AskUserQuestionItem>,
-}
-
-/// Parse flat `_x.ai/ask_user_question` params into UI-friendly questions.
-///
-/// Accepts several shapes seen on the wire / in tool schemas:
-/// - `{ questions: [{ question, options, multiSelect? }] }`
-/// - `{ question|prompt|text, options|choices }` (single question)
-/// - option entries as strings or `{ label, description, id? }`
-pub fn parse_ask_user_question_params(params: &Value) -> ParsedAskUserQuestion {
-    let tool_call_id = params
-        .get("toolCallId")
-        .or_else(|| params.get("tool_call_id"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let mut questions = Vec::new();
-
-    if let Some(arr) = params
-        .get("questions")
-        .and_then(|v| v.as_array())
-        .filter(|a| !a.is_empty())
-    {
-        for (i, q) in arr.iter().enumerate() {
-            if let Some(item) = parse_one_question(q, i) {
-                questions.push(item);
-            }
-        }
-    }
-
-    if questions.is_empty() {
-        // Flat single-question form.
-        if let Some(item) = parse_one_question(params, 0) {
-            // Only keep if there is real question text or options.
-            if !item.question.is_empty() || !item.options.is_empty() {
-                questions.push(item);
-            }
-        }
-    }
-
-    // Last-resort: string prompt field only.
-    if questions.is_empty() {
-        let text = params
-            .get("prompt")
-            .or_else(|| params.get("message"))
-            .or_else(|| params.get("text"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if !text.is_empty() {
-            questions.push(AskUserQuestionItem {
-                id: "0".into(),
-                question: text,
-                options: Vec::new(),
-                multi_select: false,
-            });
-        }
-    }
-
-    ParsedAskUserQuestion {
-        tool_call_id,
-        questions,
-    }
-}
-
-fn parse_one_question(q: &Value, index: usize) -> Option<AskUserQuestionItem> {
-    if q.is_null() {
-        return None;
-    }
-    // Bare string → free-text question.
-    if let Some(s) = q.as_str() {
-        let s = s.trim();
-        if s.is_empty() {
-            return None;
-        }
-        return Some(AskUserQuestionItem {
-            id: index.to_string(),
-            question: s.to_string(),
-            options: Vec::new(),
-            multi_select: false,
-        });
-    }
-
-    let obj = q.as_object()?;
-    let question = obj
-        .get("question")
-        .or_else(|| obj.get("prompt"))
-        .or_else(|| obj.get("text"))
-        .or_else(|| obj.get("header"))
-        .or_else(|| obj.get("title"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-
-    let multi_select = obj
-        .get("multiSelect")
-        .or_else(|| obj.get("multi_select"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let id = obj
-        .get("id")
-        .or_else(|| obj.get("questionId"))
-        .or_else(|| obj.get("question_id"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| index.to_string());
-
-    let options_val = obj
-        .get("options")
-        .or_else(|| obj.get("choices"))
-        .cloned()
-        .unwrap_or(json!([]));
-    let options = parse_ask_user_options(&options_val);
-
-    if question.is_empty() && options.is_empty() {
-        return None;
-    }
-
-    Some(AskUserQuestionItem {
-        id,
-        question: if question.is_empty() {
-            format!("Question {}", index + 1)
-        } else {
-            question
-        },
-        options,
-        multi_select,
-    })
-}
-
-fn parse_ask_user_options(v: &Value) -> Vec<AskUserOption> {
-    let Some(arr) = v.as_array() else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for (i, item) in arr.iter().enumerate() {
-        if let Some(s) = item.as_str() {
-            let label = s.trim();
-            if label.is_empty() {
-                continue;
-            }
-            out.push(AskUserOption {
-                id: format!("opt-{i}"),
-                label: label.to_string(),
-                description: None,
-            });
-            continue;
-        }
-        let Some(obj) = item.as_object() else {
-            continue;
-        };
-        let label = obj
-            .get("label")
-            .or_else(|| obj.get("name"))
-            .or_else(|| obj.get("text"))
-            .or_else(|| obj.get("title"))
-            .or_else(|| obj.get("value"))
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if label.is_empty() {
-            continue;
-        }
-        let id = obj
-            .get("id")
-            .or_else(|| obj.get("optionId"))
-            .or_else(|| obj.get("option_id"))
-            .or_else(|| obj.get("value"))
-            .and_then(|x| x.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("opt-{i}"));
-        let description = obj
-            .get("description")
-            .or_else(|| obj.get("desc"))
-            .or_else(|| obj.get("detail"))
-            .and_then(|x| x.as_str())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
-        out.push(AskUserOption {
-            id,
-            label,
-            description,
-        });
-    }
-    out
-}
-
 #[cfg(test)]
 mod usage_parse_tests {
     use super::*;
@@ -2446,92 +1591,6 @@ mod usage_parse_tests {
     fn parse_usage_empty_returns_none() {
         assert!(parse_usage_update("usage", &json!({})).is_none());
         assert!(parse_usage_update("other", &json!({ "title": "hi" })).is_none());
-    }
-}
-
-#[cfg(test)]
-mod ask_user_question_tests {
-    use super::*;
-
-    #[test]
-    fn parse_questions_array_with_object_options() {
-        let params = json!({
-            "sessionId": "s1",
-            "toolCallId": "call-1",
-            "questions": [{
-                "question": "Which store?",
-                "multiSelect": false,
-                "options": [
-                    { "label": "SQLite", "description": "Local file" },
-                    { "label": "Postgres", "description": "Server" }
-                ]
-            }]
-        });
-        let p = parse_ask_user_question_params(&params);
-        assert_eq!(p.tool_call_id.as_deref(), Some("call-1"));
-        assert_eq!(p.questions.len(), 1);
-        assert_eq!(p.questions[0].question, "Which store?");
-        assert!(!p.questions[0].multi_select);
-        assert_eq!(p.questions[0].options.len(), 2);
-        assert_eq!(p.questions[0].options[0].label, "SQLite");
-        assert_eq!(
-            p.questions[0].options[0].description.as_deref(),
-            Some("Local file")
-        );
-    }
-
-    #[test]
-    fn parse_flat_single_question_string_options() {
-        let params = json!({
-            "question": "Ship it?",
-            "options": ["Yes", "No", "Later"]
-        });
-        let p = parse_ask_user_question_params(&params);
-        assert_eq!(p.questions.len(), 1);
-        assert_eq!(p.questions[0].question, "Ship it?");
-        assert_eq!(
-            p.questions[0]
-                .options
-                .iter()
-                .map(|o| o.label.as_str())
-                .collect::<Vec<_>>(),
-            vec!["Yes", "No", "Later"]
-        );
-    }
-
-    #[test]
-    fn parse_multi_select_and_snake_case() {
-        let params = json!({
-            "questions": [{
-                "question": "Pick targets",
-                "multi_select": true,
-                "choices": [
-                    { "name": "macOS" },
-                    { "name": "Windows" }
-                ]
-            }]
-        });
-        let p = parse_ask_user_question_params(&params);
-        assert_eq!(p.questions.len(), 1);
-        assert!(p.questions[0].multi_select);
-        assert_eq!(p.questions[0].options.len(), 2);
-        assert_eq!(p.questions[0].options[1].label, "Windows");
-    }
-
-    #[test]
-    fn parse_prompt_only_free_text() {
-        let params = json!({ "prompt": "What should the package be named?" });
-        let p = parse_ask_user_question_params(&params);
-        assert_eq!(p.questions.len(), 1);
-        assert_eq!(p.questions[0].question, "What should the package be named?");
-        assert!(p.questions[0].options.is_empty());
-    }
-
-    #[test]
-    fn parse_empty_params_yields_no_questions() {
-        let p = parse_ask_user_question_params(&json!({}));
-        assert!(p.questions.is_empty());
-        assert!(p.tool_call_id.is_none());
     }
 }
 
@@ -2725,42 +1784,6 @@ mod retry_tests {
 }
 
 #[cfg(test)]
-mod prompt_fallback_tests {
-    use super::*;
-
-    fn grace() -> Duration {
-        Duration::from_millis(PROMPT_COMPLETE_FALLBACK_GRACE_MS)
-    }
-
-    #[test]
-    fn no_updates_yet_completes_immediately() {
-        assert!(prompt_fallback_due(None, grace(), Instant::now()));
-    }
-
-    #[test]
-    fn silence_past_grace_completes() {
-        let now = Instant::now();
-        let last = now - grace() - Duration::from_millis(1);
-        assert!(prompt_fallback_due(Some(last), grace(), now));
-    }
-
-    /// The regression: the agent keeps streaming after an early
-    /// `prompt_complete`. Completing the RPC here truncated the answer.
-    #[test]
-    fn still_streaming_defers_completion() {
-        let now = Instant::now();
-        let last = now - Duration::from_millis(PROMPT_COMPLETE_FALLBACK_GRACE_MS / 2);
-        assert!(!prompt_fallback_due(Some(last), grace(), now));
-    }
-
-    #[test]
-    fn exactly_at_grace_boundary_completes() {
-        let now = Instant::now();
-        assert!(prompt_fallback_due(Some(now - grace()), grace(), now));
-    }
-}
-
-#[cfg(test)]
 mod prompt_wait_timeout_tests {
     use super::*;
 
@@ -2812,49 +1835,6 @@ mod prompt_wait_timeout_tests {
         assert_eq!(
             prompt_wait_should_timeout(Some(last), started, now, idle(), absolute()),
             Some("absolute")
-        );
-    }
-}
-
-#[cfg(test)]
-mod sandbox_spawn_tests {
-    use super::*;
-
-    #[test]
-    fn off_and_empty_yield_no_flags() {
-        assert!(SandboxSpawnSpec::from_setting("off").is_none());
-        assert!(SandboxSpawnSpec::from_setting("OFF").is_none());
-        assert!(SandboxSpawnSpec::from_setting("").is_none());
-        assert!(SandboxSpawnSpec::from_setting("   ").is_none());
-        assert!(sandbox_spawn_flags("off").is_none());
-    }
-
-    #[test]
-    fn known_profiles_build_top_level_args_and_env() {
-        for profile in ["workspace", "read-only", "strict", "devbox"] {
-            let spec = SandboxSpawnSpec::from_setting(profile).expect(profile);
-            assert_eq!(spec.profile, profile);
-            assert_eq!(
-                spec.cli_args(),
-                ["--sandbox".to_string(), profile.to_string()]
-            );
-            assert_eq!(
-                spec.env_pair(),
-                ("GROK_SANDBOX".to_string(), profile.to_string())
-            );
-            let (args, env) = sandbox_spawn_flags(profile).unwrap();
-            assert_eq!(args, vec!["--sandbox".to_string(), profile.to_string()]);
-            assert_eq!(env, ("GROK_SANDBOX".to_string(), profile.to_string()));
-        }
-    }
-
-    #[test]
-    fn trims_and_lowercases_profile() {
-        let spec = SandboxSpawnSpec::from_setting("  WorkSpace  ").unwrap();
-        assert_eq!(spec.profile, "workspace");
-        assert_eq!(
-            spec.cli_args(),
-            ["--sandbox".to_string(), "workspace".to_string()]
         );
     }
 }

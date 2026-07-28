@@ -34,6 +34,7 @@ export type ErrorDeckCode =
   | "CONNECT_FAILED"
   | "PROCESS_LIMIT"
   | "CLI_TOO_OLD"
+  | "RUNTIME_UNAVAILABLE"
   | "TURN_TIMEOUT"
   | "AGENT_DISCONNECTED"
   | "STREAM_STALL"
@@ -128,6 +129,14 @@ const DECK: Record<ErrorDeckCode, DeckSpec> = {
     secondaryId: "open_doctor",
     secondaryLabel: "error.action.openDoctor",
   },
+  RUNTIME_UNAVAILABLE: {
+    problem: "error.deck.runtimeUnavailable.problem",
+    cause: "error.deck.runtimeUnavailable.cause",
+    primaryId: "open_runtime",
+    primaryLabel: "error.action.openRuntime",
+    secondaryId: "open_doctor",
+    secondaryLabel: "error.action.openDoctor",
+  },
   TURN_TIMEOUT: {
     problem: "error.deck.timeout.problem",
     cause: "error.deck.timeout.cause",
@@ -191,6 +200,7 @@ const AGENT_DECK_CODES: ErrorDeckCode[] = [
   "CONNECT_FAILED",
   "PROCESS_LIMIT",
   "CLI_TOO_OLD",
+  "RUNTIME_UNAVAILABLE",
 ];
 
 /** Map a classified agent code (or special timeout/disconnect) to a deck code. */

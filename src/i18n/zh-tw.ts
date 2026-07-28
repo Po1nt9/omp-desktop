@@ -178,6 +178,9 @@ export const zhTW: Record<MessageKey, string> = {
   "error.deck.cliTooOld.problem": "Grok CLI 版本過舊",
   "error.deck.cliTooOld.cause":
     "目前的 grok CLI 不認得應用相依的參數。請升級 CLI 後重新啟動對話。",
+  "error.deck.runtimeUnavailable.problem": "目前建置未連接 OMP Runtime。",
+  "error.deck.runtimeUnavailable.cause":
+    "Agent 執行處於 fail-closed 狀態，待後續方案接入 OMP runtime。",
   "error.deck.timeout.problem": "本輪執行逾時",
   "error.deck.timeout.cause":
     "等待過久已中止。可重試；生圖等長任務可能需要更久。",

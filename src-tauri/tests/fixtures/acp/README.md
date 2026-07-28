@@ -10,8 +10,7 @@ permission option mapping). Exercised by `src/acp_golden_test.rs` via
 | `stream_chunks.json` | `session/update` thought + assistant chunks |
 | `stop_cancel.json` | Host `session/cancel` + mock stop done shape |
 | `permission_request.json` | `session/request_permission` + `pick_option_id` |
-| `ask_user_question.json` | `_x.ai/ask_user_question` parse + replies |
-| `exit_plan_mode.json` | `_x.ai/exit_plan_mode` + plan sessionUpdate |
+| `exit_plan_mode.json` | `session/update` plan entries (standard ACP) |
 | `mock_stream.json` | In-process mock token stream for prompt `hi` |
 
 ## When to update

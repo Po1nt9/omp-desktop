@@ -18,7 +18,8 @@ export type AgentErrorCode =
   | "QUOTA_EXCEEDED"
   | "CONNECT_FAILED"
   | "PROCESS_LIMIT"
-  | "CLI_TOO_OLD";
+  | "CLI_TOO_OLD"
+  | "RUNTIME_UNAVAILABLE";
 
 export interface AgentError {
   code: AgentErrorCode;
@@ -1082,7 +1083,7 @@ export interface AskUserQuestionItem {
   multiSelect?: boolean;
 }
 
-/** Payload for `session://ask_user` (`_x.ai/ask_user_question`). */
+/** Payload for `session://ask_user` (private extension, removed in Plan 1). */
 export interface AskUserPayload {
   rpcId: number;
   sessionId: string;
@@ -1096,7 +1097,7 @@ export const IDLE_SNAPSHOT: SessionSnapshot = {
   state: "idle",
   lastError: null,
   streamingMessageId: null,
-  backend: "grok_agent_stdio",
+  backend: "runtime_unavailable",
   modelId: null,
   projectPath: null,
   title: "",
@@ -1874,6 +1875,7 @@ const KNOWN_ERROR_CODES: AgentErrorCode[] = [
   "CONNECT_FAILED",
   "PROCESS_LIMIT",
   "CLI_TOO_OLD",
+  "RUNTIME_UNAVAILABLE",
 ];
 
 export function isAgentErrorCode(code: string | undefined | null): code is AgentErrorCode {
@@ -1897,10 +1899,10 @@ export function agentDisconnectedCopy(locale: Locale = "en"): string {
 }
 
 const AGENT_ERROR_CODE_RE =
-  /^(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD)(?::\s*|\s+)([\s\S]*)$/;
+  /^(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD|RUNTIME_UNAVAILABLE)(?::\s*|\s+)([\s\S]*)$/;
 
 const MARKDOWN_CODE_RE =
-  /^\*\*(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD)\*\*(?:\s*[\r\n]+([\s\S]*))?$/;
+  /^\*\*(CLI_NOT_FOUND|AUTH_FAILED|NETWORK_PROVIDER|AGENT_CRASHED|QUOTA_EXCEEDED|CONNECT_FAILED|PROCESS_LIMIT|CLI_TOO_OLD|RUNTIME_UNAVAILABLE)\*\*(?:\s*[\r\n]+([\s\S]*))?$/;
 
 /** Strip ANSI SGR sequences from CLI/MCP stderr dumps. */
 export function stripAnsi(text: string): string {

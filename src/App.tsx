@@ -3326,7 +3326,7 @@ export default function App() {
         title: s.title || "Untitled",
         state: resume.state,
         streamingMessageId: resume.streamingMessageId,
-        backend: "grok_agent_stdio",
+        backend: "runtime_unavailable",
       });
     }
     if (openingSessionIdRef.current === s.id) {
@@ -3565,7 +3565,7 @@ export default function App() {
       sessionId: null,
       title: tr("session.new"),
       state: "idle",
-      backend: "grok_agent_stdio",
+      backend: "runtime_unavailable",
     });
     setLocalError(null);
     // Multi-session: NEVER sessionDisconnect here.
@@ -3793,7 +3793,7 @@ export default function App() {
           sessionId: null,
           title: auto.title || tr("session.new"),
           state: "idle",
-          backend: "grok_agent_stdio",
+          backend: "runtime_unavailable",
         });
         {
           const idle = { ...IDLE_SNAPSHOT };
@@ -4072,7 +4072,7 @@ export default function App() {
                 sessionId: prev.sessionId,
                 title: prev.title,
                 state: "idle",
-                backend: prev.backend || "grok_agent_stdio",
+                backend: prev.backend || "runtime_unavailable",
               }
             : prev,
         );
@@ -7185,7 +7185,7 @@ export default function App() {
                 sessionId: sid,
                 title: prev.title,
                 state: "idle",
-                backend: prev.backend || "grok_agent_stdio",
+                backend: prev.backend || "runtime_unavailable",
               }
             : prev,
         );
