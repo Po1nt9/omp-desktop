@@ -50,7 +50,7 @@ export function validateUpstreams(directory) {
   return data;
 }
 
-function validatePatchLedger(directory) {
+export function validatePatchLedger(directory) {
   const data = JSON.parse(fs.readFileSync(path.join(directory, "omp-patches.json"), "utf8"));
   requireValue(data.schemaVersion, 1, "omp-patches.schemaVersion");
   requireValue(data.baseCommit, OMP_BASE, "omp-patches.baseCommit");
