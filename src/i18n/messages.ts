@@ -971,7 +971,7 @@ const en = {
   "managedSetup.error.rejectedTitle": "Deployment key rejected",
   "managedSetup.error.rejected":
     "The deployment key was rejected or expired. Confirm it with your administrator.",
-  "settings.aboutApp": "About Grok App",
+  "settings.aboutApp": "About OMP Desktop",
   "settings.checkUpdate": "Check for updates",
   "settings.checkUpdateDesc":
     "Signed release builds can download and install updates in-app. Local or unsigned builds open the GitHub release page instead.",
@@ -1967,8 +1967,8 @@ const en = {
   "settings.remoteIm.scan.placeholder": "Click Start scan to show a Feishu/Lark QR code",
   "settings.remoteIm.scan.autoSaveFailed": "Scan succeeded but auto-save failed. Check fields in Paste tab and click Save & connect.",
   "settings.remoteIm.scan.hint": "Scan with Feishu/Lark mobile app. No terminal setup. Bridge runs in-process (Rust).",
-  "settings.remoteIm.bridge.remoteBridgeMissing": "Remote IM bridge backend is not the Rust runtime. Restart Grok App.",
-  "settings.remoteIm.bridge.agentConnectMissing": "Remote IM bridge backend is not the Rust runtime. Restart Grok App.",
+  "settings.remoteIm.bridge.remoteBridgeMissing": "Remote IM bridge backend is not the Rust runtime. Restart OMP Desktop.",
+  "settings.remoteIm.bridge.agentConnectMissing": "Remote IM bridge backend is not the Rust runtime. Restart OMP Desktop.",
   "settings.remoteIm.scan.openLink": "Open link",
   "settings.remoteIm.scan.needHost": "Scan requires the desktop app (Tauri host). Use paste credentials in browser-only mode.",
   "settings.remoteIm.scan.start": "Start scan",
@@ -3052,7 +3052,7 @@ const zh: Record<MessageKey, string> = {
   "managedSetup.error.rejectedTitle": "部署密钥被拒绝",
   "managedSetup.error.rejected":
     "部署密钥无效或已过期，请与管理员确认。",
-  "settings.aboutApp": "关于 Grok App",
+  "settings.aboutApp": "关于 OMP Desktop",
   "settings.checkUpdate": "检查更新",
   "settings.checkUpdateDesc":
     "已签名的正式版可在应用内下载并安装更新。本地或未签名构建会改为打开 GitHub 发布页。",
@@ -4025,8 +4025,8 @@ const zh: Record<MessageKey, string> = {
   "settings.remoteIm.scan.placeholder": "点击「开始扫码」显示飞书/Lark 二维码",
   "settings.remoteIm.scan.autoSaveFailed": "扫码成功但自动保存失败。请到「粘贴凭证」检查后点「保存并连接」。",
   "settings.remoteIm.scan.hint": "用飞书/Lark 手机 App 扫码。无需终端。Bridge 在应用内以 Rust 进程运行。",
-  "settings.remoteIm.bridge.remoteBridgeMissing": "远程 IM 未使用 Rust 内置桥。请重启 Grok App。",
-  "settings.remoteIm.bridge.agentConnectMissing": "远程 IM 未使用 Rust 内置桥。请重启 Grok App。",
+  "settings.remoteIm.bridge.remoteBridgeMissing": "远程 IM 未使用 Rust 内置桥。请重启 OMP Desktop。",
+  "settings.remoteIm.bridge.agentConnectMissing": "远程 IM 未使用 Rust 内置桥。请重启 OMP Desktop。",
   "settings.remoteIm.scan.openLink": "打开链接",
   "settings.remoteIm.scan.needHost": "扫码需要桌面端 Host。仅浏览器模式请使用「粘贴凭证」。",
   "settings.remoteIm.scan.start": "开始扫码",

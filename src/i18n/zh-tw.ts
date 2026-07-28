@@ -933,7 +933,7 @@ export const zhTW: Record<MessageKey, string> = {
   "managedSetup.error.rejectedTitle": "部署金鑰被拒絕",
   "managedSetup.error.rejected":
     "部署金鑰無效或已過期，請與管理員確認。",
-  "settings.aboutApp": "關於 Grok App",
+  "settings.aboutApp": "關於 OMP Desktop",
   "settings.checkUpdate": "檢查更新",
   "settings.checkUpdateDesc":
     "已簽名的正式版可在應用程式內下載並安裝更新。本機或未簽名建置會改為開啟 GitHub 發佈頁。",
@@ -1906,8 +1906,8 @@ export const zhTW: Record<MessageKey, string> = {
   "settings.remoteIm.scan.placeholder": "點擊「開始掃碼」顯示飛書/Lark 二維碼",
   "settings.remoteIm.scan.autoSaveFailed": "掃碼成功但自動儲存失敗。請到「貼上憑證」檢查後點「儲存並連線」。",
   "settings.remoteIm.scan.hint": "用飛書/Lark 手機 App 掃碼。無需終端。Bridge 在應用內以 Rust 進程運行。",
-  "settings.remoteIm.bridge.remoteBridgeMissing": "遠端 IM 未使用 Rust 內建橋。請重啟 Grok App。",
-  "settings.remoteIm.bridge.agentConnectMissing": "遠端 IM 未使用 Rust 內建橋。請重啟 Grok App。",
+  "settings.remoteIm.bridge.remoteBridgeMissing": "遠端 IM 未使用 Rust 內建橋。請重啟 OMP Desktop。",
+  "settings.remoteIm.bridge.agentConnectMissing": "遠端 IM 未使用 Rust 內建橋。請重啟 OMP Desktop。",
   "settings.remoteIm.scan.openLink": "開啟連結",
   "settings.remoteIm.scan.needHost": "掃碼需要桌面端 Host。僅瀏覽器模式請使用「貼上憑證」。",
   "settings.remoteIm.scan.start": "開始掃碼",
