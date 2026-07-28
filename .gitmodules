@@ -1,0 +1,3 @@
+[submodule "runtime/oh-my-pi"]
+	path = runtime/oh-my-pi
+	url = https://github.com/Po1nt9/oh-my-pi.git
