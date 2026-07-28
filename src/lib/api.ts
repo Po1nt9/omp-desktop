@@ -300,6 +300,14 @@ export async function openExternalUrl(url: string) {
   return invoke<void>("open_external_url", { url });
 }
 
+/** Generic per-day activity sample for contribution-style heatmaps. */
+export interface HeatmapDay {
+  date: string;
+  requests: number;
+  tokens: number;
+  costUsd: number;
+}
+
 /** GitHub Releases check (Settings → About). Does not auto-install. */
 export type AppUpdateCheck = {
   currentVersion: string;

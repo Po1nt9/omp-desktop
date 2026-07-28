@@ -10,14 +10,16 @@ import type { AccountStatus, SavedAccount } from "@/lib/api";
 import {
   accountDisplayName,
   accountInitials,
+  tierLabel,
+  usagePercent,
+} from "@/lib/accountUi";
+import {
   formatCompactNumber,
   formatDuration,
   formatQuotaResetTime,
   formatRelativeTime,
   localDateKeyFromIso,
-  tierLabel,
-  usagePercent,
-} from "@/lib/accountUi";
+} from "@/lib/formatUtils";
 import {
   Heatmap,
   dateInHeatRange,

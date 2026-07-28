@@ -57,7 +57,7 @@ import {
   IconRewind,
   IconTarget,
 } from "@/components/icons";
-import { formatMessageTime } from "@/lib/accountUi";
+import { formatMessageTime } from "@/lib/formatUtils";
 import { formatTokenCount } from "@/lib/contextUsage";
 import { useStickToBottom } from "@/hooks/useStickToBottom";
 import { useChatMessageVirtualizer } from "@/hooks/useChatMessageVirtualizer";

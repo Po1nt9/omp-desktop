@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { HeatmapDay } from "@/lib/api";
-import { formatCompactNumber } from "@/lib/accountUi";
+import { formatCompactNumber } from "@/lib/formatUtils";
 
 export type HeatGranularity = "day" | "week";
 
