@@ -32,7 +32,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --pretty false",
-    "check:provenance": "node scripts/check-provenance.mjs"
+    "check:provenance": "node scripts/check-provenance.mjs",
+    "check:brand": "node scripts/check-brand-policy.mjs"
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.17",
