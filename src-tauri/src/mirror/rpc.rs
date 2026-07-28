@@ -94,16 +94,8 @@ pub async fn dispatch(
             let snap = mgr.snapshot();
             Ok(serde_json::to_value(snap).map_err(|e| RpcError::host(e.to_string()))?)
         }
-        "account.status" => {
-            // Light: skip heavy billing refresh unless client asks.
-            let refresh = params
-                .get("refreshBilling")
-                .or_else(|| params.get("refresh_billing"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let status = crate::account::account_status(None, refresh).await;
-            Ok(serde_json::to_value(status).map_err(|e| RpcError::host(e.to_string()))?)
-        }
+        // TODO(Task 7/8): "account.status" mirror RPC removed with account module.
+        // OMP Runtime integration may restore an equivalent account surface.
         "settings.get" => {
             let s = store::load_settings();
             // Subset safe for phone display (no secret paths beyond what desktop already exposes).
@@ -348,8 +340,6 @@ pub async fn dispatch(
         | "path_open"
         | "path_reveal"
         | "open_in_editor"
-        | "cli_install_latest"
-        | "account_login"
         | "account.login"
         | "reset_app_data"
         | "fs_list_dir"
@@ -360,14 +350,14 @@ pub async fn dispatch(
 }
 
 /// Light account blob for hello (no billing refresh).
+// TODO(Task 7/8): account_summary_light removed with account module.
+// OMP Runtime integration may restore an equivalent summary.
 pub async fn account_summary_light(_app: &AppHandle) -> Value {
-    let status = crate::account::account_status(None, false).await;
     json!({
-        "signedIn": status.profile.signed_in,
-        "displayName": status.profile.display_name.clone()
-            .or(status.profile.email.clone()),
-        "email": status.profile.email,
-        "channel": status.channel,
+        "signedIn": false,
+        "displayName": null,
+        "email": null,
+        "channel": "none",
     })
 }
 

@@ -1723,52 +1723,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omp-desktop"
-version = "0.1.9"
-dependencies = [
- "arboard",
- "axum",
- "base64 0.22.1",
- "chrono",
- "directories",
- "fs2",
- "futures-util",
- "hex",
- "hmac",
- "image",
- "keyring",
- "parking_lot",
- "rand 0.8.7",
- "reqwest 0.12.28",
- "rfd",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tauri-plugin-store",
- "tauri-plugin-updater",
- "thiserror 2.0.19",
- "tokio",
- "tokio-tungstenite 0.26.2",
- "tower",
- "tower-http",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
- "uuid",
- "which",
- "window-vibrancy",
- "windows",
- "winreg",
- "zip 2.4.2",
-]
-
-[[package]]
 name = "gtk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2982,6 +2936,52 @@ dependencies = [
  "objc2-app-kit",
  "objc2-core-foundation",
  "objc2-foundation",
+]
+
+[[package]]
+name = "omp-desktop"
+version = "0.1.9"
+dependencies = [
+ "arboard",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "directories",
+ "fs2",
+ "futures-util",
+ "hex",
+ "hmac",
+ "image",
+ "keyring",
+ "parking_lot",
+ "rand 0.8.7",
+ "reqwest 0.12.28",
+ "rfd",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-store",
+ "tauri-plugin-updater",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-tungstenite 0.26.2",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "which",
+ "window-vibrancy",
+ "windows",
+ "winreg",
+ "zip 2.4.2",
 ]
 
 [[package]]

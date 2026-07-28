@@ -19,10 +19,33 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{info, warn};
 
+use crate::secrets;
 use crate::session_manager::SessionManager;
 use crate::store;
-use crate::voice_auth;
 use crate::voice_tools;
+
+/// Resolve a Bearer token for xAI Voice without the deleted voice_auth module.
+/// Checks official API key (secrets) and environment variables only —
+/// CLI auth.json path was removed with account/voice_auth modules.
+/// TODO(Task 8): OMP Runtime integration may restore credential resolution.
+fn resolve_voice_bearer_token() -> Result<String, String> {
+    let sec = secrets::load_secrets();
+    if let Some(key) = sec.official_api_key.filter(|k| !k.trim().is_empty()) {
+        return Ok(key.trim().to_string());
+    }
+    for var in ["XAI_API_KEY", "GROK_API_KEY"] {
+        if let Ok(key) = std::env::var(var) {
+            let key = key.trim().to_string();
+            if !key.is_empty() {
+                return Ok(key);
+            }
+        }
+    }
+    Err(
+        "No xAI credentials found. Add an official API key in Settings or set XAI_API_KEY."
+            .into(),
+    )
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,7 +178,7 @@ impl VoiceHost {
             return Ok(self.snapshot());
         }
 
-        let token = voice_auth::resolve_bearer_token()?;
+        let token = resolve_voice_bearer_token()?;
         let instructions = voice_tools::live_voice_instructions(
             project_path.as_deref(),
             project_name.as_deref(),

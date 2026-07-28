@@ -139,4 +139,24 @@ mod integration {
         // Just ensure helper runs; value depends on machine
         let _ = cli_auth_json_present();
     }
+
+    #[test]
+    fn command_surface_has_no_grok_product_commands() {
+        let commands = crate::registered_command_names();
+        for removed in [
+            "probe_cli",
+            "install_cli_latest",
+            "check_cli_update",
+            "install_cli_update",
+            "account_status",
+            "account_login",
+            "account_logout",
+            "supergrok_quota",
+        ] {
+            assert!(
+                !commands.contains(&removed),
+                "legacy command remained: {removed}"
+            );
+        }
+    }
 }
