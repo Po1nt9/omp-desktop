@@ -139,4 +139,64 @@ mod integration {
         // Just ensure helper runs; value depends on machine
         let _ = cli_auth_json_present();
     }
+
+    #[test]
+    fn command_surface_has_no_grok_product_commands() {
+        let commands = crate::registered_command_names();
+
+        // Meta-check: `registered_command_names()` is a manual mirror of the
+        // `generate_handler!` list in `lib.rs`. Assert the count so future
+        // drift is caught here rather than silently making the absence checks
+        // below vacuous. If you add/remove a command in `generate_handler!`,
+        // update `registered_command_names()` AND this expected count.
+        //
+        // Verify at any time with:
+        //   sed -n '/invoke_handler(tauri::generate_handler!/,/^\s*])/p' \
+        //     src-tauri/src/lib.rs | grep -cE '(commands|updater|tray|mirror|voice_host|remote_im)::'
+        const EXPECTED_REGISTERED_COMMAND_COUNT: usize = 172;
+        assert_eq!(
+            commands.len(),
+            EXPECTED_REGISTERED_COMMAND_COUNT,
+            "registered_command_names() is out of sync with generate_handler! \
+             (expected {EXPECTED_REGISTERED_COMMAND_COUNT}, got {}). Update \
+             registered_command_names() in lib.rs to match the current \
+             generate_handler! list.",
+            commands.len()
+        );
+
+        // Every Tauri command removed by the Grok CLI / account backend
+        // deletion must stay removed. These names are the actual
+        // `commands::<name>` identifiers from the pre-deletion `main` branch's
+        // `generate_handler!` block (enumerated via `comm -23` between main and
+        // this branch), not module names or guesswork.
+        for removed in [
+            // CLI install / update lifecycle
+            "probe_cli",
+            "cli_install_latest",
+            "cli_install_commands",
+            "cli_update_check",
+            "cli_update_install",
+            // CLI session import
+            "cli_session_import",
+            "cli_sessions_import_all",
+            "cli_sessions_list",
+            // Grok account backend
+            "account_status",
+            "account_login",
+            "account_login_cancel",
+            "account_logout",
+            "account_switch",
+            "account_remove",
+            "account_rename",
+            "account_save_current",
+            "account_open_subscribe",
+            "account_open_usage",
+            "accounts_list",
+        ] {
+            assert!(
+                !commands.contains(&removed),
+                "legacy command remained: {removed}"
+            );
+        }
+    }
 }

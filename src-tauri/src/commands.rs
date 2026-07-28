@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::cli_probe::{self, CliProbeResult};
+use crate::cli_probe;
 use crate::session_manager::{SessionManager, SessionSnapshot};
 use crate::store::{self, AppSettings, Project, SessionMeta};
 
@@ -195,11 +195,6 @@ pub async fn session_resolve_permission(
         .await
 }
 
-#[tauri::command]
-pub async fn probe_cli(manual_path: Option<String>) -> Result<CliProbeResult, String> {
-    Ok(cli_probe::probe_cli(manual_path.as_deref()))
-}
-
 /// API mode: TCP-connect to an ACP server and run the initialize handshake.
 #[tauri::command]
 pub async fn acp_test_connection(
@@ -210,32 +205,6 @@ pub async fn acp_test_connection(
         return Err("empty address".into());
     }
     Ok(crate::acp_client::probe_acp_server(addr).await)
-}
-
-/// Download + install latest Grok Build (multi-mirror, progress via `setup://cli-install-progress`).
-///
-/// `allow_unverified`: optional; when omitted, uses Settings
-/// `allowUnverifiedCliInstall` (default false → checksum required).
-#[tauri::command]
-pub async fn cli_install_latest(
-    app: tauri::AppHandle,
-    allow_unverified: Option<bool>,
-) -> Result<crate::cli_install::CliInstallResult, String> {
-    let allow = allow_unverified.unwrap_or_else(|| {
-        store::load_settings().allow_unverified_cli_install
-    });
-    let result = crate::cli_install::install_cli_latest(app, allow).await?;
-    // Remember last install verification for Doctor.
-    let mut s = store::load_settings();
-    s.last_cli_checksum_verified = result.checksum_verified;
-    let _ = store::save_settings(&s);
-    Ok(result)
-}
-
-/// Platform install command + docs URL for manual fallback.
-#[tauri::command]
-pub async fn cli_install_commands() -> Result<serde_json::Value, String> {
-    Ok(crate::cli_install::install_commands())
 }
 
 /// Native file picker for a Grok Build binary (manual path).
@@ -268,7 +237,7 @@ pub async fn open_external_url(url: String) -> Result<(), String> {
     open_http_url(url.trim())
 }
 
-/// Shared http(s) open helper (also used by account login).
+/// Shared http(s) open helper for opening URLs in the system browser.
 ///
 /// Windows uses `rundll32 url.dll,FileProtocolHandler` so query `&` is not
 /// split by `cmd /C start`, and no console window flashes (Fixes #162).
@@ -433,37 +402,6 @@ pub async fn sessions_search(
     .map_err(|e| e.to_string())
 }
 
-/// List Grok Build CLI sessions under GROK_HOME (shared-mode discovery, E03).
-#[tauri::command]
-pub async fn cli_sessions_list() -> Result<Vec<crate::cli_sessions::CliSessionSummary>, String> {
-    let mode = store::load_settings().session_data_mode;
-    crate::cli_sessions::list_cli_sessions(&mode)
-}
-
-/// Import one CLI session (chat_history.jsonl) into the App journal.
-#[tauri::command]
-pub async fn cli_session_import(
-    agent_session_id: String,
-    dir: Option<String>,
-    project_id: Option<String>,
-) -> Result<SessionMeta, String> {
-    let mode = store::load_settings().session_data_mode;
-    crate::cli_sessions::import_cli_session(
-        &agent_session_id,
-        dir.as_deref(),
-        project_id,
-        &mode,
-    )
-}
-
-/// Import up to `limit` not-yet-linked CLI sessions (default 50).
-#[tauri::command]
-pub async fn cli_sessions_import_all(limit: Option<u32>) -> Result<Vec<SessionMeta>, String> {
-    let mode = store::load_settings().session_data_mode;
-    let lim = limit.unwrap_or(50).min(100) as usize;
-    crate::cli_sessions::import_all_cli_sessions(&mode, lim)
-}
-
 #[tauri::command]
 pub async fn session_create(
     project_id: Option<String>,
@@ -530,9 +468,8 @@ pub async fn session_set_project(
 pub async fn session_messages(
     id: String,
 ) -> Result<Vec<store::ChatMessageStored>, String> {
-    // If Host dropped the final assistant stream, agent chat_history still has
-    // it — merge before serving so reload / re-open recovers the answer.
-    let _ = crate::cli_sessions::try_reconcile_linked_session(&id);
+    // TODO(Task 7/8): CLI session reconciliation was removed with cli_sessions
+    // module. OMP Runtime integration may restore equivalent merge logic.
     Ok(store::load_messages(&id))
 }
 
@@ -4939,98 +4876,6 @@ pub async fn project_add_dialog(trust: bool) -> Result<Option<Project>, String> 
     Ok(Some(p))
 }
 
-// ── Official Grok Build account ─────────────────────────────────────────────
-
-#[tauri::command]
-pub async fn account_status(
-    refresh_billing: Option<bool>,
-    manual_cli_path: Option<String>,
-) -> Result<crate::account::AccountStatus, String> {
-    let settings = store::load_settings();
-    let manual = manual_cli_path
-        .or(settings.manual_cli_path)
-        .filter(|s| !s.is_empty());
-    Ok(crate::account::account_status(manual.as_deref(), refresh_billing.unwrap_or(true)).await)
-}
-
-#[tauri::command]
-pub async fn account_login(
-    method: Option<String>,
-    manual_cli_path: Option<String>,
-) -> Result<crate::account::LoginResult, String> {
-    let settings = store::load_settings();
-    let manual = manual_cli_path
-        .or(settings.manual_cli_path)
-        .filter(|s| !s.is_empty());
-    let method = method.unwrap_or_else(|| "oauth".into());
-    Ok(crate::account::account_login(&method, manual.as_deref()).await)
-}
-
-/// Abort a running `grok login` (OAuth / device-code). No-op if none is running.
-#[tauri::command]
-pub async fn account_login_cancel() -> Result<(), String> {
-    crate::account::account_login_cancel().await;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn account_logout(
-    manual_cli_path: Option<String>,
-) -> Result<crate::account::AccountProfile, String> {
-    let settings = store::load_settings();
-    let manual = manual_cli_path
-        .or(settings.manual_cli_path)
-        .filter(|s| !s.is_empty());
-    crate::account::account_logout(manual.as_deref()).await
-}
-
-#[tauri::command]
-pub async fn account_open_usage() -> Result<(), String> {
-    crate::account::open_usage_manage().await
-}
-
-#[tauri::command]
-pub async fn account_open_subscribe() -> Result<(), String> {
-    crate::account::open_subscribe().await
-}
-
-// ── Multi-account profiles ─────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn accounts_list() -> crate::account_profiles::AccountsListResult {
-    crate::account_profiles::list_accounts()
-}
-
-#[tauri::command]
-pub fn account_save_current(label: Option<String>) -> Result<crate::account_profiles::SavedAccount, String> {
-    crate::account_profiles::save_current_account(label)
-}
-
-#[tauri::command]
-pub async fn account_switch(
-    app: tauri::AppHandle,
-    mgr: State<'_, Arc<SessionManager>>,
-    id: String,
-) -> Result<crate::account::AccountProfile, String> {
-    let profile = crate::account_profiles::switch_account(&id)?;
-    // Soft-drop live agent so next send uses the new credentials.
-    let _ = mgr.disconnect(app).await;
-    Ok(profile)
-}
-
-#[tauri::command]
-pub fn account_remove(id: String) -> Result<(), String> {
-    crate::account_profiles::remove_account(&id)
-}
-
-#[tauri::command]
-pub fn account_rename(
-    id: String,
-    label: String,
-) -> Result<crate::account_profiles::SavedAccount, String> {
-    crate::account_profiles::rename_account(&id, &label)
-}
-
 /// Import a markdown/JSON transcript into a new local session (Grok web history alternative).
 #[tauri::command]
 pub fn session_import_transcript(
@@ -5176,7 +5021,7 @@ pub async fn providers_upsert(
         set_as_default,
         create_only,
     })?;
-    // Keep legacy secrets in sync for Doctor / account channel display.
+    // Keep legacy secrets in sync for Doctor display.
     if let Some(p) = result.providers.iter().find(|p| p.is_default).or(result.providers.first())
     {
         let mut secrets = store::load_secrets();
@@ -5611,29 +5456,6 @@ pub async fn cli_doctor_fix(id: String) -> Result<serde_json::Value, String> {
             }))
         }
     }
-}
-
-// from PR #63
-
-/// Run resolved `grok update --check --json` and return a typed DTO.
-#[tauri::command]
-pub async fn cli_update_check() -> Result<crate::cli_update::CliUpdateCheck, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let settings = store::load_settings();
-        crate::cli_update::check_cli_update(settings.manual_cli_path.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-// from PR #63
-
-/// Install CLI update: prefer `grok update`, fall back to install trust-chain.
-#[tauri::command]
-pub async fn cli_update_install(
-    app: tauri::AppHandle,
-) -> Result<crate::cli_install::CliInstallResult, String> {
-    crate::cli_update::install_cli_update(app).await
 }
 
 /// Recycle every warm agent process so the next send spawns fresh binaries.

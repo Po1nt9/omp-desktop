@@ -9,10 +9,8 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::account;
 use crate::providers::{self, ActiveRoute};
 use crate::secrets;
-use crate::voice_auth;
 
 const STT_URL: &str = "https://api.x.ai/v1/stt";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -36,11 +34,9 @@ pub struct VoiceTranscribeResult {
     pub error_class: Option<String>,
 }
 
-/// Resolve Bearer token for xAI STT (official only — not relay).
+/// Resolve Bearer token for xAI STT (official API key only — not relay).
+/// TODO(Task 8): CLI auth.json / OAuth path removed with account/voice_auth modules.
 pub fn speech_auth_token() -> Option<(String, &'static str)> {
-    if let Some(t) = account::speech_access_token() {
-        return Some((t, "oauth"));
-    }
     let secrets = secrets::load_secrets();
     if let Some(k) = secrets
         .official_api_key
@@ -289,7 +285,9 @@ pub async fn transcribe_base64(
         });
     }
 
-    let token = voice_auth::resolve_bearer_token()?;
+    let token = speech_auth_token()
+        .map(|(t, _)| t)
+        .ok_or_else(|| "no speech auth (official API key required)".to_string())?;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(audio_b64.trim())
         .map_err(|e| format!("invalid audio base64: {e}"))?;

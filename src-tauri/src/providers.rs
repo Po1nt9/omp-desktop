@@ -599,21 +599,20 @@ pub fn agent_spawn_model_id(composer_model: &str) -> String {
 /// Custom: strip agent-home `auth.json` so inference uses `api_key` only.
 /// Official: mirror `~/.grok/auth.json` into agent-home for OAuth.
 pub fn prepare_route_auth_for_agent() {
+    // TODO(Task 7/8): agent-home auth sync removed with account module.
+    // OMP Runtime integration may restore equivalent credential binding.
     match active_route() {
         ActiveRoute::Custom { ref id } => {
-            crate::account::clear_agent_home_auth();
             tracing::info!(
                 target: "providers",
-                "custom route `{id}`: cleared agent-home auth.json (api_key only)"
+                "custom route `{id}`: agent-home auth sync not available (account module removed)"
             );
         }
         ActiveRoute::Official => {
-            if let Err(e) = crate::account::sync_cli_auth_to_agent_home() {
-                tracing::warn!(
-                    target: "providers",
-                    "official route: auth sync failed: {e}"
-                );
-            }
+            tracing::info!(
+                target: "providers",
+                "official route: agent-home auth sync not available (account module removed)"
+            );
         }
     }
 }
@@ -630,10 +629,7 @@ pub fn activate_provider(
     match source.as_str() {
         "official" => {
             let result = set_default_model_id(OFFICIAL_DEFAULT_MODEL)?;
-            // Restore official OAuth into agent-home; drop relay display fields.
-            if let Err(e) = crate::account::sync_cli_auth_to_agent_home() {
-                tracing::warn!(target: "providers", "activate official: auth sync: {e}");
-            }
+            // TODO(Task 7/8): official OAuth agent-home sync removed with account module.
             let mut secrets = crate::store::load_secrets();
             secrets.relay_base_url = None;
             // Prefer catalog id for composer, not the synthetic "grok" default key.
@@ -651,8 +647,7 @@ pub fn activate_provider(
                 return Err(format!("unknown provider `{id}`"));
             }
             let result = set_default_model_id(id)?;
-            // Critical: remove OIDC so Grok Build uses [model.<id>].api_key.
-            crate::account::clear_agent_home_auth();
+            // TODO(Task 7/8): clear_agent_home_auth removed with account module.
             if let Some(p) = result.providers.iter().find(|p| p.id == id) {
                 let mut secrets = crate::store::load_secrets();
                 secrets.relay_base_url = Some(p.base_url.clone());
@@ -733,8 +728,7 @@ pub fn upsert_custom_provider(input: UpsertProviderInput) -> Result<ProvidersLis
     write_text(&path, &text)?;
     let result = list_custom_providers()?;
     if input.set_as_default.unwrap_or(false) {
-        // Newly defaulted custom channel must not inherit OIDC.
-        crate::account::clear_agent_home_auth();
+        // TODO(Task 7/8): clear_agent_home_auth removed with account module.
     }
     Ok(result)
 }

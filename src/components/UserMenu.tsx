@@ -15,10 +15,10 @@ import type { AccountStatus, CustomProvider } from "@/lib/api";
 import {
   accountDisplayName,
   accountInitials,
-  formatQuotaResetTime,
   tierLabel,
   usagePercent,
 } from "@/lib/accountUi";
+import { formatQuotaResetTime } from "@/lib/formatUtils";
 
 export interface UserMenuProps {
   open: boolean;

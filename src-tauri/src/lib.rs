@@ -1,7 +1,5 @@
 //! Grok App Host — real ACP default (`grok agent stdio`).
 
-mod account;
-mod account_profiles;
 mod acp_client;
 mod agent_memory;
 mod agents_catalog;
@@ -11,10 +9,7 @@ mod updater;
 mod agent_subagents;
 mod extensions;
 mod hooks;
-mod supergrok_quota;
 mod cli_probe;
-mod cli_install;
-mod cli_update;
 mod commands;
 mod support_bundle;
 mod editors;
@@ -34,7 +29,6 @@ mod logging;
 mod stream_emit;
 mod stream_stall;
 mod tool_heartbeat;
-mod cli_sessions;
 mod turn_complete;
 mod store_lock;
 mod permission;
@@ -59,7 +53,6 @@ mod tray;
 mod tray_i18n;
 #[cfg(windows)]
 mod win_shell;
-mod voice_auth;
 mod voice_host;
 mod voice_stt;
 mod voice_tools;
@@ -210,12 +203,7 @@ pub fn run() {
             commands::session_resolve_permission,
             commands::session_resolve_plan,
             commands::session_resolve_ask_user,
-            commands::probe_cli,
             commands::acp_test_connection,
-            commands::cli_install_latest,
-            commands::cli_install_commands,
-            commands::cli_update_check,
-            commands::cli_update_install,
             commands::pick_cli_binary,
             commands::open_external_url,
             commands::app_check_update,
@@ -240,9 +228,6 @@ pub fn run() {
             commands::project_archive_sessions,
             commands::sessions_list,
             commands::sessions_search,
-            commands::cli_sessions_list,
-            commands::cli_session_import,
-            commands::cli_sessions_import_all,
             commands::session_create,
             commands::session_delete,
             commands::session_rename,
@@ -344,17 +329,6 @@ pub fn run() {
             commands::automation_set_enabled,
             commands::automation_mark_run,
             commands::automation_delete,
-            commands::account_status,
-            commands::account_login,
-            commands::account_login_cancel,
-            commands::account_logout,
-            commands::account_open_usage,
-            commands::account_open_subscribe,
-            commands::accounts_list,
-            commands::account_save_current,
-            commands::account_switch,
-            commands::account_remove,
-            commands::account_rename,
             commands::session_import_transcript,
             commands::session_import_transcript_file,
             commands::providers_list,
@@ -415,4 +389,189 @@ pub fn run() {
             }
             let _ = (app, &event);
         });
+}
+
+/// Test-only registry of all Tauri command names registered in [`run`].
+///
+/// Kept in sync with the `generate_handler!` list above. The command-surface
+/// regression test uses this to assert that legacy Grok CLI/account/quota
+/// commands have been removed.
+#[cfg(test)]
+fn registered_command_names() -> &'static [&'static str] {
+    &[
+        // session
+        "session_get_state",
+        "session_connect",
+        "session_send",
+        "session_interject",
+        "session_stop",
+        "session_disconnect",
+        "session_reattach",
+        "session_resolve_permission",
+        "session_resolve_plan",
+        "session_resolve_ask_user",
+        "acp_test_connection",
+        "pick_cli_binary",
+        "open_external_url",
+        "app_check_update",
+        "is_auto_update_supported",
+        "is_updater_plugin_enabled",
+        "updater_status",
+        "prepare_for_app_update",
+        "voice_status",
+        "voice_transcribe",
+        // projects
+        "projects_list",
+        "project_add",
+        "project_add_dialog",
+        "project_remove",
+        "project_relocate",
+        "project_trust",
+        "project_set_permission_policy",
+        "project_rename",
+        "project_set_pinned",
+        "project_reveal",
+        "project_rules_list",
+        "project_rules_ensure_template",
+        "project_archive_sessions",
+        "sessions_list",
+        "sessions_search",
+        "session_create",
+        "session_delete",
+        "session_rename",
+        "session_set_archived",
+        "session_set_pinned",
+        "session_set_project",
+        "session_set_scheduled",
+        "session_messages",
+        "session_media_root",
+        "session_resolve_relative_media",
+        "settings_get",
+        "store_take_quarantine",
+        "settings_set",
+        "memory_clear",
+        "settings_remember_last_session",
+        "models_list_available",
+        "agents_catalog",
+        "composer_prefs_resolve",
+        "composer_prefs_set",
+        "session_set_policy",
+        "permission_rules_get",
+        "permission_rules_set",
+        "session_set_model",
+        "session_rewind_drop_last_user",
+        "session_rewind_points",
+        "session_rewind_execute",
+        "session_fork",
+        "secrets_get_masked",
+        "secrets_set",
+        "provider_ping",
+        "import_grok_cli_config",
+        "import_grok_go_config",
+        "doctor_report",
+        "network_probe",
+        "agents_recycle_all",
+        "cli_doctor_fix",
+        "export_support_bundle",
+        "export_session_bundle",
+        "session_trace_export",
+        "reset_app_data",
+        "skills_list",
+        "agents_list",
+        "inspect_mcp",
+        "project_inspect",
+        "extensions_get",
+        "extensions_set_mcp",
+        "extensions_set_skill",
+        "extensions_enable_all_mcp",
+        "extensions_enable_all_skills",
+        "mcp_add",
+        "mcp_remove",
+        "mcp_doctor",
+        "plugins_list",
+        "plugin_enable",
+        "plugin_disable",
+        "plugin_uninstall",
+        "plugin_details",
+        "plugin_install",
+        "plugin_update",
+        "hooks_list",
+        "hooks_reveal",
+        "hooks_open_dir",
+        "hooks_ensure_dir",
+        "setup_preview",
+        "setup_install",
+        "marketplace_list",
+        "marketplace_available",
+        "marketplace_add",
+        "marketplace_remove",
+        "marketplace_update",
+        "leader_list",
+        "leader_kill_all",
+        "pick_directory",
+        "pick_attach_files",
+        "pick_attach_folder",
+        "save_temp_attachment",
+        "clipboard_paste_image",
+        "paths_classify",
+        "path_open",
+        "path_reveal",
+        "git_file_diff",
+        "git_status",
+        "git_worktrees_list",
+        "git_worktree_add",
+        "git_worktree_remove",
+        "git_worktree_gc",
+        "git_show_file",
+        "fs_list_dir",
+        "fs_read_file",
+        "fs_write_file",
+        "fs_write_absolute",
+        "tray_refresh",
+        "fs_read_absolute",
+        "fs_open_path",
+        "session_auto_title",
+        "automations_list",
+        "automation_create",
+        "automation_update",
+        "automation_set_enabled",
+        "automation_mark_run",
+        "automation_delete",
+        "session_import_transcript",
+        "session_import_transcript_file",
+        "providers_list",
+        "providers_upsert",
+        "providers_remove",
+        "providers_set_default",
+        "providers_activate",
+        "providers_ping",
+        "providers_list_models",
+        "providers_cc_switch_scan",
+        "providers_cc_switch_import",
+        "editors_list",
+        "open_in_editor",
+        "mirror_status",
+        "mirror_rotate_token",
+        "mirror_set_read_only",
+        "mirror_start",
+        "mirror_stop",
+        "voice_state",
+        "voice_start",
+        "voice_stop",
+        "voice_push_pcm",
+        "voice_invoke_tool",
+        "voice_dictation_transcribe",
+        "remote_im_bridge_status",
+        "remote_im_bridge_start",
+        "remote_im_bridge_stop",
+        "remote_im_bridge_set_config",
+        "remote_im_bridge_reload",
+        "remote_im_test_connection",
+        "remote_im_scan_begin",
+        "remote_im_scan_poll",
+        "remote_im_list_instances",
+        "remote_im_save_instance",
+        "remote_im_delete_instance",
+        "remote_im_doctor",
+    ]
 }
