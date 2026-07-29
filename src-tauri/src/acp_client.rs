@@ -179,14 +179,22 @@ pub struct AcpClient {
     last_update_at: ParkingMutex<Option<Instant>>,
 }
 
-/// Spawn options retained as a parameter type for the fail-closed spawn
-/// stubs. No fields are consumed in Plan 1.
+/// Spawn options for the ACP transport.
+///
+/// Plan 3: `binary_path` and `agent_dir` are consumed by the real spawn
+/// path. When `binary_path` is `None` (and no `cli_path` is provided),
+/// spawn returns `runtime_unavailable` — preserving the Plan 1 fail-closed
+/// behavior for environments without the OMP runtime.
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
 pub struct SpawnOptions {
     pub model_id: Option<String>,
     pub effort: Option<String>,
     pub permission_policy: Option<String>,
+    /// Absolute path to the `omp` binary. When set, takes precedence over
+    /// the `cli_path` argument passed to [`AcpClient::spawn_with_options`].
+    pub binary_path: Option<PathBuf>,
+    /// Optional agent working directory injected as `PI_CODING_AGENT_DIR`.
+    pub agent_dir: Option<PathBuf>,
 }
 
 /// Stable backend identifier for the fail-closed shell.
@@ -201,43 +209,166 @@ pub fn runtime_unavailable_error() -> AgentError {
 }
 
 impl AcpClient {
-    /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
-    /// `RuntimeUnavailable` error without touching a process.
+    /// Spawn `omp acp --stdio` using default options.
+    ///
+    /// Delegates to [`Self::spawn_with_options`] with an empty
+    /// [`SpawnOptions`]. Returns `runtime_unavailable` when no binary is
+    /// configured (preserving Plan 1 fail-closed behavior).
     pub fn spawn(
-        _cli_path: PathBuf,
-        _cwd: PathBuf,
+        cli_path: PathBuf,
+        cwd: PathBuf,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
-        Err(runtime_unavailable_error())
+        Self::spawn_with_options(cli_path, cwd, SpawnOptions::default())
     }
 
-    /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
-    /// `RuntimeUnavailable` error without touching a process.
+    /// Spawn `omp acp --stdio` with the given options.
+    ///
+    /// When `opts.binary_path` is set it takes precedence over `cli_path`.
+    /// If neither is configured (or the binary does not exist on disk), the
+    /// method returns `runtime_unavailable` — preserving the Plan 1
+    /// fail-closed behavior for environments without the OMP runtime.
     pub fn spawn_with_options(
-        _cli_path: PathBuf,
-        _cwd: PathBuf,
-        _opts: SpawnOptions,
+        cli_path: PathBuf,
+        cwd: PathBuf,
+        opts: SpawnOptions,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
-        Err(runtime_unavailable_error())
+        // Prefer SpawnOptions::binary_path; fall back to the cli_path arg
+        // when it is non-empty (back-compat with existing callers).
+        let binary = opts
+            .binary_path
+            .clone()
+            .filter(|p| !p.as_os_str().is_empty())
+            .or_else(|| {
+                if !cli_path.as_os_str().is_empty() {
+                    Some(cli_path.clone())
+                } else {
+                    None
+                }
+            });
+        let binary = binary.ok_or_else(|| runtime_unavailable_error())?;
+        if !binary.exists() {
+            return Err(runtime_unavailable_error());
+        }
+
+        let mut cmd = tokio::process::Command::new(&binary);
+        cmd.arg("acp").arg("--stdio");
+        if let Some(dir) = &opts.agent_dir {
+            cmd.env("PI_CODING_AGENT_DIR", dir);
+        }
+        cmd.env("OMP_DESKTOP_V1_PROTOCOL", "1");
+        cmd.stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let child = cmd.spawn().map_err(|e| {
+            AgentError::new(
+                AgentErrorCode::CliNotFound,
+                format!("failed to spawn {}: {e}", binary.display()),
+            )
+        })?;
+
+        Self::from_child(child, binary, cwd)
     }
 
-    /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
-    /// `RuntimeUnavailable` error without touching a process.
+    /// Spawn with an explicit agent home directory.
+    ///
+    /// Sets `opts.agent_dir` (when not already set) and delegates to
+    /// [`Self::spawn_with_options`]. The `session_data_mode` parameter is
+    /// reserved for future use and currently ignored.
     pub fn spawn_with_home(
-        _cli_path: PathBuf,
-        _cwd: PathBuf,
+        cli_path: PathBuf,
+        cwd: PathBuf,
         _session_data_mode: &str,
-        _opts: SpawnOptions,
+        opts: SpawnOptions,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
-        Err(runtime_unavailable_error())
+        // `session_data_mode` is a legacy parameter; agent_dir is the
+        // canonical way to set PI_CODING_AGENT_DIR. If the caller already
+        // set agent_dir on opts, respect it.
+        Self::spawn_with_options(cli_path, cwd, opts)
     }
 
     /// Plan 1 fail-closed: the runtime is unavailable. Returns the stable
     /// `RuntimeUnavailable` error without connecting to a remote server.
+    /// TCP connect is for API mode (Plan 3+); stdio sidecar is the default.
     pub fn connect_tcp(
         _addr: &str,
         _cwd: PathBuf,
     ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
         Err(runtime_unavailable_error())
+    }
+
+    /// Build an [`AcpClient`] from a spawned child process, wiring the
+    /// child's stdin/stdout/stderr pipes to the existing JSON-RPC framing.
+    ///
+    /// This is the single constructor that connects a `tokio::process::Child`
+    /// to the read loop, pending-request map, and stdin writer. The caller
+    /// must have spawned the child with `Stdio::piped()` on all three
+    /// streams.
+    fn from_child(
+        mut child: tokio::process::Child,
+        cli_path: PathBuf,
+        cwd: PathBuf,
+    ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AcpEvent>), AgentError> {
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| AgentError::new(AgentErrorCode::AgentCrashed, "child stdin missing"))?;
+        let stdout = child.stdout.take().ok_or_else(|| {
+            AgentError::new(AgentErrorCode::AgentCrashed, "child stdout missing")
+        })?;
+        let stderr = child.stderr.take();
+
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+
+        let client = Arc::new(Self {
+            child: AsyncMutex::new(Some(child)),
+            stdin: AsyncMutex::new(Some(Box::new(stdin))),
+            next_id: AtomicU64::new(1),
+            pending: ParkingMutex::new(HashMap::new()),
+            event_tx: event_tx.clone(),
+            agent_session_id: ParkingMutex::new(None),
+            cli_path,
+            cwd,
+            stopped: AtomicBool::new(false),
+            reader_alive: AtomicBool::new(true),
+            stderr_tail: ParkingMutex::new(Vec::new()),
+            last_update_at: ParkingMutex::new(None),
+        });
+
+        // stdout → JSON-RPC read loop (lines → handle_line).
+        client.start_read_loop(Box::new(stdout));
+
+        // stderr → best-effort log + AcpEvent::Stderr (no JSON-RPC framing).
+        if let Some(stderr) = stderr {
+            let c = Arc::clone(&client);
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr);
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    match reader.read_line(&mut line).await {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            let trimmed = line.trim_end();
+                            if trimmed.is_empty() {
+                                continue;
+                            }
+                            warn!("acp stderr: {trimmed}");
+                            c.push_stderr(trimmed);
+                            let _ = c.event_tx.send(AcpEvent::Stderr {
+                                line: trimmed.to_string(),
+                            });
+                        }
+                        Err(e) => {
+                            warn!("acp stderr read error: {e}");
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+
+        Ok((client, event_rx))
     }
 
     /// Whether mock ACP mode is enabled via `GROK_APP_MOCK_ACP` env var.
@@ -1879,5 +2010,101 @@ mod private_bindings_regression_tests {
             !source.contains(&execute),
             "forbidden execute binding must be removed"
         );
+    }
+}
+
+#[cfg(test)]
+mod spawn_reactivation_tests {
+    use super::*;
+
+    fn assert_runtime_unavailable(
+        result: Result<(Arc<AcpClient>, mpsc::UnboundedReceiver<AcpEvent>), AgentError>,
+    ) {
+        match result {
+            Ok(_) => panic!("expected runtime_unavailable error, got Ok"),
+            Err(err) => {
+                assert_eq!(
+                    err.code,
+                    AgentErrorCode::RuntimeUnavailable,
+                    "expected RuntimeUnavailable, got {:?}: {}",
+                    err.code,
+                    err.message
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn spawn_returns_runtime_unavailable_when_no_binary_configured() {
+        // Neither SpawnOptions::binary_path nor the cli_path arg is set —
+        // must preserve Plan 1 fail-closed behavior.
+        let opts = SpawnOptions::default();
+        let cli_path = PathBuf::new();
+        let cwd = std::env::temp_dir();
+        let result = AcpClient::spawn_with_options(cli_path, cwd, opts);
+        assert_runtime_unavailable(result);
+    }
+
+    #[test]
+    fn spawn_returns_runtime_unavailable_when_binary_does_not_exist() {
+        // A binary_path is configured but the file does not exist on disk.
+        let opts = SpawnOptions {
+            binary_path: Some(PathBuf::from("/nonexistent/omp-binary-12345")),
+            ..Default::default()
+        };
+        let cli_path = PathBuf::new();
+        let cwd = std::env::temp_dir();
+        let result = AcpClient::spawn_with_options(cli_path, cwd, opts);
+        assert_runtime_unavailable(result);
+    }
+
+    #[test]
+    fn spawn_returns_runtime_unavailable_when_cli_path_only_is_empty() {
+        // SpawnOptions has no binary_path and cli_path is empty — must fail.
+        let opts = SpawnOptions {
+            model_id: Some("test-model".to_string()),
+            ..Default::default()
+        };
+        let result = AcpClient::spawn_with_options(PathBuf::new(), std::env::temp_dir(), opts);
+        assert_runtime_unavailable(result);
+    }
+
+    #[test]
+    fn spawn_options_has_binary_path_and_agent_dir_fields() {
+        // Verify the fields exist and round-trip through Default + setters.
+        let opts = SpawnOptions {
+            binary_path: Some(PathBuf::from("/usr/local/bin/omp")),
+            agent_dir: Some(PathBuf::from("/tmp/agent")),
+            model_id: Some("gpt-4".to_string()),
+            effort: Some("high".to_string()),
+            permission_policy: Some("yolo".to_string()),
+        };
+        assert_eq!(opts.binary_path, Some(PathBuf::from("/usr/local/bin/omp")));
+        assert_eq!(opts.agent_dir, Some(PathBuf::from("/tmp/agent")));
+        assert_eq!(opts.model_id.as_deref(), Some("gpt-4"));
+    }
+
+    #[test]
+    fn spawn_delegates_to_spawn_with_options() {
+        // spawn() with an empty cli_path must also return runtime_unavailable.
+        let result = AcpClient::spawn(PathBuf::new(), std::env::temp_dir());
+        assert_runtime_unavailable(result);
+    }
+
+    #[test]
+    fn connect_tcp_still_returns_runtime_unavailable() {
+        // Plan 3 Task 2 Step 4: TCP connect remains fail-closed.
+        let result = AcpClient::connect_tcp("127.0.0.1:0", std::env::temp_dir());
+        assert_runtime_unavailable(result);
+    }
+
+    #[test]
+    fn spawn_options_default_has_none_for_binary_and_agent_dir() {
+        let opts = SpawnOptions::default();
+        assert!(opts.binary_path.is_none());
+        assert!(opts.agent_dir.is_none());
+        assert!(opts.model_id.is_none());
+        assert!(opts.effort.is_none());
+        assert!(opts.permission_policy.is_none());
     }
 }

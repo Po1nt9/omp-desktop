@@ -2633,6 +2633,8 @@ impl SessionManager {
             model_id: Some(agent_model.clone()),
             effort: Some(prefs.effort.clone()),
             permission_policy: Some(prefs.permission_policy.clone()),
+            binary_path: None,
+            agent_dir: None,
         };
 
         let (client, mut events) = match AcpClient::spawn_with_options(cli_path, cwd, spawn_opts)
