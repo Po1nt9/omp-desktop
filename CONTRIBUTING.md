@@ -1,10 +1,8 @@
-# Contributing to Grok App
+# Contributing to OMP Desktop
 
-感谢关注 **Grok App**！欢迎 Issue、PR 与使用反馈。
+Thanks for your interest in contributing to **OMP Desktop**. Issues and PRs are welcome.
 
-Thanks for your interest in contributing.
-
-## 开发环境 / Development
+## Development
 
 ```bash
 pnpm install
@@ -26,45 +24,37 @@ pnpm build:ui
 cd src-tauri && cargo test
 ```
 
-Optional mock agent (no real CLI):
+## Workflow
 
-```bash
-GROK_APP_ACP=mock pnpm dev
-```
+1. Fork the repository and create a branch.
+2. Keep changes small and focused.
+3. Run `pnpm typecheck`, `pnpm test`, and `cargo test` (in `src-tauri`) locally.
+4. User-visible strings go through `src/i18n/messages.ts` (`en` / `zh` same keys).
+5. Do not use `window.confirm` / `prompt` / `alert` in product UI — use in-app dialogs.
+6. Open a PR describing the motivation, the change, and how you verified it.
 
-Default is the real **Grok Build** CLI (`grok agent stdio`).
+## Guidelines
 
-## 贡献流程 / Workflow
+- Product name: **OMP Desktop**.
+- Session and settings data live under the App data root.
+- Current specs and plans live under [`docs/superpowers/`](./docs/superpowers/).
+- Do not commit `node_modules`, `target`, `dist`, local tokens, or `secrets.json`.
+- Security-related issues: see [SECURITY.md](./SECURITY.md).
 
-1. Fork 本仓库并创建分支
-2. 做尽量小而清晰的改动
-3. 本地通过 `pnpm typecheck`、`pnpm test` 与 `cargo test`（`src-tauri`）
-4. 用户可见文案走 `src/i18n/messages.ts`（`en` / `zh` 同键）
-5. 禁止在 UI 使用 `window.confirm` / `prompt` / `alert`（见 `docs/llm-wiki/dialogs.md`）
-6. 提交 PR，说明动机、改动与验证方式
+## Contact
 
-**维护者 / AI 协作者**：Issue 分拣、PR 采纳标准、社区反馈入库与发版闭环见 **[docs/llm-wiki/maintain.md](./docs/llm-wiki/maintain.md)**。
-
-## 约定 / Guidelines
-
-- 产品名：**Grok App**（窗口 / 安装包名多为 **Grok**）
-- 会话与设置数据在 App data root（可用 `GROK_APP_HOME` 覆盖）
-- Agent 产品规则以 [`docs/llm-wiki/`](./docs/llm-wiki/) 为准
-- 不要提交 `node_modules`、`target`、`dist`、本地 token / `secrets.json` / `auth.json`
-- 安全相关问题请走 [SECURITY.md](./SECURITY.md)
-
-## 交流 / Contact
-
-- X: [@cgnot996](https://x.com/cgnot996)
-- GitHub Issues: https://github.com/RongleCat/grok-app/issues
+- GitHub Issues: <https://github.com/Po1nt9/omp-desktop/issues>
 
 ## Releases
 
-Full process for humans and AI maintainers: **[docs/llm-wiki/release.md](./docs/llm-wiki/release.md)**.
-
-1. Write bilingual notes under `## [X.Y.Z] - YYYY-MM-DD` in `CHANGELOG.md` (what changed — list form).
+1. Write notes under `## [X.Y.Z] - YYYY-MM-DD` in `CHANGELOG.md` (what changed — list form).
 2. Commit on a clean `main`.
 3. Run `./scripts/release-tag.sh X.Y.Z` (optionally `--push`).
-4. CI builds **macOS ARM + Intel + Windows + Linux** and sets the **GitHub Release body** from that CHANGELOG section via `scripts/changelog-for-release.py` (changes only; install notes stay in README).
+4. CI builds **macOS ARM + Intel + Windows + Linux** and sets the **GitHub Release body** from that CHANGELOG section via `scripts/changelog-for-release.py`.
 
 Do not tag without a matching CHANGELOG section — the release job will fail.
+
+## Attribution
+
+OMP Desktop is adapted from `RongleCat/grok-app` (MIT) at commit
+`d2a2563f19bba46cb67496d3b4ac821a31bceaed`. Upstream author: [RongleCat](https://github.com/RongleCat).

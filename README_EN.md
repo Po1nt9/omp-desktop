@@ -1,329 +1,122 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Grok App" width="128" height="128" />
+  <img src="assets/logo.png" alt="OMP Desktop" width="128" height="128" />
 </p>
 
-<h1 align="center">Grok App</h1>
+<h1 align="center">OMP Desktop</h1>
 
-<p align="center"><strong>Desktop workbench for local Grok Build</strong></p>
-<p align="center"><em>Sessions, projects, media, automations — for the real <code>grok</code> CLI</em></p>
+<p align="center"><strong>Open-source Tauri/React desktop shell adapted to the OMP Runtime</strong></p>
 
 <p align="center">
-  <a href="./README.md">中文</a> ·
-  <a href="./README_EN.md">English</a>
+  <a href="./README.md">English</a> ·
+  <a href="./README_ZH.md">中文</a>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
-  <a href="https://github.com/RongleCat/grok-app/stargazers"><img src="https://img.shields.io/github/stars/RongleCat/grok-app?style=social" alt="GitHub stars" /></a>
+  <a href="https://github.com/Po1nt9/omp-desktop/stargazers"><img src="https://img.shields.io/github/stars/Po1nt9/omp-desktop?style=social" alt="GitHub stars" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="Platforms" />
   <img src="https://img.shields.io/badge/Tauri-2-orange" alt="Tauri 2" />
-  <img src="https://img.shields.io/badge/note-unofficial-yellow" alt="Unofficial" />
-</p>
-
-<p align="center">
-  <a href="https://x.com/cgnot996"><img src="https://img.shields.io/badge/X-铁柱AGI%20%40cgnot996-black?logo=x&logoColor=white" alt="X 铁柱AGI" /></a>
-  <img src="https://img.shields.io/badge/WeChat-铁柱AGI-07C160?logo=wechat&logoColor=white" alt="WeChat 铁柱AGI" />
-</p>
-
-<p align="center">
-  <strong>Follow the author</strong><br/>
-  <a href="https://x.com/cgnot996"><strong>X / Twitter → 铁柱AGI @cgnot996</strong></a><br/>
-  WeChat Official Account: search <strong>「铁柱AGI」</strong> (scan or WeChat Search below)
-</p>
-
-<p align="center">
-  <img src="assets/wechat/mp-search-scan.png" alt="WeChat Search 铁柱AGI — scan to follow" width="480" />
-</p>
-
-<p align="center">
-  Repo ·
-  <a href="https://github.com/RongleCat/grok-app">RongleCat/grok-app</a>
 </p>
 
 ---
 
 > [!NOTE]
-> ## Note
->
-> **Grok App is not an official xAI product.** It wraps the local [Grok Build](https://x.ai) CLI (`grok agent stdio`) into a desktop workbench: sessions, projects, permissions, media previews, and scheduled tasks.
->
-> Real agent power needs a working **Grok Build CLI** installed and signed in. Without CLI you can install from the first-run wizard, or use `GROK_APP_ACP=mock` for UI-only development.
+> OMP Desktop is an open-source Tauri/React desktop shell being adapted to the OMP Runtime.
+> The Plan 1 baseline is intentionally fail-closed: Agent execution, Provider authentication,
+> and runtime-owned configuration are unavailable until the versioned OMP integration lands.
 
 ---
 
 ## Contents
 
 1. [Overview](#overview)
-2. [Features](#features)
-3. [Screenshots](#screenshots)
-4. [Install & first run](#install--first-run)
-5. [macOS “damaged” / Gatekeeper](#macos-damaged--gatekeeper)
-6. [Config paths](#config-paths)
-7. [Develop & build](#develop--build)
-8. [Docs & contributing](#docs--contributing)
-9. [Contributors](#contributors)
-10. [Follow the author](#follow-the-author)
+2. [Status](#status)
+3. [Development](#development)
+4. [Platforms](#platforms)
+5. [Provenance](#provenance)
+6. [Documentation](#documentation)
+7. [Contributing](#contributing)
+8. [License](#license)
 
 ---
 
 ## Overview
 
-The `grok` CLI is powerful in a terminal. Day-to-day work still needs multi-project sessions, a permission bar, rich previews, scheduled jobs, and bilingual UI.
-
-**Grok App** is that workbench:
-
-1. Install the app and prepare Grok Build CLI  
-2. Add a project / new session  
-3. Connect the agent; chat under Ask or YOLO  
-4. Preview artifacts, schedule automations, manage account & relays in Settings  
+OMP Desktop is a Tauri 2 + React + TypeScript desktop shell. It is being adapted from
+the upstream `RongleCat/grok-app` project (MIT) into a host for the OMP Runtime.
 
 **Stack:** Tauri 2 + Rust · React + TypeScript + Vite · Tailwind CSS
 
----
+The OMP Runtime source is pinned as a git submodule at `runtime/oh-my-pi`.
 
-## Features
+## Status
 
-| Area | What you get |
-|------|----------------|
-| **Real Build sessions** | Default `grok agent stdio` (ACP); host-owned session FSM; optional remote ACP |
-| **Projects & sessions** | Trusted dirs, virtualized sidebar, archive / orphan, fork & rewind; **import CLI sessions** in shared mode |
-| **Multi-session stream** | Keep busy turns streaming after switching chats; process limits & idle recycle |
-| **Git worktrees** | Project chip lists linked worktrees; switch cwd in one click (hidden for non-git) |
-| **Permissions** | Default Ask; allow once / session / deny; YOLO; **per-project** permission tier |
-| **Plan / Goal** | Sticky execution progress; resource-pane Markdown review + steps; Goal entry |
-| **Slash · Extensions** | Slash palette, Skills; Settings → Extensions for MCP / Plugins |
-| **Composer** | Follow-up send queue while busy; paste screenshots; context usage chip |
-| **Media & files** | Image / video / PDF / Office / code preview; **edit & save** text in Resources; Changes (session diffs + workspace git) |
-| **Agent runtime** | Stall cancel; structured error deck; **diagnostic zip** export; no early “ready” while tools/permissions open |
-| **Automations** | Scheduled list; natural-language create-from-chat (silent fence, no JSON in UI) |
-| **Account & quota** | Multi-account switcher, official login, SuperGrok quota + heatmap, custom-provider local usage |
-| **Custom relays** | Independent `GROK_HOME` agent profile (keeps `~/.grok` clean when desired) |
-| **Security** | Optional OS keychain for API keys (default `secrets.json` 0600); store write locks; in-app confirms only |
-| **i18n** | Simplified Chinese / Traditional Chinese / English + tray |
-| **Packaging** | macOS ARM / Intel · Windows x64 (setup + portable) · Linux x64 (AppImage / deb / rpm) |
+The Plan 1 baseline is intentionally fail-closed. The following surfaces return
+`runtime_unavailable` and are not yet wired to a live runtime:
 
----
+- Agent execution (no prompts run)
+- Provider authentication (no sign-in)
+- Runtime-owned configuration (no model catalog, no fallback model)
 
-## Screenshots
+Do not advertise or document these as working capabilities yet. The frozen master
+design lives at
+[`docs/superpowers/specs/2026-07-28-omp-desktop-design.md`](./docs/superpowers/specs/2026-07-28-omp-desktop-design.md).
 
-> From the current macOS development build.
+## Development
 
-| Workbench · SuperGrok | Account & quota |
-|:---:|:---:|
-| ![Workbench](assets/screenshots/workbench.png) | ![Account](assets/screenshots/account.png) |
-
-| Light theme | Session & media |
-|:---:|:---:|
-| ![Light](assets/screenshots/light.png) | ![Chat](assets/screenshots/chat.png) |
-
----
-
-## Install & first run
-
-### 1. Download
-
-Get installers from [Releases](https://github.com/RongleCat/grok-app/releases):
-
-| Platform | Artifact |
-|----------|----------|
-| macOS Apple Silicon | `Grok_*_aarch64.dmg` |
-| macOS Intel | `Grok_*_x64.dmg` |
-| Windows x64 | `*-setup.exe` installer + `*-portable.zip` |
-| Linux x64 | AppImage / `.deb` / `.rpm` |
-
-The bundle product name is **Grok** (matches the window title).
-
-**Arch / Manjaro / EndeavourOS:** prefer the **AppImage** (`chmod +x` then run). Official CI does not publish a separate AUR package; AppImage is distro-agnostic.
-
-> **Prebuilt packages need no build tools.** Node / pnpm / Rust are only required if you [build from source](#develop--build) — do not run `pnpm install && tauri build` just to use the app.
-
-#### Verify your download
-
-Each release ships a `SHA256SUMS` file. After downloading:
+Requirements: Node 22+, pnpm 9, Rust stable, Xcode CLT (macOS).
 
 ```bash
-# macOS / Linux
-shasum -a 256 -c SHA256SUMS --ignore-missing
-# Windows (PowerShell)
-Get-FileHash .\Grok_*_x64-setup.exe -Algorithm SHA256
-```
-
-Compare the PowerShell hash against the matching line in `SHA256SUMS`.
-
-#### Windows SmartScreen
-
-Windows builds are **not code-signed** (no Authenticode certificate yet), so SmartScreen shows “Windows protected your PC / Unknown publisher” on first run. This is expected for this project’s unsigned builds: click **More info → Run anyway**. Verify the checksum above if in doubt.
-
-### 2. First run
-
-1. Launch → **Setup wizard** ensures CLI is installed (multi-mirror install supported)  
-2. (Optional) Official login / API key / custom relay — skippable. If your local `grok` CLI is already signed in, pick **Use existing CLI sign-in** — no re-authorization needed  
-3. **Add project** → trust a folder  
-4. **Connect agent** → chat when Ready  
-5. Permission bar defaults to **Ask**; use YOLO only when you want unattended runs  
-
-### 3. Requirements
-
-- Local **Grok Build CLI** (`grok`) **0.2.112 or newer**, often `~/.grok/bin/grok` or on `PATH` — older CLIs reject flags the app depends on (run `grok update` once after installing, then fully restart the app)  
-- Windows: `%USERPROFILE%\.grok\bin\grok.exe` or `PATH`; **WebView2 Runtime** (preinstalled on Windows 11; the installer bootstraps it otherwise)  
-
-### 4. Restricted networks (e.g. mainland China)
-
-Grok backends (`auth.x.ai` / `grok.com` / `cli-chat-proxy.grok.com`) may be unreachable by direct connection. If sign-in hangs or every message times out with `NETWORK_PROVIDER`:
-
-1. **Settings → Runtime → Network**: set the proxy (System / Manual, e.g. `http://127.0.0.1:7890`), then use **Test connection** to verify all three endpoints  
-2. If your `grok` CLI is already signed in, reuse it via the setup wizard (or switch **Session data mode** to *shared*) instead of Browser OAuth  
-3. No launcher scripts or manually exported `HTTP_PROXY` variables are needed — the app injects the configured proxy into all agent processes  
-
----
-
-## macOS “damaged” / Gatekeeper
-
-Release builds are **not Apple-notarized** (paid Developer ID required). Gatekeeper may block downloads — that is expected.
-
-**Recommended:**
-
-```bash
-xattr -cr /Applications/Grok.app
-open /Applications/Grok.app
-```
-
-**Also works:**
-
-- Finder: **right-click** → **Open** → confirm  
-- **System Settings → Privacy & Security** → **Open Anyway**  
-
-Only download from this repo’s official [Releases](https://github.com/RongleCat/grok-app/releases).
-
----
-
-## Config paths
-
-Default data root (override with **`GROK_APP_HOME`**):
-
-| Platform | Typical path |
-|----------|----------------|
-| macOS | `~/Library/Application Support/com.grokapp.grok-app/` |
-| Windows | `%APPDATA%\grokapp\grok-app\` |
-| Fallback | `~/.grok-app/` |
-
-```text
-<app-data>/
-  projects.json
-  sessions_index.json
-  settings.json
-  secrets.json          # metadata (+ API-key fallback); keys prefer OS keychain
-  automations.json
-  projects/
-  sessions/
-  logs/
-  agent-home/           # independent-mode GROK_HOME
-```
-
-API keys prefer the OS secret store (macOS Keychain / Windows Credential Manager /
-Linux Secret Service) with a `secrets.json` (mode `0600`) fallback when the OS store
-is unavailable. Do not commit secrets.
-
-Grok Build’s own config remains under **`~/.grok`** (CLI login, `auth.json`, …).  
-**shared** session mode can use `~/.grok`; **independent** mode uses `agent-home/`.
-
----
-
-## Develop & build
-
-```bash
-# Needs: Node 22+, pnpm 9, Rust stable, Xcode CLT (macOS)
 pnpm install
 
-pnpm dev                 # full app (real CLI by default)
-pnpm dev:ui              # frontend only
-GROK_APP_ACP=mock pnpm dev
+pnpm dev          # full app (Tauri + Vite)
+pnpm dev:ui       # frontend only
 
-pnpm typecheck && pnpm test
+pnpm typecheck
+pnpm test
 cd src-tauri && cargo test
 
 pnpm build
 ```
 
-Cross-compile and release notes: [docs/BUILD.md](./docs/BUILD.md).
+## Platforms
 
-Release (write the matching `CHANGELOG.md` section first):
+OMP Desktop targets three operating systems:
 
-```bash
-./scripts/release-tag.sh 0.1.1
-./scripts/release-tag.sh 0.1.1 --push
-```
+| Platform | Target |
+|----------|--------|
+| macOS | Apple Silicon + Intel |
+| Windows | x64 |
+| Linux | x64 (AppImage / deb / rpm) |
 
----
+## Provenance
 
-## Docs & contributing
+OMP Desktop is adapted from upstream sources under MIT license:
+
+- **Desktop shell baseline:** `RongleCat/grok-app` at commit `d2a2563f19bba46cb67496d3b4ac821a31bceaed`
+- **OMP Runtime submodule:** `runtime/oh-my-pi` at commit `667111575ebba136dadfd6989379e7f67e0d40d9`
+
+Historical upstream material (plans, wikis, acceptance docs) is preserved under
+[`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) for provenance.
+Those files do not describe the current OMP Desktop product.
+
+## Documentation
 
 | Audience | Link |
 |----------|------|
-| AI agents / product rules | [`docs/llm-wiki/`](./docs/llm-wiki/) |
-| Build & release | [docs/BUILD.md](./docs/BUILD.md) |
-| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Contributing | [CONTRIBUTING.md](./CONTRIBUTING.md) |
-| Code of conduct | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) |
-| Security | [SECURITY.md](./SECURITY.md) |
+| Frozen master design | [`docs/superpowers/specs/2026-07-28-omp-desktop-design.md`](./docs/superpowers/specs/2026-07-28-omp-desktop-design.md) |
+| Brand baseline plan | [`docs/superpowers/plans/2026-07-28-repository-brand-baseline.md`](./docs/superpowers/plans/2026-07-28-repository-brand-baseline.md) |
+| Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
+| Contributing | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
+| Code of conduct | [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) |
+| Security | [`SECURITY.md`](./SECURITY.md) |
+| Upstream history | [`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) |
 
-Issues and PRs are welcome.
+## Contributing
 
-## Contributors
-
-Thanks to everyone who has contributed to Grok App. Data from the GitHub Contributors API (fetched 2026-07-24).
-
-<p align="center">
-  <a href="https://github.com/RongleCat"><img src="https://github.com/RongleCat.png?size=80" width="80" height="80" alt="RongleCat" /></a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/sonnemusk"><img src="https://github.com/sonnemusk.png?size=80" width="80" height="80" alt="sonnemusk" /></a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/Sdefendre"><img src="https://github.com/Sdefendre.png?size=80" width="80" height="80" alt="Sdefendre" /></a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/jason920612"><img src="https://github.com/jason920612.png?size=80" width="80" height="80" alt="jason920612" /></a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/shiaho777"><img src="https://github.com/shiaho777.png?size=80" width="80" height="80" alt="shiaho777" /></a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/2530185073"><img src="https://github.com/2530185073.png?size=80" width="80" height="80" alt="2530185073" /></a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/tisrop"><img src="https://github.com/tisrop.png?size=80" width="80" height="80" alt="tisrop" /></a>
-</p>
-
-| | Contributor | Commits | Highlights (selected) |
-|:---:|:---|:---:|:---|
-| <img src="https://github.com/RongleCat.png?size=48" width="48" height="48" alt="RongleCat" /> | [**RongleCat**](https://github.com/RongleCat) · maintainer | 59 | Product architecture, releases, community integration |
-| <img src="https://github.com/sonnemusk.png?size=48" width="48" height="48" alt="sonnemusk" /> | [**sonnemusk**](https://github.com/sonnemusk) | 21 | Changes / fork & rewind, MCP·Plugins, permission tiers, worktrees, resource edit, paste screenshots, error deck, multi-session stream, CLI session import, turn-complete, store locks, and more |
-| <img src="https://github.com/Sdefendre.png?size=48" width="48" height="48" alt="Sdefendre" /> | [**Sdefendre**](https://github.com/Sdefendre)<br/>Steve Defendre | 2 | Session titles follow locale; Grok Build permission optionIds |
-| <img src="https://github.com/jason920612.png?size=48" width="48" height="48" alt="jason920612" /> | [**jason920612**](https://github.com/jason920612) | 2 | Remote ACP (API mode); Traditional Chinese locale |
-| <img src="https://github.com/shiaho777.png?size=48" width="48" height="48" alt="shiaho777" /> | [**shiaho777**](https://github.com/shiaho777)<br/>shiaho | 2 | Cancelable login; stop re-streaming history on session switch |
-| <img src="https://github.com/2530185073.png?size=48" width="48" height="48" alt="2530185073" /> | [**2530185073**](https://github.com/2530185073)<br/>Yun | 1 | Custom provider account + local usage UI |
-| <img src="https://github.com/tisrop.png?size=48" width="48" height="48" alt="tisrop" /> | [**tisrop**](https://github.com/tisrop)<br/>wanghang | — | Composer follow-up send queue while agent is busy |
-
-[Full contributors graph →](https://github.com/RongleCat/grok-app/graphs/contributors)
-
-[![Contributors](https://contrib.rocks/image?repo=RongleCat/grok-app)](https://github.com/RongleCat/grok-app/graphs/contributors)
+Issues and PRs are welcome at <https://github.com/Po1nt9/omp-desktop>. See
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) for the development workflow.
 
 ## License
 
-[MIT](./LICENSE) © RongleCat
-
----
-
-## Follow the author
-
-Updates, walkthroughs, and AI practice content land first on:
-
-| Channel | Link |
-|---------|------|
-| **X / Twitter** | [铁柱AGI @cgnot996](https://x.com/cgnot996) ← highly recommended |
-| **WeChat Official Account** | Search **「铁柱AGI」**, or scan / use the card below |
-
-<p align="center">
-  <img src="assets/wechat/mp-search-scan.png" alt="WeChat Search 铁柱AGI" width="420" />
-</p>
-
-<p align="center">
-  If Grok App helps you, please star the repo and follow
-  <a href="https://x.com/cgnot996"><strong>@cgnot996</strong></a> on X
-  and the WeChat account <strong>铁柱AGI</strong> 🙏
-</p>
+[MIT](./LICENSE) · Adapted from `RongleCat/grok-app` (MIT).

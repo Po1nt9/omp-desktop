@@ -72,6 +72,19 @@ test("does not exempt historical documentation or similarly named scanner files"
   assert.ok(scanText("scripts/brand-policy-copy.mjs", policy).length > 0);
 });
 
+test("current README files describe OMP Desktop and fail-closed behavior", () => {
+  const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  assert.ok(readme.includes("OMP Desktop"), "README must mention OMP Desktop");
+  assert.ok(
+    readme.includes("runtime_unavailable") || readme.includes("unavailable until the versioned OMP integration lands"),
+    "README must describe fail-closed behavior",
+  );
+  assert.ok(
+    !/run Agent prompts|configure Providers|install a Grok CLI/.test(readme),
+    "README must not advertise removed capabilities",
+  );
+});
+
 test("repository scan skips exact denied fixtures, binary files, and submodules", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "brand-policy-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

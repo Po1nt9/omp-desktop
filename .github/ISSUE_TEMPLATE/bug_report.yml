@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a Grok App bug
+description: Report an OMP Desktop bug
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -20,7 +20,7 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Start Grok App
+        1. Start OMP Desktop
         2. ...
         3. ...
     validations:
@@ -36,11 +36,6 @@ body:
     attributes:
       label: App version
       placeholder: 0.1.0
-  - type: input
-    id: cli
-    attributes:
-      label: Grok Build CLI version (if known)
-      placeholder: output of `grok --version`
   - type: dropdown
     id: os
     attributes:

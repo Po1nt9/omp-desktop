@@ -29,8 +29,8 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainer via X [@cgnot996](https://x.com/cgnot996)
-or GitHub.
+reported to the project maintainer via GitHub at
+[Po1nt9/omp-desktop](https://github.com/Po1nt9/omp-desktop).
 
 All complaints will be reviewed and investigated promptly and fairly.
 
