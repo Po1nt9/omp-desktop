@@ -66,7 +66,7 @@ export interface UsageReport {
   timestamp: string;
 }
 
-// ── Per-method params/result types (24 methods) ────────────────────────────
+// ── Per-method params/result types (32 methods) ────────────────────────────
 
 export interface SessionsListAllParams {
   limit?: number;
@@ -258,6 +258,94 @@ export interface SkillsListResult {
   skills: SkillInfo[];
 }
 
+// ── todo.list ────────────────────────────────────────────────────────────────
+export interface TodoListParams {
+  sessionId?: string;
+}
+export interface TodoTask {
+  content: string;
+  status: "pending" | "in_progress" | "completed" | "abandoned" | "blocked";
+}
+export interface TodoPhase {
+  name: string;
+  tasks: TodoTask[];
+}
+export interface TodoListResult {
+  phases: TodoPhase[];
+}
+
+// ── subagents.status ─────────────────────────────────────────────────────────
+export interface SubagentsStatusParams {}
+export interface SubagentsStatusResult {
+  enabled: boolean;
+  activeCount: number;
+}
+
+// ── subagents.setEnabled ──────────────────────────────────────────────────────
+export interface SubagentsSetEnabledParams {
+  enabled: boolean;
+}
+export interface SubagentsSetEnabledResult {
+  enabled: boolean;
+}
+
+// ── sessions.fork ─────────────────────────────────────────────────────────────
+export interface SessionsForkParams {
+  sourceId: string;
+  throughUserPromptIndex?: number;
+  title?: string;
+}
+export interface SessionsForkResult {
+  id: string;
+  title: string | null;
+  parentSession: string;
+}
+
+// ── sessions.rewindPoints ─────────────────────────────────────────────────────
+export interface SessionsRewindPointsParams {
+  sessionId?: string;
+}
+export interface RewindPoint {
+  promptIndex: number;
+  messageId: string | null;
+  preview: string;
+}
+export interface SessionsRewindPointsResult {
+  points: RewindPoint[];
+}
+
+// ── sessions.rewind ───────────────────────────────────────────────────────────
+export interface SessionsRewindParams {
+  targetPromptIndex: number;
+  sessionId?: string;
+}
+export interface SessionsRewindResult {
+  keptCount: number;
+  localOk: boolean;
+}
+
+// ── sessions.resolveMedia ─────────────────────────────────────────────────────
+export interface SessionsResolveMediaParams {
+  sessionId: string;
+  relatives: string[];
+}
+export interface MediaAttachment {
+  path: string;
+  name: string;
+  isDir: boolean;
+}
+export interface SessionsResolveMediaResult {
+  attachments: MediaAttachment[];
+}
+
+// ── diagnostics.exportBundle ─────────────────────────────────────────────────
+export interface DiagnosticsExportBundleParams {
+  sessionId: string;
+}
+export interface DiagnosticsExportBundleResult {
+  path: string;
+}
+
 // ── config.discover ─────────────────────────────────────────────────────────
 export interface ConfigDiscoverParams {
   cwd?: string;
@@ -346,6 +434,32 @@ export interface MethodMap {
     result: DiagnosticsSelfCheckResult;
   };
   "skills.list": { params: SkillsListParams; result: SkillsListResult };
+  "todo.list": { params: TodoListParams; result: TodoListResult };
+  "subagents.status": {
+    params: SubagentsStatusParams;
+    result: SubagentsStatusResult;
+  };
+  "subagents.setEnabled": {
+    params: SubagentsSetEnabledParams;
+    result: SubagentsSetEnabledResult;
+  };
+  "sessions.fork": { params: SessionsForkParams; result: SessionsForkResult };
+  "sessions.rewindPoints": {
+    params: SessionsRewindPointsParams;
+    result: SessionsRewindPointsResult;
+  };
+  "sessions.rewind": {
+    params: SessionsRewindParams;
+    result: SessionsRewindResult;
+  };
+  "sessions.resolveMedia": {
+    params: SessionsResolveMediaParams;
+    result: SessionsResolveMediaResult;
+  };
+  "diagnostics.exportBundle": {
+    params: DiagnosticsExportBundleParams;
+    result: DiagnosticsExportBundleResult;
+  };
   "config.discover": {
     params: ConfigDiscoverParams;
     result: ConfigDiscoverResult;

@@ -110,3 +110,44 @@ pub struct DesktopV1Capability {
     pub notifications: Vec<String>,
     pub optional_features: Vec<String>,
 }
+
+// ── Plan 5 mirror types ─────────────────────────────────────────────────────
+// These mirror the TypeScript types added in Plan 5 (todo.list,
+// sessions.rewindPoints, sessions.resolveMedia). They are not consumed by
+// any Rust call site yet but are provided for parity with the frontend
+// `MethodMap` and to make future Rust consumers (e.g. Tauri command wrappers)
+// straightforward.
+
+/// A single todo task within a phase (mirrors `TodoTask` in `methods.ts`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TodoTask {
+    pub content: String,
+    pub status: String,
+}
+
+/// A named phase of todo tasks (mirrors `TodoPhase` in `methods.ts`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TodoPhase {
+    pub name: String,
+    pub tasks: Vec<TodoTask>,
+}
+
+/// A rewind checkpoint (mirrors `RewindPoint` in `methods.ts`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RewindPoint {
+    pub prompt_index: u32,
+    pub message_id: Option<String>,
+    pub preview: String,
+}
+
+/// A resolved media attachment (mirrors `MediaAttachment` in `methods.ts`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaAttachment {
+    pub path: String,
+    pub name: String,
+    pub is_dir: bool,
+}
