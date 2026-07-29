@@ -1,4 +1,4 @@
-//! Custom OpenAI-compatible providers → agent-readable config.toml under GROK_HOME.
+//! Custom OpenAI-compatible providers → agent-readable config.toml under agent-home.
 //! Intentionally original implementation (not ported from other desktops).
 
 use std::fs;
@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use crate::paths::{agent_config_toml, agent_home_dir, ensure_app_dirs};
+use crate::paths::{agent_config_toml, app_data_root, ensure_app_dirs};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -398,7 +398,7 @@ fn is_custom(fields: &std::collections::HashMap<String, String>) -> bool {
 
 fn ensure_agent_home() -> Result<PathBuf, String> {
     ensure_app_dirs().map_err(|e| e.to_string())?;
-    let home = agent_home_dir();
+    let home = app_data_root().join("agent-home");
     fs::create_dir_all(&home).map_err(|e| e.to_string())?;
     Ok(home)
 }
@@ -576,11 +576,11 @@ pub fn is_custom_provider_id(id: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Model flag for `grok agent --model`.
+/// Model flag for the agent spawn command.
 ///
-/// Grok Build behavior (verified 0.2.111):
+/// Runtime behavior:
 /// - Custom route: must pass the **provider section id** (e.g. `yunyi`) and
-///   **must not** have OIDC `auth.json` in GROK_HOME (else Auth:Oidc hits the
+///   **must not** have OIDC `auth.json` in agent-home (else Auth:Oidc hits the
 ///   relay base_url → 401).
 /// - Official route: pass a catalog id; needs `auth.json`.
 pub fn agent_spawn_model_id(composer_model: &str) -> String {
@@ -600,7 +600,7 @@ pub fn agent_spawn_model_id(composer_model: &str) -> String {
 /// Prepare agent-home auth material for the active route.
 ///
 /// Custom: strip agent-home `auth.json` so inference uses `api_key` only.
-/// Official: mirror `~/.grok/auth.json` into agent-home for OAuth.
+/// Official: mirror the runtime auth profile into agent-home for OAuth.
 pub fn prepare_route_auth_for_agent() {
     // TODO(Task 7/8): agent-home auth sync removed with account module.
     // OMP Runtime integration may restore equivalent credential binding.

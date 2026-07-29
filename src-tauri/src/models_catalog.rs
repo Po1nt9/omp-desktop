@@ -52,7 +52,7 @@ struct ParsedCacheModel {
 }
 
 fn agent_home_cache() -> PathBuf {
-    crate::paths::agent_home_dir().join("models_cache.json")
+    crate::paths::app_data_root().join("agent-home").join("models_cache.json")
 }
 
 /// Parse `/info/reasoning_efforts` from a models_cache entry body.

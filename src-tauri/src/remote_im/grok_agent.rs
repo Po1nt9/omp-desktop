@@ -29,12 +29,12 @@ pub fn resolve_grok_binary() -> PathBuf {
     PathBuf::from("grok")
 }
 
-/// Same GROK_HOME the App uses for ACP (independent → agent-home, shared → ~/.grok).
+/// Same runtime home the App uses for ACP (independent → agent-home, shared → agent-home).
 /// Without this, `/r` resumes with an agent session id that only exists under agent-home
 /// and the CLI reports "Session not found locally" + remote 404.
 pub fn resolve_remote_grok_home() -> PathBuf {
-    let mode = crate::store::load_settings().session_data_mode;
-    crate::paths::resolve_agent_grok_home(&mode)
+    let _ = crate::paths::ensure_app_dirs();
+    crate::paths::app_data_root().join("agent-home")
 }
 
 fn apply_agent_env(cmd: &mut Command) {
@@ -358,13 +358,13 @@ mod tests {
     fn remote_grok_home_matches_app_session_data_mode() {
         let mode = crate::store::load_settings().session_data_mode;
         let home = resolve_remote_grok_home();
-        let expected = crate::paths::resolve_agent_grok_home(&mode);
+        let expected = crate::paths::app_data_root().join("agent-home");
         assert_eq!(home, expected);
         // Independent default: must NOT be bare ~/.grok when App stores sessions in agent-home.
         if mode != "shared" {
             assert!(
                 home.ends_with("agent-home") || home.to_string_lossy().contains("agent-home"),
-                "independent GROK_HOME should be agent-home, got {}",
+                "independent runtime home should be agent-home, got {}",
                 home.display()
             );
         }

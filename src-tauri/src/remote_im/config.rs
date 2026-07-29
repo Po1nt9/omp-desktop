@@ -1,4 +1,4 @@
-//! Persist Remote IM channel instances under ~/.grok-app/remote/.
+//! Persist Remote IM channel instances under the app data root `remote/`.
 
 use std::collections::HashMap;
 use std::fs;

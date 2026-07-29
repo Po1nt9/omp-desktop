@@ -599,7 +599,7 @@ fn collect_agent_files(
     Ok(())
 }
 
-/// Wipe App-owned data under the data root. Does not touch ~/.grok (CLI home).
+/// Wipe App-owned data under the data root. Does not touch the foreign CLI home.
 ///
 /// `keep_secrets`: when true, leave secrets.json, OS keychain app secrets, and accounts/ in place.
 pub fn reset_app_data(keep_secrets: bool) -> Result<serde_json::Value, String> {

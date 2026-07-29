@@ -1,4 +1,4 @@
-//! Independent store under ~/.grok-app: projects, sessions index, settings, secrets.
+//! Independent store under the app data root: projects, sessions index, settings, secrets.
 
 use std::sync::Mutex;
 use std::fs;
@@ -227,8 +227,8 @@ pub struct AppSettings {
     /// and independent mode writes `[subagents] enabled = false`.
     #[serde(default = "default_true")]
     pub subagents_enabled: bool,
-    /// Preferred Grok Build agent definition for new agent processes
-    /// (`explore` / `plan` / `general-purpose` / custom name under `~/.grok/agents`).
+    /// Preferred runtime agent definition for new agent processes
+    /// (`explore` / `plan` / `general-purpose` / custom name under the runtime agents dir).
     /// Empty / `default` / `none` → omit top-level `--agent` (CLI default).
     /// Applied at spawn only; changing it soft-respawns the live agent.
     #[serde(default)]

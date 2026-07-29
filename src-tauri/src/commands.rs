@@ -478,7 +478,7 @@ pub async fn session_messages(
     Ok(store::load_messages(&id))
 }
 
-/// Absolute path of the agent session folder under GROK_HOME (images/, etc.).
+/// Absolute path of the agent session folder under the runtime home (images/, etc.).
 /// Used to resolve short relative paths like `images/1.jpg` into image cards.
 #[tauri::command]
 pub async fn session_media_root(id: String) -> Result<Option<String>, String> {
@@ -486,7 +486,7 @@ pub async fn session_media_root(id: String) -> Result<Option<String>, String> {
 }
 
 /// Resolve relative media refs to absolute paths that exist on disk.
-/// Tries (1) agent session dir under GROK_HOME (`images/1.jpg`),
+/// Tries (1) agent session dir under the runtime home (`images/1.jpg`),
 /// then (2) project cwd (skill outputs like `outputs/xhx-media-gen/foo.png`).
 /// Skips missing / unsafe paths.
 #[tauri::command]
@@ -1071,12 +1071,12 @@ pub async fn import_grok_cli_config() -> Result<serde_json::Value, String> {
     let config = home.join(".grok").join("config.toml");
     let mut msg = Vec::new();
     if auth.is_file() {
-        msg.push("Found ~/.grok/auth.json (CLI will use cached_token)".to_string());
+        msg.push("Found runtime auth.json (CLI will use cached_token)".to_string());
     } else {
-        msg.push("No ~/.grok/auth.json".to_string());
+        msg.push("No runtime auth.json".to_string());
     }
     if config.is_file() {
-        msg.push("Found ~/.grok/config.toml".to_string());
+        msg.push("Found runtime config.toml".to_string());
     }
     let mut settings = store::load_settings();
     apply_import_onboarding_done(&mut settings);
@@ -1538,7 +1538,7 @@ fn session_trace_export_blocking(
 ) -> Result<serde_json::Value, String> {
     // Plan 1 fail-closed: the agent runtime is unavailable, so `grok trace`
     // cannot run. Returns `runtime_unavailable`. No `cli_probe` dependency or
-    // GROK_HOME env coupling remains.
+    // runtime home env coupling remains.
     Err("runtime_unavailable: Grok Build CLI is unavailable in this build".into())
 }
 
@@ -1619,7 +1619,7 @@ fn save_and_reveal_file_blocking(
 }
 
 /// Wipe App data under the data root (sessions, projects, settings).
-/// Does not touch the CLI home (`~/.grok`). Double-confirm in the UI before calling.
+/// Does not touch the foreign CLI home. Double-confirm in the UI before calling.
 #[tauri::command]
 pub async fn reset_app_data(
     app: tauri::AppHandle,
@@ -2278,7 +2278,7 @@ pub async fn extensions_enable_all_skills(
 //
 // Keep field semantics aligned with Grok Build:
 // - install inventory: `grok plugin list --json` (status/name/version/source/…)
-// - enable/disable: `~/.grok/config.toml` `[plugins].disabled` / CLI enable|disable
+// - enable/disable: runtime config.toml `[plugins].disabled` / CLI enable|disable
 // - scope + component counts: `grok inspect --json` → `plugins[]`
 // Do not invent a parallel store or rewrite CLI `status` values.
 
@@ -4948,7 +4948,7 @@ pub struct PersonaDefDto {
 // from PR #77
 
 /// List agent + persona definition files from user / project / bundled scopes.
-/// Does not require the CLI binary (pure filesystem discovery under `~/.grok`
+/// Does not require the CLI binary (pure filesystem discovery under the runtime home
 /// and optional `{project}/.grok`). Always returns Ok.
 #[tauri::command]
 pub async fn agents_list(project_path: Option<String>) -> Result<serde_json::Value, String> {
@@ -5567,7 +5567,7 @@ pub async fn hooks_ensure_dir(
 
 // ── Hooks manager (list / reveal / open folder) ─────────────────────────────
 
-/// List hook files under `~/.grok/hooks` and optionally `<project>/.grok/hooks`.
+/// List hook files under the runtime hooks dir and optionally `<project>/.grok/hooks`.
 #[tauri::command]
 pub async fn hooks_list(project_path: Option<String>) -> Result<crate::hooks::HooksListResult, String> {
     let path = project_path
@@ -5769,7 +5769,7 @@ pub async fn mcp_add(
 
 // from PR #68
 
-/// Run `grok mcp doctor --json` (optional server name) under the active GROK_HOME.
+/// Run `grok mcp doctor --json` (optional server name) under the active runtime home.
 #[tauri::command]
 pub async fn mcp_doctor(
     name: Option<String>,
@@ -5824,7 +5824,7 @@ pub fn normalize_worktree_path_key(raw: &str) -> String {
 
 // from PR #84
 
-/// Read compact permission rules from the active GROK_HOME config.toml.
+/// Read compact permission rules from the active runtime home config.toml.
 #[tauri::command]
 pub async fn permission_rules_get(
 ) -> Result<crate::permission_rules::PermissionRulesResult, String> {
@@ -5954,7 +5954,7 @@ pub fn refuse_remove_main_worktree(
 
 // from PR #68
 
-/// Invoke CLI doctor with GROK_HOME matching session_data_mode.
+/// Invoke CLI doctor with runtime home matching session_data_mode.
 ///
 /// Plan 1 fail-closed: the agent runtime is unavailable, so `grok mcp doctor`
 /// cannot run. Returns `runtime_unavailable`. No `cli_probe` dependency remains.
@@ -6210,7 +6210,7 @@ fn setup_error_kind(msg: &str) -> &'static str {
 
 // from PR #79
 
-/// `grok setup` — fetch and install managed configuration into ~/.grok.
+/// `grok setup` — fetch and install managed configuration into the runtime home.
 /// Soft-respawns the agent on success so new policy is picked up.
 /// Always returns Ok; failures surface as `{ ok: false, error, errorKind }`.
 #[tauri::command]
@@ -6278,7 +6278,7 @@ pub async fn setup_install(
 
 // from PR #79
 
-/// `grok setup --json` — fetch managed config preview without writing to ~/.grok.
+/// `grok setup --json` — fetch managed config preview without writing to the runtime home.
 /// Always returns Ok; failures surface as `{ ok: false, error, errorKind }`.
 #[tauri::command]
 pub async fn setup_preview() -> Result<serde_json::Value, String> {

@@ -60,21 +60,9 @@ pub fn attachments_paste_dir() -> PathBuf {
     dir
 }
 
-/// Agent profile root (config.toml / optional auth) — App-owned.
-pub fn agent_home_dir() -> PathBuf {
-    app_data_root().join("agent-home")
-}
-
+/// Agent profile config.toml (providers, mcp, ui prefs) — App-owned.
 pub fn agent_config_toml() -> PathBuf {
-    agent_home_dir().join("config.toml")
-}
-
-/// Resolve the agent profile home for a spawned process.
-/// Runtime-owned session data mode is no longer coupled to a foreign CLI home;
-/// always returns the App-owned agent-home directory.
-pub fn resolve_agent_grok_home(_session_data_mode: &str) -> PathBuf {
-    let _ = ensure_app_dirs();
-    agent_home_dir()
+    app_data_root().join("agent-home").join("config.toml")
 }
 
 pub fn projects_file() -> PathBuf {
@@ -129,7 +117,7 @@ pub fn percent_encode_path_component(s: &str) -> String {
 }
 
 /// Locate the on-disk agent session directory for a given agent session id.
-/// Layout: `{agent_home}/sessions/{percent-encoded-cwd}/{agent_session_id}/`
+/// Layout: `{agent-home}/sessions/{percent-encoded-cwd}/{agent_session_id}/`
 ///
 /// `cwd_hint` (project path) avoids a directory scan when known.
 pub fn find_agent_session_dir(
@@ -140,7 +128,8 @@ pub fn find_agent_session_dir(
     if agent_session_id.is_empty() {
         return None;
     }
-    let home = resolve_agent_grok_home(_session_data_mode);
+    let _ = ensure_app_dirs();
+    let home = app_data_root().join("agent-home");
     let sessions = home.join("sessions");
     if !sessions.is_dir() {
         return None;

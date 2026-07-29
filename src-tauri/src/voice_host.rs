@@ -1,7 +1,7 @@
 //! Live voice host: local state machine + host tools → SessionManager.
 //!
 //! Plan 1 fail-closed shell: direct xAI realtime WebSocket and credential
-//! resolution have been removed. The live (`wss://api.x.ai/...`) network loop
+//! resolution have been removed. The live realtime network loop
 //! is gone; `start()` returns `runtime_unavailable` for the live path. Local
 //! audio capture plumbing, mock mode, tool dispatch, and session delegation
 //! remain so a later OMP Runtime integration can wire them back up.

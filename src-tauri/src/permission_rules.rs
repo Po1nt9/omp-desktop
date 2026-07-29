@@ -1,4 +1,4 @@
-//! Grok Build `[permission]` allow / deny / ask rules in agent `config.toml`.
+//! Runtime `[permission]` allow / deny / ask rules in agent `config.toml`.
 //!
 //! Compact form (CLI `--allow` / `--deny` strings):
 //! ```toml
@@ -8,17 +8,17 @@
 //! ask = ["Edit"]
 //! ```
 //!
-//! Evaluation order is deny > ask > allow (Grok Build docs). This module only
+//! Evaluation order is deny > ask > allow (runtime docs). This module only
 //! manages the string-array keys; other `[permission]` keys (e.g. structured
-//! `rules`) are left untouched. Writes target the active GROK_HOME for the
-//! current `session_data_mode` (agent-home or `~/.grok`).
+//! `rules`) are left untouched. Writes target the active runtime home for the
+//! current `session_data_mode` (agent-home or shared runtime home).
 
 use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::paths::{agent_config_toml, ensure_app_dirs, resolve_agent_grok_home};
+use crate::paths::{agent_config_toml, app_data_root, ensure_app_dirs};
 use crate::store;
 
 /// Snapshot of compact permission rules + config path metadata.
@@ -388,14 +388,14 @@ pub fn set_permission_rules_in_toml(text: &str, rules: &PermissionRules) -> Stri
 /// Config path for the active session data mode.
 pub fn permission_config_path(session_data_mode: &str) -> PathBuf {
     if session_data_mode == "shared" {
-        resolve_agent_grok_home(session_data_mode).join("config.toml")
+        app_data_root().join("agent-home").join("config.toml")
     } else {
         let _ = ensure_app_dirs();
         agent_config_toml()
     }
 }
 
-/// Load rules from the active GROK_HOME config.toml.
+/// Load rules from the active runtime home config.toml.
 pub fn load_permission_rules() -> Result<PermissionRulesResult, String> {
     let settings = store::load_settings();
     let mode = settings.session_data_mode.clone();

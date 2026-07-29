@@ -2520,7 +2520,7 @@ impl SessionManager {
             Self::emit_state(&app, &self.snapshot());
         }
 
-        // Independent GROK_HOME: push permission into agent config before spawn so
+        // Independent runtime home: push permission into agent config before spawn so
         // dontAsk / acceptEdits / YOLO apply agent-side (not only Host).
         if let Err(e) = crate::agent_prefs::sync_permission_to_agent_profile(
             &settings.session_data_mode,
@@ -4944,7 +4944,7 @@ impl SessionManager {
     /// Drop every warm agent process (live + background + parked).
     ///
     /// Used when `session_data_mode` flips independent↔shared so no process keeps
-    /// the previous `GROK_HOME`. App session meta + journals stay; live shell is
+    /// the previous runtime home. App session meta + journals stay; live shell is
     /// soft-disconnected and its `agent_session_id` is cleared (old agent dirs are
     /// under a different data root — reconnect should `session/new` + bootstrap).
     /// Emits `session://agents_recycled` for UI toasts.
@@ -5009,7 +5009,7 @@ impl SessionManager {
                 }
                 s.fsm.soft_disconnect();
                 s.process_id = String::new();
-                // Old agent session lives under previous GROK_HOME — do not resume.
+                // Old agent session lives under previous runtime home — do not resume.
                 if s.meta.agent_session_id.take().is_some() {
                     let _ = store::update_session_meta(&s.meta);
                 }

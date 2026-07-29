@@ -78,13 +78,13 @@ fn set_table_bool(text: &str, table: &str, key: &str, value: bool) -> String {
     }
 }
 
-/// Write `[memory] enabled` into App agent-home (independent GROK_HOME only).
+/// Write `[memory] enabled` into App agent-home (independent mode only).
 pub fn sync_memory_to_agent_profile(
     session_data_mode: &str,
     experimental_memory: bool,
 ) -> Result<(), String> {
     if session_data_mode == "shared" {
-        // Never rewrite the user's personal ~/.grok/config.toml from the App.
+        // Never rewrite the user's personal runtime config from the App.
         return Ok(());
     }
     let _ = ensure_app_dirs();
