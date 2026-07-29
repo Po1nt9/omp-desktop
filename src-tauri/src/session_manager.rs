@@ -4194,7 +4194,7 @@ impl SessionManager {
     /// Used before re-sending an edited last user message so the previous assistant
     /// reply is replaced, not stacked.
     ///
-    /// Agent path: `x.ai/rewind/execute` (OMP Runtime extension).
+    /// Agent path: removed in Plan 2 (private rewind bindings were dead code).
     /// Local path: truncate `messages.json` to keep only messages before the last user row.
     /// Drop the last user turn before an edit-resend.
     ///
@@ -4206,7 +4206,7 @@ impl SessionManager {
         app: AppHandle,
         session_id: Option<String>,
     ) -> Result<SessionSnapshot, String> {
-        let (backend, app_sid, acp, user_prompt_count) = {
+        let (_backend, app_sid, _acp, _user_prompt_count) = {
             let guard = self.inner.lock();
             let s = guard.as_ref().ok_or("no active session")?;
             if let Some(target) = session_id.as_deref() {
@@ -4235,45 +4235,10 @@ impl SessionManager {
             )
         };
 
-        // Agent: discard last user turn. TUI semantics keep the selected turn and drop after;
-        // so for "drop last user" we target the previous turn when count > 1.
-        // When count == 1, execute target 0 with best-effort; host journal is the source of truth for UI.
-        if backend != "mock_acp" && !AcpClient::use_mock() {
-            if let Some(client) = acp {
-                let target = user_prompt_count.saturating_sub(1);
-                // Prefer rewinding to previous turn (keep 0..n-2, drop n-1..).
-                // When only one user turn: try target 0 then clear local journal fully.
-                let exec_index = if user_prompt_count <= 1 {
-                    0u32
-                } else {
-                    // Keep through previous user turn → drop last.
-                    user_prompt_count - 2
-                };
-                match client.rewind_execute(exec_index, false).await {
-                    Ok(_) => {
-                        tracing::info!(
-                            target: "session",
-                            "rewind_drop_last_user_turn: agent rewound target={exec_index} (user_turns={user_prompt_count})"
-                        );
-                    }
-                    Err(e) => {
-                        // Fallback: try targeting the last turn itself (some builds discard at/after index).
-                        tracing::warn!(
-                            target: "session",
-                            error = %e,
-                            "rewind_execute({exec_index}) failed; trying last-turn index {target}"
-                        );
-                        if let Err(e2) = client.rewind_execute(target, false).await {
-                            tracing::warn!(
-                                target: "session",
-                                error = %e2,
-                                "agent rewind failed; local journal still truncated"
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        // Plan 2: the private rewind agent bindings were removed from
+        // `AcpClient` (dead code — spawn is fail-closed). The local journal
+        // truncation below is the source of truth for UI state. Plan 3 may wire
+        // a versioned `_omp/desktop/v1/*` equivalent once the Supervisor lands.
 
         // Local journal: keep messages strictly before the last user message.
         let msgs = store::load_messages(&app_sid);
@@ -4348,13 +4313,14 @@ impl SessionManager {
     }
 
     /// Rewind a session to a user-prompt index (keep that turn, drop after).
-    /// Always truncates the local journal. Agent `x.ai/rewind/execute` is best-effort
-    /// when this session is the live ACP session.
+    /// Always truncates the local journal. The agent rewind path was removed in
+    /// Plan 2 (private rewind bindings are gone); Plan 3 may wire a versioned
+    /// `_omp/desktop/v1/*` equivalent once the Supervisor lands.
     pub async fn rewind_to_prompt_index(
         self: &Arc<Self>,
         app: AppHandle,
         target_prompt_index: u32,
-        restore_files: bool,
+        _restore_files: bool,
         session_id: Option<String>,
     ) -> Result<RewindExecuteResult, String> {
         let app_sid = match session_id {
@@ -4367,7 +4333,7 @@ impl SessionManager {
         };
 
         // Block if *this* session is mid-turn on the live host.
-        let (live_match, backend, acp, busy) = {
+        let (live_match, _backend, _acp, busy) = {
             let guard = self.inner.lock();
             match guard.as_ref() {
                 Some(s) if s.app_session_id == app_sid => {
@@ -4396,36 +4362,15 @@ impl SessionManager {
         let mut agent_ok = true;
         let mut agent_error: Option<String> = None;
 
-        // Agent path only when this is the live session with a real ACP client.
-        if live_match && backend != "mock_acp" && !AcpClient::use_mock() {
-            if let Some(client) = acp {
-                match client
-                    .rewind_execute(target_prompt_index, restore_files)
-                    .await
-                {
-                    Ok(_) => {
-                        tracing::info!(
-                            target: "session",
-                            "rewind_to_prompt_index: agent rewound target={target_prompt_index}"
-                        );
-                    }
-                    Err(e) => {
-                        agent_ok = false;
-                        agent_error = Some(e.clone());
-                        tracing::warn!(
-                            target: "session",
-                            error = %e,
-                            "agent rewind failed; applying local journal truncate only"
-                        );
-                    }
-                }
-            } else {
-                agent_ok = false;
-                agent_error = Some("agent not connected".into());
-            }
-        } else if !live_match {
+        // Plan 2: the private rewind agent binding was removed from
+        // `AcpClient` (dead code — spawn is fail-closed). The local
+        // journal truncation below is the source of truth for UI state.
+        if !live_match {
             agent_ok = false;
             agent_error = Some("session not live; local journal only".into());
+        } else {
+            agent_ok = false;
+            agent_error = Some("agent rewind not available in Plan 2".into());
         }
 
         let kept = store::truncate_through_user_prompt(&msgs, target_prompt_index)?;

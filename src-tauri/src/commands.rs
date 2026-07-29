@@ -99,7 +99,8 @@ pub async fn session_rewind_points(
 }
 
 /// Rewind a session to a user-prompt index. Local journal always truncates;
-/// agent `x.ai/rewind/execute` is best-effort when the session is live (`agentOk`).
+/// the agent rewind path was removed in Plan 2 (private bindings gone) —
+/// `agentOk` is always `false` until Plan 3 wires a versioned equivalent.
 #[tauri::command]
 pub async fn session_rewind_execute(
     app: tauri::AppHandle,

@@ -1,10 +1,8 @@
-//! ACP client transport: JSON-RPC line framing + pending-request management.
+//! ACP client — JSON-RPC framing and transport for the OMP Runtime.
 //!
-//! Plan 1 fail-closed shell: the runtime is unavailable, so every spawn /
-//! connect path returns `RuntimeUnavailable`. The standard ACP wire builders,
-//! pure decoders, and protocol decode tests remain as the stable contract for
-//! a later plan that wires up an OMP runtime. No process spawn or
-//! private-extension binding remains.
+//! Plan 1: fail-closed shell. All spawn paths return `runtime_unavailable`.
+//! Plan 2: `OmpExtension` client added for versioned `_omp/desktop/v1/*` protocol.
+//! No private extension bindings (private rewind namespace) remain.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -1153,49 +1151,6 @@ impl AcpClient {
             .await
     }
 
-    /// List rewind points (one per user prompt). Grok extension `x.ai/rewind/points`.
-    pub async fn rewind_points(&self) -> Result<Value, String> {
-        let sid = self
-            .agent_session_id
-            .lock()
-            .clone()
-            .ok_or_else(|| "no session".to_string())?;
-        self.request(
-            "x.ai/rewind/points",
-            json!({ "sessionId": sid }),
-        )
-        .await
-    }
-
-    /// Truncate agent conversation to a user-prompt index (and optionally restore files).
-    /// Grok extension `x.ai/rewind/execute` — `targetPromptIndex` is 0-based user turn index.
-    ///
-    /// Semantics (TUI `/rewind`): discard everything **after** the selected turn.
-    /// For "edit last user message", pass the **previous** user-turn index, or when
-    /// editing the only user message use index `0` with a full clear via host journal.
-    pub async fn rewind_execute(
-        &self,
-        target_prompt_index: u32,
-        restore_files: bool,
-    ) -> Result<Value, String> {
-        let sid = self
-            .agent_session_id
-            .lock()
-            .clone()
-            .ok_or_else(|| "no session".to_string())?;
-        // Prefer conversation truncate; file restore is optional (edit-resend usually false).
-        let mut params = json!({
-            "sessionId": sid,
-            "targetPromptIndex": target_prompt_index,
-        });
-        if let Some(obj) = params.as_object_mut() {
-            obj.insert("restoreFiles".into(), Value::Bool(restore_files));
-            // Some builds accept this camelCase alias.
-            obj.insert("restore_files".into(), Value::Bool(restore_files));
-        }
-        self.request("x.ai/rewind/execute", params).await
-    }
-
     /// Unblock a waiting `session/prompt` RPC (e.g. after host circuit-breaker cancel).
     pub fn abort_pending_prompts(&self, message: &str) {
         let mut pending = self.pending.lock();
@@ -1895,5 +1850,34 @@ mod live_handshake_tests {
         eprintln!("OK session={} in {:?}", sid, t0.elapsed());
         client.kill().await;
         assert!(!sid.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod private_bindings_regression_tests {
+    use super::*;
+
+    /// Plan 1 audit + Plan 2 Task 7: the dead private rewind bindings must not
+    /// return. The binding code was unreachable (fail-closed spawn) but still
+    /// shipped in the binary; removing the methods entirely and asserting via
+    /// `include_str!` keeps future drift from reintroducing them.
+    ///
+    /// The forbidden strings are assembled from parts so the test source itself
+    /// does not contain them as contiguous literals (which would make
+    /// `contains` always return true and the assertion always fail).
+    #[test]
+    fn no_private_xai_bindings_remain() {
+        let source = include_str!("acp_client.rs");
+        let ns: String = ["x", ".ai/", "rewind", "/"].concat();
+        let points: String = format!("{ns}{}", "points");
+        let execute: String = format!("{ns}{}", "execute");
+        assert!(
+            !source.contains(&points),
+            "forbidden points binding must be removed"
+        );
+        assert!(
+            !source.contains(&execute),
+            "forbidden execute binding must be removed"
+        );
     }
 }
