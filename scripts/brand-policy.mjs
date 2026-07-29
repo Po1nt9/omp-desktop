@@ -19,6 +19,7 @@ export const rules = [
 
 export const wholeFileAllowlist = new Set([
   "scripts/brand-policy.mjs",
+  "THIRD_PARTY_NOTICES",
 ]);
 
 export const repositoryExclusions = new Set([

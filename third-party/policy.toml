@@ -1,0 +1,23 @@
+# Accepted license policy for OMP Desktop source-level inventory.
+# Plan 9 must recalculate against final build artifacts.
+
+schemaVersion = 1
+
+[accepted]
+licenses = [
+  "MIT",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Apache-2.0",
+  "ISC",
+  "Unicode-3.0",
+  "CC-BY-4.0",
+]
+
+[restrictions]
+# CC-BY-4.0 is limited to the Silver font entry only.
+cc-by-4-0-only = "runtime/oh-my-pi/crates/pi-natives/src/fonts/Silver.LICENSE"
+
+[rejected]
+# Unknown and unapproved copyleft expressions fail.
+copyleft = ["GPL-2.0", "GPL-3.0", "AGPL-3.0", "LGPL-2.1", "LGPL-3.0"]

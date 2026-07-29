@@ -1,0 +1,293 @@
+THIRD-PARTY NOTICES
+===================
+
+This file aggregates source-distribution license and notice information for
+OMP Desktop. The authoritative inventory is third-party/inventory.json; this
+file is the human-readable companion.
+
+-------------------------------------------------------------------------------
+1. RongleCat/grok-app (desktop-ui upstream) — MIT
+   Source: https://github.com/RongleCat/grok-app.git
+   Import commit: d2a2563f19bba46cb67496d3b4ac821a31bceaed
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2026 RongleCat
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+2. oh-my-pi (OMP sidecar source) — MIT
+   Submodule path: runtime/oh-my-pi
+   Pinned commit: 667111575ebba136dadfd6989379e7f67e0d40d9
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2025 Mario Zechner
+Copyright (c) 2025-2026 Can Bölük
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+3. pi-shell NOTICE (RTK adaptation) — MIT
+   Path: runtime/oh-my-pi/crates/pi-shell/NOTICE
+-------------------------------------------------------------------------------
+
+This file documents third-party attribution for the shell-output minimizer in
+this crate, which adapts an algorithm from RTK (https://github.com/rtk-ai/rtk),
+used under the MIT License.
+
+  Copyright (c) the RTK authors (rtk-ai/rtk)
+
+Adapted component: the `build_pytest_summary` algorithm from the upstream
+`src/cmds/python/pytest_cmd.rs` (pinned at commit
+878af7de99e0ba71da2e8fd996f6b52a1836e06c), re-implemented here in
+`src/minimizer/filters/python.rs` as the pytest state machine (`filter_pytest`,
+`pytest_success`, `is_pytest_*`, `looks_like_pytest_summary_part`). It preserves
+failures, errors, and the final summary line; strips header framing, progress
+dots, and verbose `PASSED` rows; and falls through unchanged on unknown-state
+lines (RTK's defensive default) so xdist `[gwN]` prefixes and custom reporters
+never cause data loss.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+4. markit NOTICE (markit-ai adaptation) — MIT
+   Path: runtime/oh-my-pi/packages/coding-agent/src/markit/NOTICE
+-------------------------------------------------------------------------------
+
+This directory contains an in-house document-to-markdown engine adapted from
+markit-ai (https://github.com/Michaelliv/markit), used under the MIT License.
+
+  Copyright (c) 2026 Michael Liv
+
+Only the converters for the document formats omp supports are ported (pdf,
+docx, pptx, xlsx, epub); the CLI, plugin/provider, and unused converters
+(html, image, audio, plain-text, rss, github, wikipedia, csv, json, yaml,
+ipynb, iwork, zip, xml) were dropped. Legacy binary `.doc`/`.ppt`/`.xls` and
+`.rtf` are routed by the read/fetch tools but have no converter — they surface
+a conversion error, exactly as upstream markit did. Logic is ported faithfully
+so conversion output matches the upstream package.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+5. mermaid-ascii NOTICE (beautiful-mermaid adaptation) — MIT
+   Path: runtime/oh-my-pi/packages/utils/src/vendor/mermaid-ascii/NOTICE
+-------------------------------------------------------------------------------
+
+This directory contains an in-house Mermaid-diagram-to-ASCII renderer adapted
+from beautiful-mermaid (https://github.com/lukilabs/beautiful-mermaid), used
+under the MIT License.
+
+  Copyright (c) 2026 Craft Docs
+
+Only the ASCII rendering pipeline is ported (flowchart/state, sequence, class,
+ER, and xychart diagrams); the SVG renderer and its `elkjs` graph-layout
+dependency, the browser entry point, and the SVG theme/style modules were
+dropped. Terminal display width is reimplemented on `Bun.stringWidth`, and
+inline label formatting (HTML tags, markdown emphasis) is reduced to plain text
+for ASCII output. Layout and edge-routing logic is preserved faithfully so
+ASCII output matches the upstream package.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+6. Silver font — CC BY 4.0
+   Path: runtime/oh-my-pi/crates/pi-natives/src/fonts/Silver.LICENSE
+   URL: https://poppyworks.itch.io/silver
+-------------------------------------------------------------------------------
+
+Silver — a pixel font for games
+
+Source:  https://poppyworks.itch.io/silver
+Author:  Poppy Works, Wolfgang Wozniak
+Major contributors:
+  - Itou Hiro (PixelMPlus)
+  - leedheo (DOSGothic)
+  - ぶち (Buchidot)
+
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+
+This license allows the work and adaptations of it to be shared and used
+commercially, as long as it is attributed to Poppy Works. The font is bundled
+here (crates/pi-natives/src/fonts/Silver.ttf) as a CJK/Unicode bitmap fallback.
+
+-------------------------------------------------------------------------------
+7. highlight.js — BSD-3-Clause
+   Path: runtime/oh-my-pi/packages/coding-agent/src/export/html/vendor/highlight.min.js
+-------------------------------------------------------------------------------
+
+Highlight.js v11.9.0 (git: f47103d4f1)
+(c) 2006-2023 undefined and other contributors
+License: BSD-3-Clause
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+8. Vendored crate license index
+-------------------------------------------------------------------------------
+
+The following vendored crate LICENSE files are tracked under
+runtime/oh-my-pi/crates/vendor/. All are MIT licensed.
+
+  runtime/oh-my-pi/crates/vendor/brush-builtins/LICENSE
+  runtime/oh-my-pi/crates/vendor/brush-core/LICENSE
+  runtime/oh-my-pi/crates/vendor/jaq/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-b2sum/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-base32/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-base64/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-basename/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-cat/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-checksum-common/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-comm/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-cut/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-date/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-dirname/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-head/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-hostname/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-ln/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-ls/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-md5sum/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-mkdir/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-mktemp/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-mv/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-nproc/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-paste/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-printenv/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-readlink/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-realpath/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-rm/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-sed/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-seq/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-sha1sum/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-sha224sum/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-sha256sum/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-sha384sum/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-sha512sum/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-sort/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-stat/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-tac/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-tee/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-touch/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-tr/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-truncate/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-uname/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-uniq/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-wc/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-wc/src/utf8/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-whoami/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-xargs/LICENSE
+  runtime/oh-my-pi/crates/vendor/uu-yes/LICENSE

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "root": {
+    "packageJson": "package.json",
+    "pnpmLock": "pnpm-lock.yaml",
+    "cargoToml": "src-tauri/Cargo.toml",
+    "cargoLock": "src-tauri/Cargo.lock"
+  },
+  "submodule": {
+    "path": "runtime/oh-my-pi",
+    "packageJson": "runtime/oh-my-pi/package.json",
+    "bunLock": "runtime/oh-my-pi/bun.lock",
+    "cargoToml": "runtime/oh-my-pi/Cargo.toml",
+    "cargoLock": "runtime/oh-my-pi/Cargo.lock",
+    "rustToolchain": "runtime/oh-my-pi/rust-toolchain.toml"
+  },
+  "legal": {
+    "inventory": "third-party/inventory.json",
+    "policy": "third-party/policy.toml",
+    "notices": "THIRD_PARTY_NOTICES"
+  },
+  "removed": [
+    {"path": "remote-bridge", "state": "removed", "includedInReleaseGraph": false}
+  ]
+}
