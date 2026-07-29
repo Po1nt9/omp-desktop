@@ -607,26 +607,6 @@ pub fn build_dingtalk_session_card(sessions: &[AppSessionEntry], lang: &str) -> 
     })
 }
 
-/// CLI args for resume-capable grok turn (shipped helper used by grok_agent + tests).
-pub fn grok_turn_cli_args(
-    prompt: &str,
-    session_id: Option<&str>,
-    always_approve: bool,
-) -> Vec<String> {
-    let mut args = vec!["-p".into(), prompt.to_string()];
-    if always_approve {
-        args.push("--always-approve".into());
-    }
-    // Grok Build CLI accepts plain | json | streaming-json (not "stream-json").
-    args.push("--output-format".into());
-    args.push("streaming-json".into());
-    if let Some(sid) = session_id.map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        args.push("--resume".into());
-        args.push(sid.to_string());
-    }
-    args
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -857,14 +837,6 @@ mod tests {
     }
 
     #[test]
-    fn grok_cli_args_include_resume_when_set() {
-        let with = grok_turn_cli_args("hi", Some("sess-1"), true);
-        assert!(with.windows(2).any(|w| w[0] == "--resume" && w[1] == "sess-1"));
-        let without = grok_turn_cli_args("hi", None, false);
-        assert!(!without.iter().any(|a| a == "--resume"));
-    }
-
-    #[test]
     fn multi_turn_resume_id_propagates() {
         // Simulates: resume pick → turn1 returns sid → turn2 still resumes
         let b0 = ScopeBinding {
@@ -893,8 +865,5 @@ mod tests {
             } => assert_eq!(agent_session_id, "agent-xyz"),
             _ => panic!("second turn must resume"),
         }
-        // CLI path for turn 2
-        let args = grok_turn_cli_args("follow up", Some("agent-xyz"), false);
-        assert!(args.contains(&"--resume".into()));
     }
 }
