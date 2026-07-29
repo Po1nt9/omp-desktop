@@ -3,7 +3,7 @@ export const textExtensions = new Set([".ts", ".tsx", ".js", ".mjs", ".rs", ".js
 export const userVisiblePathPatterns = [
   /^src\/i18n\//,
   /^src\/components\/.*\.(?:ts|tsx)$/,
-  /^src-tauri\/src\/(?:tray|tray_i18n|remote_im|mirror)\//,
+  /^src-tauri\/src\/(?:tray|tray_i18n|dialog_i18n|remote_im|mirror)\//,
   /^README(?:_EN|_ZH)?\.md$/,
 ];
 
@@ -41,6 +41,10 @@ export const wholeFileAllowlist = new Set([
   "docs/superpowers/verification/2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics.md",
   "docs/superpowers/plans/2026-07-29-plan-6-i18n.md",
   "docs/superpowers/verification/2026-07-29-plan-6-i18n.md",
+  "docs/superpowers/plans/2026-07-29-plan-7-remote-hub.md",
+  "docs/superpowers/plans/2026-07-29-plan-8-channels.md",
+  "docs/superpowers/plans/2026-07-29-plan-9-os-packaging.md",
+  "docs/superpowers/plans/2026-07-29-plan-10-1.0-acceptance.md",
 ]);
 
 export const directoryExclusions = [

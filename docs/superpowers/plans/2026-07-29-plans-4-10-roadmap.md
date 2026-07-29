@@ -2,9 +2,18 @@
 
 This document outlines the scope and key tasks for the remaining plans (4-10) in the OMP Desktop 1.0 roadmap. Plans 1-3 are complete.
 
+> **Plan documents:**
+> - Plan 4: [`2026-07-29-plan-4-config-provider-mcp-skills-credentials.md`](./2026-07-29-plan-4-config-provider-mcp-skills-credentials.md) — ✅ Complete
+> - Plan 5: [`2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics.md`](./2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics.md) — ✅ Complete
+> - Plan 6: [`2026-07-29-plan-6-i18n.md`](./2026-07-29-plan-6-i18n.md) — ✅ Complete
+> - Plan 7: [`2026-07-29-plan-7-remote-hub.md`](./2026-07-29-plan-7-remote-hub.md) — 🚫 Blocked (external deps)
+> - Plan 8: [`2026-07-29-plan-8-channels.md`](./2026-07-29-plan-8-channels.md) — 🚫 Blocked (external deps)
+> - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — 🚫 Blocked (external deps)
+> - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — 🚫 Blocked (Plans 7-9 + testing infra)
+
 ## Plan 4: Config, Provider, MCP, Skills, and Secure Credentials
 
-**Status:** Not started
+**Status:** ✅ Complete
 **Depends on:** Plan 3 (complete)
 **Spec:** Master design §3 item 4
 
@@ -57,14 +66,14 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ---
 
-## Plan 6: i18n (en, zh-CN, zh-TW)
+## Plan 6: i18n (en, zh, zh-TW)
 
-**Status:** Not started
+**Status:** ✅ Complete
 **Depends on:** Plan 2 (for protocol layer)
 **Spec:** Master design §3 item 6, §14
 
 ### Scope
-- Three locale support: English (source), Simplified Chinese, Traditional Chinese
+- Three locale support: English (source), Simplified Chinese (canonical id `zh`; `zh-CN`/`zh-Hans` aliases accepted), Traditional Chinese (`zh-TW`)
 - Static validation ensuring all three locales have complete coverage
 - Localized Runtime envelope (agentInfo.title, error messages, mode names)
 - Native surface localization (menu, tray, notifications, dialogs)
@@ -72,7 +81,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ### Key Tasks
 1. Extract all user-visible strings from React components
-2. Create locale files for `en`, `zh-CN`, `zh-TW`
+2. Locale files for `en`, `zh`, `zh-TW` (already in place; `zh-CN` accepted as alias by `resolveLocale` and `Locale::parse`)
 3. Add i18n provider and locale switcher
 4. Localize Tauri tray menu, notifications, and dialogs
 5. Add brand normalization for Runtime metadata
@@ -86,7 +95,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ## Plan 7: Remote Hub
 
-**Status:** Not started
+**Status:** 🚫 Blocked (external deps)
 **Depends on:** Plan 3 (for runtime and session model)
 **Spec:** Master design §3 item 7, §16
 
@@ -110,7 +119,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ## Plan 8: Channels (11 Platforms)
 
-**Status:** Not started
+**Status:** 🚫 Blocked (external deps)
 **Depends on:** Plan 7 (for Remote Hub)
 **Spec:** Master design §3 item 8, §17
 
@@ -147,7 +156,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ## Plan 9: OS Packaging and Updates
 
-**Status:** Not started
+**Status:** 🚫 Blocked (external deps)
 **Depends on:** Plans 3-8 (for complete feature set)
 **Spec:** Master design §3 item 9, §20
 
@@ -174,7 +183,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ## Plan 10: 1.0 Acceptance Matrix
 
-**Status:** Not started
+**Status:** 🚫 Blocked (Plans 7-9 + testing infra)
 **Depends on:** Plans 1-9 (all complete)
 **Spec:** Master design §3 item 10, §5
 
@@ -208,10 +217,10 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 | 3. Supervisor, Core ACP, Event Journal | ✅ Complete | - | - |
 | 4. Config, Provider, MCP, Skills, Credentials | ✅ Complete | Medium-High | None |
 | 5. Todo, Subagent, Branch, Rewind, Attachments | ✅ Complete | Medium | None |
-| 6. i18n | 📋 Not started | Medium | None |
-| 7. Remote Hub | 📋 Not started | High | Server infra |
-| 8. Channels | 📋 Not started | Very High | Platform APIs |
-| 9. OS Packaging | 📋 Not started | Very High | Signing certs |
-| 10. 1.0 Acceptance | 📋 Not started | Medium | All platforms |
+| 6. i18n | ✅ Complete | Medium | None |
+| 7. Remote Hub | 🚫 Blocked | High | Server infra |
+| 8. Channels | 🚫 Blocked | Very High | Platform APIs |
+| 9. OS Packaging | 🚫 Blocked | Very High | Signing certs |
+| 10. 1.0 Acceptance | 🚫 Blocked | Medium | All platforms |
 
 Plans 4-6 can be executed immediately with no external dependencies. Plans 7-10 require external infrastructure and should be prioritized based on available resources.

@@ -2059,4 +2059,15 @@ export const zhTW: Record<MessageKey, string> = {
   "ui.errorBoundary.body":
     "聊天區域無法顯示。磁碟上的工作階段仍保留 — 可重試或切換對話。",
   "ui.errorBoundary.retry": "重試",
+
+  // OMP Desktop v1 擴展協議錯誤訊息。
+  "v1Error.runtimeUnavailable": "執行時未連接。",
+  "v1Error.invalidParams": "請求參數未通過驗證。",
+  "v1Error.notFound": "引用的項目不存在。",
+  "v1Error.authFailed": "認證失敗。",
+  "v1Error.capabilityMissing": "啟動時未協商此能力。",
+  "v1Error.tooLate": "操作在回合邊界之後到達。",
+  "v1Error.schemaDigestMismatch": "協定 schema 摘要不符 — 請更新應用。",
+  "v1Error.unknownMethod": "執行時不支援此方法。",
+  "v1Error.journalGap": "事件日誌存在缺口 — 可能需要復原。",
 };

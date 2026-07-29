@@ -2121,6 +2121,18 @@ const en = {
   "ui.errorBoundary.body":
     "The chat surface failed to render. Your session on disk is kept — retry or switch chats.",
   "ui.errorBoundary.retry": "Retry",
+
+  // OMP Desktop v1 Extension Protocol error messages.
+  // messageKey values come from runtime/oh-my-pi/.../schema/errors.ts and src-tauri/src/omp_desktop_v1/errors.rs.
+  "v1Error.runtimeUnavailable": "Runtime is not connected.",
+  "v1Error.invalidParams": "Request parameters failed validation.",
+  "v1Error.notFound": "The referenced item does not exist.",
+  "v1Error.authFailed": "Authentication failed.",
+  "v1Error.capabilityMissing": "This capability was not negotiated during startup.",
+  "v1Error.tooLate": "The action arrived after the turn boundary.",
+  "v1Error.schemaDigestMismatch": "Protocol schema digest mismatch — update the app.",
+  "v1Error.unknownMethod": "This method is not supported by the runtime.",
+  "v1Error.journalGap": "Event journal has a gap — recovery may be needed.",
 } as const;
 
 const zh: Record<MessageKey, string> = {
@@ -4181,6 +4193,17 @@ const zh: Record<MessageKey, string> = {
   "ui.errorBoundary.body":
     "聊天区域无法显示。磁盘上的会话仍保留 — 可重试或切换会话。",
   "ui.errorBoundary.retry": "重试",
+
+  // OMP Desktop v1 扩展协议错误消息。
+  "v1Error.runtimeUnavailable": "运行时未连接。",
+  "v1Error.invalidParams": "请求参数未通过校验。",
+  "v1Error.notFound": "引用的项目不存在。",
+  "v1Error.authFailed": "认证失败。",
+  "v1Error.capabilityMissing": "启动时未协商此能力。",
+  "v1Error.tooLate": "操作在回合边界之后到达。",
+  "v1Error.schemaDigestMismatch": "协议 schema 摘要不匹配 — 请更新应用。",
+  "v1Error.unknownMethod": "运行时不支持此方法。",
+  "v1Error.journalGap": "事件日志存在缺口 — 可能需要恢复。",
 };
 
 export const messages: Record<Locale, Record<MessageKey, string>> = {

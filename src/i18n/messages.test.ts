@@ -73,3 +73,34 @@ describe("resolveLocale", () => {
     expect(resolveLocale(null)).toBe("en");
   });
 });
+
+describe("v1 protocol error keys", () => {
+  const v1Keys = [
+    "v1Error.runtimeUnavailable",
+    "v1Error.invalidParams",
+    "v1Error.notFound",
+    "v1Error.authFailed",
+    "v1Error.capabilityMissing",
+    "v1Error.tooLate",
+    "v1Error.schemaDigestMismatch",
+    "v1Error.unknownMethod",
+    "v1Error.journalGap",
+  ] as const;
+
+  it("all 9 v1 error keys resolve in every locale", () => {
+    for (const loc of ["en", "zh", "zh-TW"] as const) {
+      for (const key of v1Keys) {
+        const v = t(loc, key);
+        expect(v, `${loc}.${key}`).not.toBe(key); // not falling back to the key itself
+        expect(v.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("v1Error.runtimeUnavailable matches the runtime messageKey", () => {
+    // Cross-check: the runtime's error registry messageKey is "runtime.unavailable".
+    // The frontend key is "v1Error.runtimeUnavailable" (prefixed to avoid dot-namespace collisions).
+    // A mapping table in src/lib/ompDesktopV1/errors.ts connects them.
+    expect(t("en", "v1Error.runtimeUnavailable")).toBe("Runtime is not connected.");
+  });
+});

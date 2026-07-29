@@ -8,6 +8,7 @@ use tauri::State;
 use crate::omp_desktop_v1::{generated::DesktopV1Capability, OmpExtension};
 use crate::session_manager::{SessionManager, SessionSnapshot};
 use crate::store::{self, AppSettings, Project, SessionMeta};
+use crate::dialog_i18n;
 
 fn windows_grok_go_config_candidates() -> Option<Vec<String>> {
     #[cfg(target_os = "windows")]
@@ -1465,8 +1466,8 @@ pub async fn export_support_bundle(
     .map_err(|e| e.to_string())??;
     save_and_reveal_file(
         tmp,
-        "Save support bundle",
-        "grok-app-support.zip",
+        dialog_i18n::t().support_bundle_title,
+        "omp-desktop-support.zip",
         "Zip",
         &["zip"],
     )
@@ -1492,10 +1493,10 @@ pub async fn export_session_bundle(
     .await
     .map_err(|e| e.to_string())??;
     let short: String = sid.chars().take(8).collect();
-    let suggested = format!("grok-app-session-{short}.zip");
+    let suggested = format!("omp-desktop-session-{short}.zip");
     save_and_reveal_file(
         tmp,
-        "Save session diagnostic bundle",
+        dialog_i18n::t().session_bundle_title,
         &suggested,
         "Zip",
         &["zip"],

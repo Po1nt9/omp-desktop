@@ -50,6 +50,7 @@ mod session_manager;
 mod store;
 mod tray;
 mod tray_i18n;
+mod dialog_i18n;
 #[cfg(windows)]
 mod win_shell;
 mod voice_host;
