@@ -177,6 +177,11 @@ pub struct AcpClient {
     /// Last inbound `session/update` — proof the agent is still producing turn
     /// output. Re-arms the `prompt_complete` fallback window.
     last_update_at: ParkingMutex<Option<Instant>>,
+    /// Cached ACP `initialize` result. Used by the host to negotiate the
+    /// `_omp/desktop/v1` capability after the handshake succeeds.
+    /// `None` until `initialize_and_open_session` (or a direct `initialize`)
+    /// populates it.
+    initialize_result: ParkingMutex<Option<Value>>,
 }
 
 /// Spawn options for the ACP transport.
@@ -333,6 +338,7 @@ impl AcpClient {
             reader_alive: AtomicBool::new(true),
             stderr_tail: ParkingMutex::new(Vec::new()),
             last_update_at: ParkingMutex::new(None),
+            initialize_result: ParkingMutex::new(None),
         });
 
         // stdout → JSON-RPC read loop (lines → handle_line).
@@ -976,6 +982,13 @@ impl AcpClient {
         &self.cwd
     }
 
+    /// Returns a clone of the cached ACP `initialize` result, if the
+    /// handshake has completed. Used by the host to negotiate the
+    /// `_omp/desktop/v1` capability from the advertised `extensions` list.
+    pub fn initialize_result(&self) -> Option<Value> {
+        self.initialize_result.lock().clone()
+    }
+
     /// Initialize + auth, then open a session.
     /// Prefer `session/load` when `resume_session_id` is set (runtime persists
     /// agent sessions under its home directory). Fall back to `session/new`.
@@ -1002,6 +1015,11 @@ impl AcpClient {
             init.pointer("/agentCapabilities/loadSession")
                 .or_else(|| init.pointer("/capabilities/loadSession"))
         );
+
+        // Cache the initialize result so the host can negotiate the
+        // `_omp/desktop/v1` capability from the advertised `extensions` list
+        // after the handshake succeeds.
+        *self.initialize_result.lock() = Some(init.clone());
 
         // Best-effort cached auth — short timeout so a hung auth cannot burn 120s.
         match self

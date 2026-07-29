@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
 use crate::acp_client::{
@@ -2723,6 +2723,43 @@ impl SessionManager {
                 }
                 if let Err(e) = client.set_mode(&prefs.mode).await {
                     tracing::warn!("acp set_mode after session open soft-fail: {e}");
+                }
+                // Plan 4 Task 7: negotiate the `_omp/desktop/v1` capability
+                // from the ACP `initialize` result. The OmpExtension is
+                // registered as Tauri state in `lib.rs`; without this call it
+                // stays fail-closed (capability = None) and every v1 request
+                // returns `runtime_unavailable`.
+                if let Some(omp_extension) = app.try_state::<Arc<crate::omp_desktop_v1::OmpExtension>>()
+                {
+                    let init_result = client.initialize_result();
+                    if let Some(ref init) = init_result {
+                        if let Some(cap) =
+                            crate::omp_desktop_v1::extract_capability_from_initialize(init)
+                        {
+                            let method_count = cap.methods.len();
+                            omp_extension.negotiate_capability(Some(cap)).await;
+                            tracing::info!(
+                                target: "session",
+                                session = %meta.id,
+                                "omp desktop v1 capability negotiated: {} methods",
+                                method_count
+                            );
+                        } else {
+                            tracing::warn!(
+                                target: "session",
+                                session = %meta.id,
+                                "OMP Runtime did not advertise _omp/desktop/v1 capability"
+                            );
+                            omp_extension.negotiate_capability(None).await;
+                        }
+                    } else {
+                        tracing::warn!(
+                            target: "session",
+                            session = %meta.id,
+                            "ACP initialize result missing — cannot negotiate v1 capability"
+                        );
+                        omp_extension.negotiate_capability(None).await;
+                    }
                 }
                 // Native resume = full agent context. Fresh session + existing UI
                 // journal → bootstrap history into the next prompt.

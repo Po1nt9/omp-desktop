@@ -98,3 +98,27 @@ impl Default for OmpExtension {
         Self::new()
     }
 }
+
+/// Extract the `_omp/desktop/v1` capability descriptor from an ACP
+/// `initialize` result, if the runtime advertised it.
+///
+/// The ACP `initialize` response may carry an `extensions` array whose
+/// entries each describe a negotiated extension namespace. This helper
+/// scans for the entry whose `namespace` is `_omp/desktop/v1` and
+/// deserializes its fields into [`DesktopV1Capability`]. Returns `None`
+/// when the runtime did not advertise the v1 extension or the entry
+/// failed to deserialize.
+pub fn extract_capability_from_initialize(
+    initialize_result: &serde_json::Value,
+) -> Option<DesktopV1Capability> {
+    let extensions = initialize_result.get("extensions")?.as_array()?;
+    for ext in extensions {
+        let namespace = ext.get("namespace")?.as_str()?;
+        if namespace == "_omp/desktop/v1" {
+            if let Ok(cap) = serde_json::from_value::<DesktopV1Capability>(ext.clone()) {
+                return Some(cap);
+            }
+        }
+    }
+    None
+}

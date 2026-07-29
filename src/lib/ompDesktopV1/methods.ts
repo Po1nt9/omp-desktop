@@ -243,6 +243,45 @@ export interface DiagnosticsSelfCheckResult {
   checks: unknown[];
 }
 
+// ── skills.list ────────────────────────────────────────────────────────────
+export interface SkillsListParams {
+  cwd?: string;
+}
+export interface SkillInfo {
+  id: string;
+  name: string;
+  description: string | null;
+  level: "user" | "project";
+  hidden: boolean;
+}
+export interface SkillsListResult {
+  skills: SkillInfo[];
+}
+
+// ── config.discover ─────────────────────────────────────────────────────────
+export interface ConfigDiscoverParams {
+  cwd?: string;
+}
+export interface ConfigSourceInfo {
+  kind:
+    | "settings"
+    | "mcp"
+    | "models"
+    | "credentials"
+    | "skills"
+    | "sessions"
+    | "project";
+  path: string;
+  level: "user" | "project";
+  writable: boolean;
+}
+export interface ConfigDiscoverResult {
+  agentDir: string;
+  profile: string | null;
+  projectCwd: string | null;
+  sources: ConfigSourceInfo[];
+}
+
 // ── Method map ─────────────────────────────────────────────────────────────
 
 /**
@@ -305,6 +344,11 @@ export interface MethodMap {
   "diagnostics.selfCheck": {
     params: DiagnosticsSelfCheckParams;
     result: DiagnosticsSelfCheckResult;
+  };
+  "skills.list": { params: SkillsListParams; result: SkillsListResult };
+  "config.discover": {
+    params: ConfigDiscoverParams;
+    result: ConfigDiscoverResult;
   };
 }
 

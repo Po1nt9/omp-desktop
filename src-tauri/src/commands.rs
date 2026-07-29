@@ -1826,7 +1826,7 @@ pub async fn omp_desktop_v1_capability(
     Ok(state.capability().await)
 }
 
-/// List invocable skills from the OMP Runtime via `_omp/desktop/v1/extensions.list`.
+/// List invocable skills from the OMP Runtime via `_omp/desktop/v1/skills.list`.
 ///
 /// Plan 2: routes through `OmpExtension` when capability is present, falling
 /// back to `runtime_unavailable` when absent. Plan 3 wires the real transport.
@@ -1839,7 +1839,7 @@ pub async fn skills_list(
         Some(cwd) if !cwd.trim().is_empty() => serde_json::json!({ "cwd": cwd }),
         _ => serde_json::json!({}),
     };
-    route_through_extension(&state, "extensions.list", params).await
+    route_through_extension(&state, "skills.list", params).await
 }
 
 /// List MCP servers from the OMP Runtime via `_omp/desktop/v1/mcp.list`.

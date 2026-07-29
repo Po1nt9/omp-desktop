@@ -70,6 +70,25 @@ pub struct ExtensionInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SkillInfo {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub level: String,
+    pub hidden: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSourceInfo {
+    pub kind: String,
+    pub path: String,
+    pub level: String,
+    pub writable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UsageReport {
     pub provider_id: String,
     pub model_id: String,
