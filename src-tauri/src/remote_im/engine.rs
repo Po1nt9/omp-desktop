@@ -478,9 +478,9 @@ impl Engine {
         let projects = load_trusted_projects();
         if projects.is_empty() {
             let t = if self.lang == "en" {
-                "No trusted projects. Trust a folder in Grok App first."
+                "No trusted projects. Trust a folder in OMP Desktop first."
             } else {
-                "没有已信任项目。请先在 Grok App 中信任项目目录。"
+                "没有已信任项目。请先在 OMP Desktop 中信任项目目录。"
             };
             let _ = self.reply_msg(msg, t).await;
             return;

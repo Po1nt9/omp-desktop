@@ -1,7 +1,7 @@
 //! Check for newer App releases on GitHub (manual fallback path).
 //!
 //! Prefer the Tauri updater plugin (`updater` module) when the binary was built
-//! with `GROK_UPDATER_*` secrets — that path downloads, verifies, installs, and
+//! with `OMP_DESKTOP_UPDATER_*` secrets — that path downloads, verifies, installs, and
 //! relaunches. This module remains for:
 //! - Local / unsigned builds (plugin not registered)
 //! - Linux `.deb` / `.rpm` installs (in-place update unsupported)
@@ -19,10 +19,9 @@ use serde::Serialize;
 use serde_json::Value;
 
 const DEFAULT_RELEASES_API_URL: &str =
-    "https://api.github.com/repos/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_HTML_URL: &str =
-    "https://github.com/RongleCat/grok-app/releases/latest";
-const DEFAULT_RELEASES_PAGE: &str = "https://github.com/RongleCat/grok-app/releases";
+    "https://api.github.com/repos/Po1nt9/omp-desktop/releases/latest";
+const DEFAULT_RELEASES_HTML_URL: &str = "https://github.com/Po1nt9/omp-desktop/releases/latest";
+const DEFAULT_RELEASES_PAGE: &str = "https://github.com/Po1nt9/omp-desktop/releases";
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(12);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -161,7 +160,11 @@ pub fn parse_github_release(current_version: &str, v: &Value) -> Result<AppUpdat
     let asset_names = assets
         .map(|arr| {
             arr.iter()
-                .filter_map(|a| a.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                .filter_map(|a| {
+                    a.get("name")
+                        .and_then(|n| n.as_str())
+                        .map(|s| s.to_string())
+                })
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -187,9 +190,9 @@ pub fn parse_github_release(current_version: &str, v: &Value) -> Result<AppUpdat
 /// Extract `v0.1.7` / `0.1.7` from a releases tag URL or path.
 ///
 /// Accepts:
-/// - `https://github.com/RongleCat/grok-app/releases/tag/v0.1.7`
+/// - `https://github.com/Po1nt9/omp-desktop/releases/tag/v0.1.7`
 /// - `.../releases/tag/v0.1.7?foo=1`
-/// - `/RongleCat/grok-app/releases/tag/0.1.7`
+/// - `/Po1nt9/omp-desktop/releases/tag/0.1.7`
 pub fn extract_tag_from_release_url(url: &str) -> Option<String> {
     let base = url.split(['?', '#']).next().unwrap_or(url);
     // Find `/releases/tag/<tag>`
@@ -268,10 +271,7 @@ fn http_client(user_agent: &str) -> Result<reqwest::Client, String> {
 }
 
 /// Primary path: GitHub REST releases/latest.
-async fn fetch_via_api(
-    client: &reqwest::Client,
-    url: &str,
-) -> Result<Value, String> {
+async fn fetch_via_api(client: &reqwest::Client, url: &str) -> Result<Value, String> {
     let mut req = client
         .get(url)
         .header("Accept", "application/vnd.github+json")
@@ -327,7 +327,7 @@ async fn fetch_via_html_redirect(
     current_version: &str,
 ) -> Result<AppUpdateCheck, String> {
     let ua = format!(
-        "GrokApp/{current_version} (desktop; check-update; +https://github.com/RongleCat/grok-app)"
+        "OMP-Desktop/{current_version} (desktop; check-update; +https://github.com/Po1nt9/omp-desktop)"
     );
 
     // 1) Prefer Location header without downloading the HTML body.
@@ -367,7 +367,7 @@ async fn fetch_via_html_redirect(
                 } else {
                     format!("v{tag}")
                 };
-                let html = format!("https://github.com/RongleCat/grok-app/releases/tag/{tag_path}");
+                let html = format!("https://github.com/Po1nt9/omp-desktop/releases/tag/{tag_path}");
                 return Ok(build_check_from_tag(current_version, &tag, &html));
             }
         }
@@ -393,8 +393,8 @@ async fn fetch_via_html_redirect(
 /// Query GitHub for the latest release and compare to this build.
 pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
     let current = env!("CARGO_PKG_VERSION");
-    let api_url =
-        std::env::var("GROK_APP_RELEASES_URL").unwrap_or_else(|_| DEFAULT_RELEASES_API_URL.into());
+    let api_url = std::env::var("GROK_APP_RELEASES_URL")
+        .unwrap_or_else(|_| DEFAULT_RELEASES_API_URL.into());
     let html_url = std::env::var("GROK_APP_RELEASES_HTML_URL")
         .unwrap_or_else(|_| DEFAULT_RELEASES_HTML_URL.into());
 
@@ -406,7 +406,7 @@ pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
     }
 
     let ua = format!(
-        "GrokApp/{current} (desktop; check-update; +https://github.com/RongleCat/grok-app)"
+        "OMP-Desktop/{current} (desktop; check-update; +https://github.com/Po1nt9/omp-desktop)"
     );
     let client = http_client(&ua)?;
 
@@ -451,13 +451,13 @@ mod tests {
     fn parse_github_release_update_and_same() {
         let sample = json!({
             "tag_name": "v0.2.0",
-            "name": "Grok App v0.2.0",
-            "html_url": "https://github.com/RongleCat/grok-app/releases/tag/v0.2.0",
+            "name": "OMP Desktop v0.2.0",
+            "html_url": "https://github.com/Po1nt9/omp-desktop/releases/tag/v0.2.0",
             "published_at": "2026-07-24T00:00:00Z",
             "body": "### Added\n- hello",
             "assets": [
-                {"name": "Grok_0.2.0_aarch64.dmg"},
-                {"name": "Grok_0.2.0_x64-setup.exe"}
+                {"name": "OMP-Desktop_0.2.0_aarch64.dmg"},
+                {"name": "OMP-Desktop_0.2.0_x64-setup.exe"}
             ]
         });
         let up = parse_github_release("0.1.5", &sample).unwrap();
@@ -477,23 +477,26 @@ mod tests {
     fn extract_tag_from_release_url_ok() {
         assert_eq!(
             extract_tag_from_release_url(
-                "https://github.com/RongleCat/grok-app/releases/tag/v0.1.7"
+                "https://github.com/Po1nt9/omp-desktop/releases/tag/v0.1.7"
             )
             .as_deref(),
             Some("v0.1.7")
         );
         assert_eq!(
             extract_tag_from_release_url(
-                "https://github.com/RongleCat/grok-app/releases/tag/0.2.0?foo=1#sec"
+                "https://github.com/Po1nt9/omp-desktop/releases/tag/0.2.0?foo=1#sec"
             )
             .as_deref(),
             Some("0.2.0")
         );
         assert_eq!(
-            extract_tag_from_release_url("/RongleCat/grok-app/releases/tag/v1.0.0").as_deref(),
+            extract_tag_from_release_url("/Po1nt9/omp-desktop/releases/tag/v1.0.0").as_deref(),
             Some("v1.0.0")
         );
-        assert!(extract_tag_from_release_url("https://github.com/RongleCat/grok-app/releases").is_none());
+        assert!(
+            extract_tag_from_release_url("https://github.com/Po1nt9/omp-desktop/releases")
+                .is_none()
+        );
         assert!(extract_tag_from_release_url("https://example.com/nope").is_none());
     }
 
@@ -512,7 +515,7 @@ mod tests {
         let c = build_check_from_tag(
             "0.1.5",
             "v0.1.7",
-            "https://github.com/RongleCat/grok-app/releases/tag/v0.1.7",
+            "https://github.com/Po1nt9/omp-desktop/releases/tag/v0.1.7",
         );
         assert!(c.update_available);
         assert_eq!(c.latest_version, "0.1.7");

@@ -977,7 +977,7 @@ describe("session projection", () => {
     );
     expect(fromLocal?.code).toBe("CLI_TOO_OLD");
     expect(fromLocal?.primary?.id).toBe("upgrade_cli");
-    expect(fromLocal?.summary.toLowerCase()).toMatch(/cli/);
+    expect(fromLocal?.summary.toLowerCase()).toMatch(/runtime/);
   });
 
   it("formatTurnErrorBody maps turn_timeout tag", () => {

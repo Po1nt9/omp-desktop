@@ -6,8 +6,8 @@
 #
 # Example:
 #   ./scripts/generate-latest-json.sh 0.1.9 \
-#     darwin-aarch64:./Grok.app.tar.gz.sig:https://github.com/org/grok-app/releases/download/grok-desktop-latest/Grok_aarch64.app.tar.gz \
-#     linux-x86_64:./Grok.AppImage.sig:https://github.com/org/grok-app/releases/download/grok-desktop-latest/Grok.AppImage
+#     darwin-aarch64:./OMP-Desktop.app.tar.gz.sig:https://github.com/org/omp-desktop/releases/download/omp-desktop-latest/OMP-Desktop_aarch64.app.tar.gz \
+#     linux-x86_64:./OMP-Desktop.AppImage.sig:https://github.com/org/omp-desktop/releases/download/omp-desktop-latest/OMP-Desktop.AppImage
 #
 # Platform keys (Tauri 2):
 #   darwin-aarch64 | darwin-x86_64 | linux-x86_64 | windows-x86_64
@@ -64,7 +64,7 @@ done
 
 jq -n \
   --arg version "$VERSION" \
-  --arg notes "Grok App v$VERSION" \
+  --arg notes "OMP Desktop v$VERSION" \
   --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   "${platform_args[@]}" \
   "{ version: \$version, notes: \$notes, pub_date: \$pub_date, platforms: ($platforms_obj) }"

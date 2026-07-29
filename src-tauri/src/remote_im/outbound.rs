@@ -83,14 +83,10 @@ impl OutboundRouter {
                 )
                 .await
             }
-            "telegram" => {
-                super::channels::telegram::send_text(&cred.secrets, chat_id, text).await
-            }
+            "telegram" => super::channels::telegram::send_text(&cred.secrets, chat_id, text).await,
             "discord" => super::channels::discord::send_text(&cred.secrets, chat_id, text).await,
             "slack" => super::channels::slack::send_text(&cred.secrets, chat_id, text).await,
-            "dingtalk" => {
-                super::channels::dingtalk::send_text(&cred.secrets, chat_id, text).await
-            }
+            "dingtalk" => super::channels::dingtalk::send_text(&cred.secrets, chat_id, text).await,
             "wecom" => super::channels::wecom::send_text(&cred.secrets, chat_id, text).await,
             "weixin" => super::channels::weixin::send_text(&cred.secrets, chat_id, text).await,
             "qq" => super::channels::qq::send_text(&cred.secrets, chat_id, text).await,
@@ -134,9 +130,7 @@ impl OutboundRouter {
                 )
                 .await
             }
-            "dingtalk" => {
-                super::channels::dingtalk::send_card(&cred.secrets, chat_id, card).await
-            }
+            "dingtalk" => super::channels::dingtalk::send_card(&cred.secrets, chat_id, card).await,
             _ => {
                 // Fallback: dump card as text menu summary
                 let text = format!(
@@ -146,8 +140,13 @@ impl OutboundRouter {
                         .unwrap_or("Select:"),
                     card
                 );
-                self.reply(instance_id, chat_id, reply_to, &text.chars().take(2000).collect::<String>())
-                    .await
+                self.reply(
+                    instance_id,
+                    chat_id,
+                    reply_to,
+                    &text.chars().take(2000).collect::<String>(),
+                )
+                .await
             }
         }
     }
@@ -156,7 +155,7 @@ impl OutboundRouter {
 pub fn http_client() -> Result<reqwest::Client, String> {
     crate::proxy::apply_to_reqwest(reqwest::Client::builder())
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent("GrokApp-RemoteIM/1.0")
+        .user_agent("OMP-Desktop-RemoteIM/1.0")
         .build()
         .map_err(|e| e.to_string())
 }
@@ -171,7 +170,12 @@ pub async fn json_post(url: &str, body: serde_json::Value) -> Result<serde_json:
         .map_err(|e| e.to_string())?;
     let status = res.status();
     let text = res.text().await.map_err(|e| e.to_string())?;
-    serde_json::from_str(&text).map_err(|_| format!("HTTP {status}: {}", text.chars().take(200).collect::<String>()))
+    serde_json::from_str(&text).map_err(|_| {
+        format!(
+            "HTTP {status}: {}",
+            text.chars().take(200).collect::<String>()
+        )
+    })
 }
 
 #[allow(dead_code)]
@@ -186,7 +190,10 @@ pub async fn json_get_bearer(url: &str, token: &str) -> Result<serde_json::Value
     let status = res.status();
     let text = res.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
-        return Err(format!("HTTP {status}: {}", text.chars().take(200).collect::<String>()));
+        return Err(format!(
+            "HTTP {status}: {}",
+            text.chars().take(200).collect::<String>()
+        ));
     }
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }

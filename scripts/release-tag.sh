@@ -90,7 +90,7 @@ for rel in ("src/i18n/messages.ts", "src/i18n/zh-tw.ts"):
     if not p.is_file():
         continue
     t = p.read_text()
-    t2, n = re.subn(r"(Grok v)[0-9]+\.[0-9]+\.[0-9]+", rf"\g<1>{ver}", t)
+    t2, n = re.subn(r"(OMP v)[0-9]+\.[0-9]+\.[0-9]+", rf"\g<1>{ver}", t)
     if n:
         p.write_text(t2)
         print(f"{rel} versionFooter ->", ver)

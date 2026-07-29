@@ -11,28 +11,28 @@ import { resolve } from "node:path";
 // 1. bundle.createUpdaterArtifacts = true so Tauri produces the .tar.gz
 //    (or platform archive) and .sig during the build.
 // 2. plugins.updater with pubkey + endpoint from env vars.
-//    Both GROK_UPDATER_PUBLIC_KEY and GROK_UPDATER_ENDPOINT are required.
+//    Both OMP_DESKTOP_UPDATER_PUBLIC_KEY and OMP_DESKTOP_UPDATER_ENDPOINT are required.
 //
 // Usage (CI):
-//   GROK_UPDATER_PUBLIC_KEY=... \
-//   GROK_UPDATER_ENDPOINT=https://github.com/<org>/grok-app/releases/download/grok-desktop-latest/latest.json \
+//   OMP_DESKTOP_UPDATER_PUBLIC_KEY=... \
+//   OMP_DESKTOP_UPDATER_ENDPOINT=https://github.com/<org>/omp-desktop/releases/download/omp-desktop-latest/latest.json \
 //   node scripts/build-release-config.mjs
 //
 // Then:
 //   pnpm tauri build --config src-tauri/tauri.release.conf.json
-// with the same GROK_UPDATER_* env vars so build.rs enables the plugin.
+// with the same OMP_DESKTOP_UPDATER_* env vars so build.rs enables the plugin.
 
 const outputConfigPath = resolve(
   process.cwd(),
   "src-tauri/tauri.release.conf.json",
 );
 
-const updaterPubkey = process.env.GROK_UPDATER_PUBLIC_KEY;
-const updaterEndpoint = process.env.GROK_UPDATER_ENDPOINT;
+const updaterPubkey = process.env.OMP_DESKTOP_UPDATER_PUBLIC_KEY;
+const updaterEndpoint = process.env.OMP_DESKTOP_UPDATER_ENDPOINT;
 
 const missing = [];
-if (!updaterPubkey) missing.push("GROK_UPDATER_PUBLIC_KEY");
-if (!updaterEndpoint) missing.push("GROK_UPDATER_ENDPOINT");
+if (!updaterPubkey) missing.push("OMP_DESKTOP_UPDATER_PUBLIC_KEY");
+if (!updaterEndpoint) missing.push("OMP_DESKTOP_UPDATER_ENDPOINT");
 if (missing.length > 0) {
   console.error(
     `Error: required environment variable(s) missing: ${missing.join(", ")}`,
@@ -68,5 +68,5 @@ console.log(
   "Next: pnpm tauri build --config src-tauri/tauri.release.conf.json",
 );
 console.log(
-  "(same GROK_UPDATER_* env vars must be set so build.rs enables registration)",
+  "(same OMP_DESKTOP_UPDATER_* env vars must be set so build.rs enables registration)",
 );

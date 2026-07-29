@@ -10,7 +10,7 @@ import {
 describe("buildErrorDeck", () => {
   it("returns problem/cause/actions for the four product classes (en)", () => {
     const cli = buildErrorDeck("CLI_NOT_FOUND", "en");
-    expect(cli.problem.toLowerCase()).toMatch(/cli/);
+    expect(cli.problem.toLowerCase()).toMatch(/runtime/);
     expect(cli.cause.length).toBeGreaterThan(8);
     expect(cli.primary.id).toBe("open_doctor");
     expect(cli.secondary?.id).toBe("open_runtime");
@@ -28,7 +28,7 @@ describe("buildErrorDeck", () => {
     expect(crash.primary.id).toBe("reconnect");
 
     const old = buildErrorDeck("CLI_TOO_OLD", "en");
-    expect(old.problem.toLowerCase()).toMatch(/cli/);
+    expect(old.problem.toLowerCase()).toMatch(/runtime/);
     expect(old.problem.toLowerCase()).toMatch(/old|version/);
     expect(old.primary.id).toBe("upgrade_cli");
     expect(old.secondary?.id).toBe("open_doctor");

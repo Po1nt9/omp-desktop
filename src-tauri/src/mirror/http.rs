@@ -60,9 +60,7 @@ pub async fn start_server(
         .route("/assets/{*path}", get(public_assets_handler))
         .with_state(state);
 
-    let app = gated
-        .merge(public_assets)
-        .fallback(unauth_fallback);
+    let app = gated.merge(public_assets).fallback(unauth_fallback);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(addr)
@@ -173,17 +171,11 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| ws::handle_socket(socket, host, app, mgr))
 }
 
-async fn index_handler(
-    State(state): State<HttpState>,
-    req: Request,
-) -> Response {
+async fn index_handler(State(state): State<HttpState>, req: Request) -> Response {
     serve_index(&state, req.headers()).await
 }
 
-async fn static_handler(
-    State(state): State<HttpState>,
-    req: Request,
-) -> Response {
+async fn static_handler(State(state): State<HttpState>, req: Request) -> Response {
     let path = req.uri().path();
     let Some(rest) = path_after_token(path) else {
         return unauthorized();
@@ -202,10 +194,7 @@ async fn static_handler(
 }
 
 /// `GET /assets/*` — no token (dynamic-import chunks ignore `<base href>`).
-async fn public_assets_handler(
-    State(state): State<HttpState>,
-    req: Request,
-) -> Response {
+async fn public_assets_handler(State(state): State<HttpState>, req: Request) -> Response {
     let path = req.uri().path();
     // Only hashed build output under /assets/; reject anything else.
     let rest = path.strip_prefix('/').unwrap_or(path);
@@ -236,7 +225,7 @@ async fn serve_index(state: &HttpState, headers: &HeaderMap) -> Response {
             );
             // Temporary placeholder when dist missing (Slice 1 gate proof still works).
             let placeholder = format!(
-                r#"<!doctype html><html><head><meta charset="utf-8"><title>Grok Mirror</title>
+                r#"<!doctype html><html><head><meta charset="utf-8"><title>OMP Desktop Mirror</title>
 <script>window.__MIRROR__={{token:{tok},protocol:1}};</script>
 <base href="/t/{token}/">
 </head><body><p>Mirror host online (dist not found). Build UI or set GROK_MIRROR_DIST.</p></body></html>"#,

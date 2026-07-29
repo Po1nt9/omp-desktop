@@ -49,7 +49,7 @@ pub fn parse_slash(text: &str) -> Option<BuiltinCommand> {
 pub fn help_text(lang: &str) -> String {
     if lang == "en" {
         [
-            "**Grok Remote IM** — local Grok Build via IM (Rust)",
+            "**OMP Desktop Remote IM** — local OMP Runtime via IM (Rust)",
             "",
             "Commands:",
             "- `/help` — this message",
@@ -66,7 +66,7 @@ pub fn help_text(lang: &str) -> String {
         .join("\n")
     } else {
         [
-            "**Grok Remote IM** — 本地 Grok Build 远程 IM 桥（Rust 内置）",
+            "**OMP Desktop Remote IM** — 本地 OMP Runtime 远程 IM 桥（Rust 内置）",
             "",
             "命令：",
             "- `/help` — 显示帮助",

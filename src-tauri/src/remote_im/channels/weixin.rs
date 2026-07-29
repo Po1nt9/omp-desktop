@@ -55,7 +55,7 @@ pub async fn run(
         let url = format!("{}/ilink/bot/getupdates", base.trim_end_matches('/'));
         let body = json!({
             "get_updates_buf": buf,
-            "base_info": { "channel_version": "grok-app-weixin/1.0" }
+            "base_info": { "channel_version": "omp-desktop-weixin/1.0" }
         });
         let mut req = client
             .post(&url)
@@ -377,7 +377,7 @@ pub async fn send_text(
             }],
             "context_token": ctx
         },
-        "base_info": { "channel_version": "grok-app-weixin/1.0" }
+        "base_info": { "channel_version": "omp-desktop-weixin/1.0" }
     });
     let mut req = client
         .post(url)

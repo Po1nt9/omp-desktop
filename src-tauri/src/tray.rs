@@ -15,7 +15,7 @@ use tauri::{
 use crate::store;
 use crate::tray_i18n::{self, TrayStrings};
 
-const TRAY_ID: &str = "grok-main-tray";
+const TRAY_ID: &str = "omp-desktop-main-tray";
 
 /// Build ChatGPT-style tray menu: Recent · More · Usage · New Chat · Open · Quit.
 /// Labels follow `settings.locale` (zh / en).

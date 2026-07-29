@@ -1,7 +1,7 @@
 //! Desktop auto-update helpers (Tauri updater plugin + process relaunch).
 //!
-//! Runtime registration only when release CI injects `GROK_UPDATER_PUBLIC_KEY` +
-//! `GROK_UPDATER_ENDPOINT` (`build.rs` → `cfg(grok_updater_enabled)`) on a
+//! Runtime registration only when release CI injects `OMP_DESKTOP_UPDATER_PUBLIC_KEY` +
+//! `OMP_DESKTOP_UPDATER_ENDPOINT` (`build.rs` → `cfg(omp_desktop_updater_enabled)`) on a
 //! non-debug binary. The crate itself is always a hard dependency so Tauri ACL
 //! can resolve `updater:allow-*` permissions at build time.
 //!
@@ -51,10 +51,10 @@ pub fn is_auto_update_supported() -> bool {
 }
 
 /// True when this binary was built with pubkey + endpoint injected
-/// (`GROK_UPDATER_*` at compile time) and is not a debug build.
+/// (`OMP_DESKTOP_UPDATER_*` at compile time) and is not a debug build.
 #[tauri::command]
 pub fn is_updater_plugin_enabled() -> bool {
-    cfg!(grok_updater_enabled) && !cfg!(debug_assertions)
+    cfg!(omp_desktop_updater_enabled) && !cfg!(debug_assertions)
 }
 
 /// Snapshot for About / Doctor: which update path this binary can use.
@@ -83,7 +83,7 @@ pub fn updater_status() -> UpdaterStatusDto {
     // Endpoint is only meaningful when the plugin was compiled in; avoid leaking
     // build-time env into debug strings beyond the non-secret public URL.
     let endpoint = if plugin_enabled {
-        option_env!("GROK_UPDATER_ENDPOINT")
+        option_env!("OMP_DESKTOP_UPDATER_ENDPOINT")
             .unwrap_or("")
             .to_string()
     } else {
@@ -114,11 +114,11 @@ pub async fn prepare_for_app_update(
     remote_im: State<'_, Arc<RemoteImState>>,
 ) -> Result<(), String> {
     if UPDATE_SHUTDOWN_DONE.swap(true, Ordering::SeqCst) {
-        info!(target: "grok_app::updater", "prepare_for_app_update already completed");
+        info!(target: "omp_desktop::updater", "prepare_for_app_update already completed");
         return Ok(());
     }
 
-    info!(target: "grok_app::updater", "stopping managed processes before app relaunch");
+    info!(target: "omp_desktop::updater", "stopping managed processes before app relaunch");
 
     // Voice realtime session first (network + tool delegation).
     let _ = voice.stop(&app).await;
@@ -128,7 +128,7 @@ pub async fn prepare_for_app_update(
     {
         let mut rt = remote_im.inner.lock().await;
         if let Err(e) = rt.stop_async().await {
-            tracing::warn!(target: "grok_app::updater", error = %e, "remote_im stop during prepare_for_app_update");
+            tracing::warn!(target: "omp_desktop::updater", error = %e, "remote_im stop during prepare_for_app_update");
         }
     }
 
@@ -138,7 +138,7 @@ pub async fn prepare_for_app_update(
     // Mirror HTTP host + cloudflared tunnel.
     mirror.stop_sync();
 
-    info!(target: "grok_app::updater", "managed processes stopped; safe to relaunch");
+    info!(target: "omp_desktop::updater", "managed processes stopped; safe to relaunch");
     Ok(())
 }
 
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn auto_update_supported_is_bool() {
         let _ = is_auto_update_supported();
-        assert!(!is_updater_plugin_enabled() || cfg!(grok_updater_enabled));
+        assert!(!is_updater_plugin_enabled() || cfg!(omp_desktop_updater_enabled));
     }
 
     #[test]

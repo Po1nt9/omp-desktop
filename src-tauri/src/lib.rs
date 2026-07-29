@@ -1,4 +1,4 @@
-//! Grok App Host — real ACP default (`grok agent stdio`).
+//! OMP Desktop Host — real ACP default (`grok agent stdio`).
 
 mod acp_client;
 mod agent_memory;
@@ -78,12 +78,12 @@ pub fn run() {
         inner: tokio::sync::Mutex::new(remote_im::BridgeRuntime::default()),
     });
 
-    // Attach `tauri-plugin-updater` only when release CI injected GROK_UPDATER_*
+    // Attach `tauri-plugin-updater` only when release CI injected OMP_DESKTOP_UPDATER_*
     // (build.rs → cfg) and this is a non-debug binary. Crate is always linked for ACL.
     fn maybe_register_updater(
         builder: tauri::Builder<tauri::Wry>,
     ) -> tauri::Builder<tauri::Wry> {
-        #[cfg(grok_updater_enabled)]
+        #[cfg(omp_desktop_updater_enabled)]
         {
             if !cfg!(debug_assertions) {
                 return builder.plugin(tauri_plugin_updater::Builder::new().build());
@@ -103,7 +103,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init());
 
     // Register the updater only in configured release builds; omit it locally.
-    // Requires GROK_UPDATER_* env at compile time (build.rs) + non-debug binary.
+    // Requires OMP_DESKTOP_UPDATER_* env at compile time (build.rs) + non-debug binary.
     let builder = maybe_register_updater(builder);
 
     builder
@@ -119,7 +119,7 @@ pub fn run() {
             });
         })
         // Close button / Alt+F4: hide to tray (default) or quit — Settings → General.
-        // Full exit always available via tray "Quit Grok" or Cmd+Q.
+        // Full exit always available via tray "Quit OMP Desktop" or Cmd+Q.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 use tauri::Manager;
@@ -365,7 +365,7 @@ pub fn run() {
             runtime_availability::runtime_availability,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Grok App")
+        .expect("error while building OMP Desktop")
         .run(|app, event| {
             // macOS: click Dock icon when all windows hidden → show main window again.
             #[cfg(target_os = "macos")]
@@ -392,7 +392,7 @@ pub fn run() {
 /// Test-only registry of all Tauri command names registered in [`run`].
 ///
 /// Kept in sync with the `generate_handler!` list above. The command-surface
-/// regression test uses this to assert that legacy Grok CLI/account/quota
+/// regression test uses this to assert that legacy CLI/account/quota
 /// commands have been removed.
 #[cfg(test)]
 fn registered_command_names() -> &'static [&'static str] {

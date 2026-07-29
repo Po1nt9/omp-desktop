@@ -4,6 +4,7 @@ import {
   notificationSupport,
   showDesktopNotification,
 } from "./desktopNotify";
+import { t } from "@/i18n";
 
 const originalNotification = globalThis.Notification;
 
@@ -93,5 +94,11 @@ describe("desktopNotify", () => {
     globalThis.Notification = ctor as unknown as typeof Notification;
     expect(showDesktopNotification({ title: "x", force: true })).toBe(false);
     expect(ctor).not.toHaveBeenCalled();
+  });
+
+  it("turn-complete notification title is branded OMP across locales", () => {
+    expect(t("en", "notify.turnDoneTitle")).toContain("OMP");
+    expect(t("zh", "notify.turnDoneTitle")).toContain("OMP");
+    expect(t("zh-TW", "notify.turnDoneTitle")).toContain("OMP");
   });
 });

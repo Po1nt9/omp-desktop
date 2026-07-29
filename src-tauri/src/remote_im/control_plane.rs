@@ -23,7 +23,7 @@ pub struct ScopeBinding {
     pub project_id: Option<String>,
     pub work_dir: String,
     pub local_session_id: String,
-    /// Grok/App agent session id used with --resume / ACP.
+    /// OMP Desktop agent session id used with --resume / ACP.
     pub agent_session_id: Option<String>,
     pub pending_mode: PendingMode,
     pub turn_count: u32,
@@ -64,7 +64,10 @@ pub fn effective_agent_session_id(s: &AppSessionEntry) -> String {
 }
 
 /// After project select: bind path, clear agent session, next speak is new.
-pub fn binding_after_project_select(_prev: &ScopeBinding, project: &TrustedProject) -> ScopeBinding {
+pub fn binding_after_project_select(
+    _prev: &ScopeBinding,
+    project: &TrustedProject,
+) -> ScopeBinding {
     ScopeBinding {
         project_id: Some(project.id.clone()),
         work_dir: project.path.clone(),
@@ -133,7 +136,10 @@ pub fn binding_after_agent_turn(
     returned_session_id: Option<&str>,
 ) -> ScopeBinding {
     let mut next = prev.clone();
-    if let Some(sid) = returned_session_id.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+    if let Some(sid) = returned_session_id
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
         next.agent_session_id = Some(sid.to_string());
     }
     next.pending_mode = PendingMode::Continue;
@@ -177,15 +183,17 @@ pub fn normalize_pick_query(query: &str) -> String {
 }
 
 /// Pick project by 1-based index or name/id substring.
-pub fn pick_project<'a>(
-    projects: &'a [TrustedProject],
-    query: &str,
-) -> Option<&'a TrustedProject> {
+pub fn pick_project<'a>(projects: &'a [TrustedProject], query: &str) -> Option<&'a TrustedProject> {
     // Strip zero-width / BOM noise from IM clients pasting button labels.
     let q_raw: String = query
         .trim()
         .chars()
-        .filter(|c| !matches!(c, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{feff}' | '\u{00a0}'))
+        .filter(|c| {
+            !matches!(
+                c,
+                '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{feff}' | '\u{00a0}'
+            )
+        })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -245,9 +253,7 @@ pub fn pick_session<'a>(
         }
     }
     sessions.iter().find(|s| {
-        s.id == q
-            || s.agent_session_id.as_deref() == Some(q)
-            || s.title.eq_ignore_ascii_case(q)
+        s.id == q || s.agent_session_id.as_deref() == Some(q) || s.title.eq_ignore_ascii_case(q)
     })
 }
 
@@ -255,9 +261,9 @@ pub fn pick_session<'a>(
 pub fn format_project_menu(projects: &[TrustedProject], lang: &str) -> String {
     if projects.is_empty() {
         return if lang == "en" {
-            "No trusted projects. Trust a folder in Grok App first.".into()
+            "No trusted projects. Trust a folder in OMP Desktop first.".into()
         } else {
-            "没有已信任项目。请先在 Grok App 中信任项目目录。".into()
+            "没有已信任项目。请先在 OMP Desktop 中信任项目目录。".into()
         };
     }
     let mut lines = vec![if lang == "en" {
@@ -444,9 +450,10 @@ pub fn apply_session_pick(
     sessions: &[AppSessionEntry],
     query_or_id: &str,
 ) -> Result<ScopeBinding, String> {
-    if let Some(s) = sessions.iter().find(|s| {
-        s.id == query_or_id || s.agent_session_id.as_deref() == Some(query_or_id)
-    }) {
+    if let Some(s) = sessions
+        .iter()
+        .find(|s| s.id == query_or_id || s.agent_session_id.as_deref() == Some(query_or_id))
+    {
         return Ok(binding_after_session_resume(binding, s));
     }
     match pick_session(sessions, query_or_id) {
@@ -495,7 +502,7 @@ pub fn build_feishu_project_card(projects: &[TrustedProject], lang: &str) -> ser
     serde_json::json!({
         "config": { "wide_screen_mode": true },
         "header": {
-            "title": { "tag": "plain_text", "content": "Grok Remote IM · /p" }
+            "title": { "tag": "plain_text", "content": "OMP Desktop Remote IM · /p" }
         },
         "elements": elements
     })
@@ -513,7 +520,11 @@ pub fn build_feishu_session_card(sessions: &[AppSessionEntry], lang: &str) -> se
     })];
     let mut actions = Vec::new();
     for (i, s) in sessions.iter().take(20).enumerate() {
-        let label = format!("{}. {}", i + 1, s.title.chars().take(40).collect::<String>());
+        let label = format!(
+            "{}. {}",
+            i + 1,
+            s.title.chars().take(40).collect::<String>()
+        );
         actions.push(serde_json::json!({
             "tag": "button",
             "text": { "tag": "plain_text", "content": label },
@@ -538,7 +549,7 @@ pub fn build_feishu_session_card(sessions: &[AppSessionEntry], lang: &str) -> se
     serde_json::json!({
         "config": { "wide_screen_mode": true },
         "header": {
-            "title": { "tag": "plain_text", "content": "Grok Remote IM · /r" }
+            "title": { "tag": "plain_text", "content": "OMP Desktop Remote IM · /r" }
         },
         "elements": elements
     })
@@ -568,7 +579,7 @@ pub fn build_dingtalk_project_card(projects: &[TrustedProject], lang: &str) -> s
     }));
     serde_json::json!({
         "config": { "autoLayout": true },
-        "header": { "title": { "type": "text", "text": "Grok · /p" } },
+        "header": { "title": { "type": "text", "text": "OMP · /p" } },
         "contents": [
             { "type": "markdown", "text": title },
             { "type": "action", "actions": btn }
@@ -599,7 +610,7 @@ pub fn build_dingtalk_session_card(sessions: &[AppSessionEntry], lang: &str) -> 
     }));
     serde_json::json!({
         "config": { "autoLayout": true },
-        "header": { "title": { "type": "text", "text": "Grok · /r" } },
+        "header": { "title": { "type": "text", "text": "OMP · /r" } },
         "contents": [
             { "type": "markdown", "text": title },
             { "type": "action", "actions": btn }
@@ -691,16 +702,19 @@ mod tests {
         ];
         let listed = list_sessions_for_project(&all, Some("p1"));
         assert_eq!(listed.len(), 2);
-        assert_eq!(pick_session(&listed, "2").map(|s| s.id.as_str()), Some("s3"));
+        assert_eq!(
+            pick_session(&listed, "2").map(|s| s.id.as_str()),
+            Some("s3")
+        );
         assert_eq!(
             pick_session(&listed, "a1").map(|s| s.id.as_str()),
             Some("s1")
         );
-        let projects = vec![
-            proj("p1", "One", "/a"),
-            proj("p2", "Two", "/b"),
-        ];
-        assert_eq!(pick_project(&projects, "2").map(|p| p.id.as_str()), Some("p2"));
+        let projects = vec![proj("p1", "One", "/a"), proj("p2", "Two", "/b")];
+        assert_eq!(
+            pick_project(&projects, "2").map(|p| p.id.as_str()),
+            Some("p2")
+        );
         let b = ScopeBinding::fresh("/tmp");
         let bound = apply_session_pick(&b, &listed, "1").unwrap();
         assert_eq!(bound.agent_session_id.as_deref(), Some("a1"));
@@ -723,10 +737,7 @@ mod tests {
         let enc = encode_card_action(&a);
         assert_eq!(parse_card_action(&enc), Some(a));
         let b = CardAction::Session { id: "s9".into() };
-        assert_eq!(
-            parse_card_action(&encode_card_action(&b)),
-            Some(b)
-        );
+        assert_eq!(parse_card_action(&encode_card_action(&b)), Some(b));
         assert_eq!(
             parse_card_action(r#"{"value":"{\"kind\":\"project\",\"id\":\"px\"}"}"#),
             Some(CardAction::Project { id: "px".into() })
@@ -795,10 +806,7 @@ mod tests {
 
     #[test]
     fn pick_project_accepts_feishu_button_label() {
-        let projects = vec![
-            proj("p1", "塔家军", "/a"),
-            proj("p2", "cc-workspace", "/b"),
-        ];
+        let projects = vec![proj("p1", "塔家军", "/a"), proj("p2", "cc-workspace", "/b")];
         assert_eq!(
             pick_project(&projects, "2. cc-workspace").map(|p| p.id.as_str()),
             Some("p2")

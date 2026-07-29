@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install toolchains for Grok App desktop builds (macOS ARM / Intel + Windows x64).
+# Install toolchains for OMP Desktop builds (macOS ARM / Intel + Windows x64).
 # On macOS/Linux, Windows installers use cargo-xwin + NSIS (Tauri official path).
 # Run once on each developer machine (or after rustup update):
 #   pnpm setup:cross

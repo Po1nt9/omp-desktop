@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Download versioned release assets, map platform archives + .sig files, write
-# latest.json, and clobber-upload to the rolling `grok-desktop-latest` release.
+# latest.json, and clobber-upload to the rolling `omp-desktop-latest` release.
 #
 # Usage (CI after all platform builds):
-#   TAG=v0.1.9 REPO=owner/grok-app bash scripts/assemble-updater-manifest.sh
+#   TAG=v0.1.9 REPO=owner/omp-desktop bash scripts/assemble-updater-manifest.sh
 #
-# Optional: PLATFORM_HINTS="darwin-aarch64:Grok_0.1.9_aarch64.app.tar.gz,..."
+# Optional: PLATFORM_HINTS="darwin-aarch64:OMP-Desktop_0.1.9_aarch64.app.tar.gz,..."
 #   Prefer explicit matrix mappings over filename heuristics.
 #
 # Requires: gh, jq. Optional: GH_TOKEN for higher rate limit.
@@ -13,8 +13,8 @@ set -euo pipefail
 
 TAG="${TAG:-}"
 REPO="${REPO:-${GITHUB_REPOSITORY:-}}"
-ROLLING_TAG="${ROLLING_TAG:-grok-desktop-latest}"
-WORK="${WORK:-/tmp/grok-updater-assets}"
+ROLLING_TAG="${ROLLING_TAG:-omp-desktop-latest}"
+WORK="${WORK:-/tmp/omp-desktop-updater-assets}"
 PLATFORM_HINTS="${PLATFORM_HINTS:-}"
 
 if [[ -z "$TAG" || -z "$REPO" ]]; then
@@ -189,7 +189,7 @@ if ! gh release view "$ROLLING_TAG" --repo "$REPO" >/dev/null 2>&1; then
   echo "==> Creating rolling release $ROLLING_TAG"
   gh release create "$ROLLING_TAG" \
     --repo "$REPO" \
-    --title "Grok Desktop auto-updater (rolling)" \
+    --title "OMP Desktop auto-updater (rolling)" \
     --notes "Rolling release for the Tauri auto-updater. Prefer versioned vX.Y.Z releases for first-time installs." \
     --latest=false || true
 fi

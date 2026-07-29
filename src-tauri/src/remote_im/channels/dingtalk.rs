@@ -67,7 +67,7 @@ async fn run_stream_once(
             "type": "CALLBACK",
             "topic": "*"
         }],
-        "ua": "grok-app-remote-im/1.0",
+        "ua": "omp-desktop-remote-im/1.0",
         "localIp": "127.0.0.1"
     });
     let res = client
@@ -305,10 +305,7 @@ pub async fn send_text(
     text: &str,
 ) -> Result<(), String> {
     // Prefer session webhook; then robot webhook
-    let instance_id = secrets
-        .get("_instance_id")
-        .cloned()
-        .unwrap_or_default();
+    let instance_id = secrets.get("_instance_id").cloned().unwrap_or_default();
     if let Some(wh) = load_session_webhook(&instance_id, chat_id)
         .or_else(|| secrets.get("webhook").cloned())
         .or_else(|| secrets.get("robot_webhook").cloned())
@@ -337,10 +334,7 @@ pub async fn send_card(
     chat_id: &str,
     card: &Value,
 ) -> Result<(), String> {
-    let instance_id = secrets
-        .get("_instance_id")
-        .cloned()
-        .unwrap_or_default();
+    let instance_id = secrets.get("_instance_id").cloned().unwrap_or_default();
     let wh = load_session_webhook(&instance_id, chat_id)
         .or_else(|| secrets.get("webhook").cloned())
         .or_else(|| secrets.get("robot_webhook").cloned());
@@ -354,13 +348,16 @@ pub async fn send_card(
         .pointer("/header/title/text")
         .or_else(|| card.pointer("/header/title/content"))
         .and_then(|x| x.as_str())
-        .unwrap_or("Grok Remote IM");
+        .unwrap_or("OMP Desktop Remote IM");
     let text = card
         .pointer("/contents/0/text")
         .and_then(|x| x.as_str())
         .unwrap_or("Select:");
     let mut btns = Vec::new();
-    if let Some(actions) = card.pointer("/contents/1/actions").and_then(|a| a.as_array()) {
+    if let Some(actions) = card
+        .pointer("/contents/1/actions")
+        .and_then(|a| a.as_array())
+    {
         for a in actions {
             btns.push(json!({
                 "title": a.get("title").and_then(|x| x.as_str()).unwrap_or("·"),

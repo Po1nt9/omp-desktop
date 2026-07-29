@@ -141,7 +141,7 @@ jobs:
           $manifest = Join-Path (Get-Location) "windows-test-manifest.xml"
           if (-not (Test-Path -LiteralPath $manifest)) { throw "missing $manifest" }
 
-          $exes = @(Get-ChildItem -Path "target\debug\deps" -Filter "grok_app_lib-*.exe" -ErrorAction SilentlyContinue)
+          $exes = @(Get-ChildItem -Path "target\debug\deps" -Filter "omp_desktop_lib-*.exe" -ErrorAction SilentlyContinue)
           if (-not $exes.Count) {
             # Fallback: any freshly built test harness under deps
             $exes = @(Get-ChildItem -Path "target\debug\deps" -Filter "*-*.exe" -ErrorAction SilentlyContinue |

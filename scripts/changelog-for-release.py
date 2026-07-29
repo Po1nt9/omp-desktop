@@ -23,7 +23,7 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 FOOTER = """
 ---
 
-Assets are attached below. Install help (macOS `xattr` / Gatekeeper, Windows SmartScreen, Linux packages, CLI): [README](https://github.com/RongleCat/grok-app#install--first-run) · [README 中文](https://github.com/RongleCat/grok-app/blob/main/README.md#%E5%AE%89%E8%A3%85%E4%B8%8E%E4%BD%BF%E7%94%A8) · Full history: [CHANGELOG.md](https://github.com/RongleCat/grok-app/blob/main/CHANGELOG.md)
+Assets are attached below. Install help (macOS `xattr` / Gatekeeper, Windows SmartScreen, Linux packages, CLI): [README](https://github.com/Po1nt9/omp-desktop#install--first-run) · [README 中文](https://github.com/Po1nt9/omp-desktop/blob/main/README.md#%E5%AE%89%E8%A3%85%E4%B8%8E%E4%BD%BF%E7%94%A8) · Full history: [CHANGELOG.md](https://github.com/Po1nt9/omp-desktop/blob/main/CHANGELOG.md)
 """
 
 
@@ -64,7 +64,7 @@ def main() -> int:
         )
         return 1
 
-    out = f"# Grok App v{version}\n\n{section}\n{FOOTER}"
+    out = f"# OMP Desktop v{version}\n\n{section}\n{FOOTER}"
     if not out.endswith("\n"):
         out += "\n"
     try:

@@ -12,7 +12,7 @@
 #            APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID  (see Tauri macOS signing docs)
 # Auto-update (optional — without these, installers still publish; in-app
 # update stays on the GitHub "open release page" path):
-#   - GROK_UPDATER_PUBLIC_KEY          minisign public key (embedded in app)
+#   - OMP_DESKTOP_UPDATER_PUBLIC_KEY          minisign public key (embedded in app)
 #   - TAURI_SIGNING_PRIVATE_KEY        minisign private key (sign archives)
 #   - TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (empty string OK)
 # See docs/desktop-auto-update.md
@@ -121,9 +121,9 @@ jobs:
           python3 scripts/changelog-for-release.py "$VER" | tee release-notes.md
           # Multiline body for tauri-action `releaseBody` (no releaseBodyFile input).
           {
-            echo "RELEASE_BODY<<GROKAPP_EOF"
+            echo "RELEASE_BODY<<OMP_DESKTOP_EOF"
             cat release-notes.md
-            echo "GROKAPP_EOF"
+            echo "OMP_DESKTOP_EOF"
           } >> "$GITHUB_ENV"
 
       # Detect updater secrets without failing unsigned community builds.
@@ -131,11 +131,11 @@ jobs:
         id: updater
         shell: bash
         env:
-          GROK_UPDATER_PUBLIC_KEY: ${{ secrets.GROK_UPDATER_PUBLIC_KEY }}
+          OMP_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.OMP_DESKTOP_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          if [[ -n "${GROK_UPDATER_PUBLIC_KEY:-}" && -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+          if [[ -n "${OMP_DESKTOP_UPDATER_PUBLIC_KEY:-}" && -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
             echo "Updater secrets present — enabling in-app auto-update artifacts"
           else
@@ -147,8 +147,8 @@ jobs:
         if: steps.updater.outputs.enabled == 'true'
         shell: bash
         env:
-          GROK_UPDATER_PUBLIC_KEY: ${{ secrets.GROK_UPDATER_PUBLIC_KEY }}
-          GROK_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/grok-desktop-latest/latest.json
+          OMP_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.OMP_DESKTOP_UPDATER_PUBLIC_KEY }}
+          OMP_DESKTOP_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/omp-desktop-latest/latest.json
         run: node scripts/build-release-config.mjs
 
       # NOTE: Do NOT pass empty APPLE_* secrets.
@@ -159,8 +159,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GROK_UPDATER_PUBLIC_KEY: ${{ secrets.GROK_UPDATER_PUBLIC_KEY }}
-          GROK_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/grok-desktop-latest/latest.json
+          OMP_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.OMP_DESKTOP_UPDATER_PUBLIC_KEY }}
+          OMP_DESKTOP_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/omp-desktop-latest/latest.json
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -168,12 +168,12 @@ jobs:
           projectPath: .
           # Prefer the pushed git tag; fallback replaces __VERSION__ from tauri.conf.json
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
-          releaseName: "Grok App v__VERSION__"
+          releaseName: "OMP Desktop v__VERSION__"
           releaseBody: ${{ env.RELEASE_BODY }}
           releaseDraft: false
           prerelease: false
           # --config injects pubkey/endpoint + createUpdaterArtifacts.
-          # GROK_UPDATER_* env (above) enables build.rs registration cfg.
+          # OMP_DESKTOP_UPDATER_* env (above) enables build.rs registration cfg.
           args: ${{ matrix.args }}${{ steps.updater.outputs.enabled == 'true' && ' --config src-tauri/tauri.release.conf.json' || '' }}
           # We assemble a multi-platform latest.json in assemble-updater-manifest.
           includeUpdaterJson: false
@@ -204,15 +204,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Assemble rolling grok-desktop-latest
+      - name: Assemble rolling omp-desktop-latest
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GROK_UPDATER_PUBLIC_KEY: ${{ secrets.GROK_UPDATER_PUBLIC_KEY }}
+          OMP_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.OMP_DESKTOP_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          if [[ -z "${GROK_UPDATER_PUBLIC_KEY:-}" || -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+          if [[ -z "${OMP_DESKTOP_UPDATER_PUBLIC_KEY:-}" || -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
             echo "Updater secrets not configured — skip assemble-updater-manifest"
             exit 0
           fi

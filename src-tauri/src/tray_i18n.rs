@@ -57,9 +57,9 @@ const EN: TrayStrings = TrayStrings {
     doctor: "Doctor",
     account: "Account",
     new_chat: "New Chat",
-    open_app: "Open Grok",
-    quit: "Quit Grok",
-    tooltip: "Grok",
+    open_app: "Open OMP Desktop",
+    quit: "Quit OMP Desktop",
+    tooltip: "OMP Desktop",
     usage_with_reset: "Usage  ·  {pct}% left  ·  {time}",
     usage_pct: "Usage  ·  {pct}% left",
     usage_unknown: "Usage  ·  —",
@@ -74,9 +74,9 @@ const ZH: TrayStrings = TrayStrings {
     doctor: "Doctor",
     account: "账户",
     new_chat: "新对话",
-    open_app: "打开 Grok",
-    quit: "退出 Grok",
-    tooltip: "Grok",
+    open_app: "打开 OMP Desktop",
+    quit: "退出 OMP Desktop",
+    tooltip: "OMP Desktop",
     usage_with_reset: "额度  ·  剩余 {pct}%  ·  {time}",
     usage_pct: "额度  ·  剩余 {pct}%",
     usage_unknown: "额度  ·  —",
@@ -91,9 +91,9 @@ const ZH_TW: TrayStrings = TrayStrings {
     doctor: "Doctor",
     account: "帳戶",
     new_chat: "新對話",
-    open_app: "開啟 Grok",
-    quit: "結束 Grok",
-    tooltip: "Grok",
+    open_app: "開啟 OMP Desktop",
+    quit: "結束 OMP Desktop",
+    tooltip: "OMP Desktop",
     usage_with_reset: "額度  ·  剩餘 {pct}%  ·  {time}",
     usage_pct: "額度  ·  剩餘 {pct}%",
     usage_unknown: "額度  ·  —",
@@ -144,5 +144,16 @@ mod tests {
         assert_eq!(s, "Usage  ·  73% left  ·  04-15 09:05");
         let z = format_usage(ZH.usage_pct, Some(73.0), None);
         assert_eq!(z, "额度  ·  剩余 73%");
+    }
+
+    #[test]
+    fn tray_copy_uses_omp_desktop_brand() {
+        assert_eq!(EN.open_app, "Open OMP Desktop");
+        assert_eq!(EN.quit, "Quit OMP Desktop");
+        assert_eq!(EN.tooltip, "OMP Desktop");
+        assert_eq!(ZH.open_app, "打开 OMP Desktop");
+        assert_eq!(ZH.quit, "退出 OMP Desktop");
+        assert_eq!(ZH_TW.open_app, "開啟 OMP Desktop");
+        assert_eq!(ZH_TW.quit, "結束 OMP Desktop");
     }
 }

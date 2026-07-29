@@ -1,4 +1,4 @@
-//! Load trusted projects from Grok App `projects.json`.
+//! Load trusted projects from OMP Desktop `projects.json`.
 
 use super::types::TrustedProject;
 use crate::paths::app_data_root;

@@ -111,8 +111,8 @@ async fn run_once(
                                         "intents": INTENTS,
                                         "properties": {
                                             "os": std::env::consts::OS,
-                                            "browser": "grok-app",
-                                            "device": "grok-app"
+                                            "browser": "omp-desktop",
+                                            "device": "omp-desktop"
                                         }
                                     }
                                 });

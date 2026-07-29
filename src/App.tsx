@@ -3857,7 +3857,7 @@ export default function App() {
           setLocalError(
             tr("automations.connectFailed", { detail }),
           );
-          // Drop empty shell sessions so sidebar does not show SuperGrok ghosts.
+          // Drop empty shell sessions so sidebar does not show stale ghost sessions.
           if (createdSessionId && api.isTauri()) {
             try {
               await api.sessionDelete(createdSessionId);
@@ -6944,7 +6944,7 @@ export default function App() {
   }, [messages, showToast, tr]);
 
   /**
-   * New empty draft only: lift composer and SuperGrok brand.
+   * New empty draft only: lift composer and apply brand styling.
    * Existing sessions (even with empty journal) must not look like a fresh chat.
    */
   const welcomeSession =
@@ -8026,7 +8026,7 @@ export default function App() {
     [session.sessionId, showToast, tr],
   );
 
-  /** Export Grok Build CLI session trace (`grok trace --local`). */
+  /** Export session trace. */
   const exportSessionTrace = useCallback(
     async (sessionId?: string | null) => {
       const id = sessionId || session.sessionId;
@@ -8869,7 +8869,7 @@ export default function App() {
             .filter((p) => p.trusted)
             .map((p) => ({ id: p.id, name: p.name, path: p.path }))}
           onProviderActivated={() => {
-            // Hot-reload Grok Build: drop live ACP so next send re-spawns with new GROK_HOME config.
+            // Hot-reload runtime: drop live ACP so next send re-spawns with new runtime config.
             void (async () => {
               try {
                 if (api.isTauri()) {
@@ -9528,7 +9528,7 @@ export default function App() {
                       : tr("common.local")}
                 </span>
                 {(() => {
-                  // Only show SuperGrok remaining when officially signed in.
+                  // Only show remaining quota when officially signed in.
                   if (customRouteActive || !account?.profile?.signedIn) return null;
                   const rem = remainingPercent(account);
                   return rem != null ? (
@@ -9862,7 +9862,7 @@ export default function App() {
           {!runtimeAvailability.available && (
             <div className="conn-bar" role="status" data-testid="runtime-unavailable">
               <span style={{ fontSize: 12, opacity: 0.9, marginRight: 8 }}>
-                OMP Runtime is not connected
+                {tr("error.deck.runtimeUnavailable.problem")}
               </span>
             </div>
           )}
