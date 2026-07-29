@@ -24,11 +24,11 @@ import {
 import { Tip } from "@/components/ui/tooltip";
 import {
   DEFAULT_EFFORT,
-  DEFAULT_MODEL_ID,
-  GROK_BUILD_EFFORTS,
-  GROK_BUILD_MODELS,
+  defaultModelId as FALLBACK_MODEL_ID,
+  availableModels,
+  type EffortOption,
   type ModelOption,
-} from "@/lib/grokCatalog";
+} from "@/lib/modelOptions";
 
 export type AutomationsFilter = "all" | "enabled" | "paused";
 
@@ -43,7 +43,7 @@ export interface AutomationsPageProps {
   defaultModelId?: string;
   defaultEffort?: string;
   /** Live selectable models; falls back to catalog. */
-  models?: ModelOption[];
+  models?: readonly ModelOption[];
   onAiCreate: () => void;
   onRunNow?: (auto: Automation) => void;
 }
@@ -75,7 +75,7 @@ const emptyForm = (modelId: string, effort: string): FormState => ({
 export function AutomationsPage({
   t,
   projects,
-  defaultModelId = DEFAULT_MODEL_ID,
+  defaultModelId = FALLBACK_MODEL_ID ?? "",
   defaultEffort = DEFAULT_EFFORT,
   models,
   onAiCreate,
@@ -330,12 +330,12 @@ export function AutomationsPage({
     [projects, t],
   );
 
-  const modelOptions = (models?.length ? models : GROK_BUILD_MODELS).map((m) => ({
+  const modelOptions = (models?.length ? models : availableModels).map((m) => ({
     value: m.id,
     label: m.label,
   }));
 
-  const effortOptions = GROK_BUILD_EFFORTS.map((e) => ({
+  const effortOptions = ([] as EffortOption[]).map((e) => ({
     value: e.id,
     label: t(`effort.${e.id}` as "effort.high"),
   }));

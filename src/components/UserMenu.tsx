@@ -11,13 +11,12 @@ import {
 } from "@/components/icons";
 import type { Theme } from "@/lib/theme";
 import { useFloatingMenu } from "@/lib/floatingMenu";
-import type { AccountStatus, CustomProvider } from "@/lib/api";
+import type { CustomProvider } from "@/lib/api";
 import {
-  accountDisplayName,
-  accountInitials,
-  tierLabel,
-  usagePercent,
-} from "@/lib/accountUi";
+  profileDisplayName,
+  profileInitials,
+  type NeutralAccountStatus,
+} from "@/lib/displayIdentity";
 import { formatQuotaResetTime } from "@/lib/formatUtils";
 
 export interface UserMenuProps {
@@ -39,7 +38,7 @@ export interface UserMenuProps {
     /** Prefix for quota refresh time, e.g. 重置 / Resets */
     resetsAt: string;
   };
-  account: AccountStatus | null;
+  account: NeutralAccountStatus | null;
   activeProvider: CustomProvider | null;
   accountBusy: boolean;
   onSettings: () => void;
@@ -50,15 +49,10 @@ export interface UserMenuProps {
   children: ReactNode;
 }
 
-export function remainingPercent(account: AccountStatus | null): number | null {
+export function remainingPercent(account: NeutralAccountStatus | null): number | null {
+  // Billing surface removed in Task 6 — always inert.
   if (!account?.billing) return null;
-  const billing = account.billing;
-  if (billing.remainingPercent != null && Number.isFinite(billing.remainingPercent)) {
-    return Math.max(0, Math.min(100, billing.remainingPercent));
-  }
-  const used = usagePercent(billing);
-  if (used == null) return null;
-  return Math.max(0, Math.min(100, 100 - used));
+  return null;
 }
 
 export function UserMenu({
@@ -102,23 +96,20 @@ export function UserMenu({
   const name = isCustomProvider
     ? providerName
     : profile
-      ? accountDisplayName(profile, labels.local)
+      ? profileDisplayName(profile, labels.local)
       : labels.local;
   const initials = isCustomProvider
     ? Array.from(providerName)[0]?.toUpperCase() || "P"
     : profile
-      ? accountInitials(profile)
+      ? profileInitials(profile)
       : "G";
-  const channel = account?.channel ?? "none";
   const billing = account?.billing;
-  const usedPct = billing ? usagePercent(billing) : null;
+  const usedPct: number | null = null;
   const remaining = remainingPercent(account);
-  const resetTime = formatQuotaResetTime(billing?.resetsAt);
-  const tier = billing
-    ? tierLabel(billing, channel)
-    : signedIn
-      ? "Grok Build"
-      : "—";
+  const resetTime = formatQuotaResetTime(
+    (billing as { resetsAt?: string } | undefined)?.resetsAt,
+  );
+  const tier = signedIn ? "Grok Build" : "—";
 
   const panel =
     open && pos && typeof document !== "undefined"

@@ -174,8 +174,8 @@ import {
 import { createT, resolveLocale, type Locale } from "@/i18n";
 import {
   DEFAULT_EFFORT,
-  DEFAULT_MODEL_ID,
-  GROK_BUILD_MODELS,
+  availableModels as STATIC_MODEL_CATALOG,
+  defaultModelId,
   PERMISSION_POLICIES,
   findModel,
   isValidEffort,
@@ -188,7 +188,7 @@ import {
   type EffortOption,
   type ModelOption,
   type PermissionPolicyId,
-} from "@/lib/grokCatalog";
+} from "@/lib/modelOptions";
 import {
   formatPermissionSummary,
   mapPermissionButtons,
@@ -401,15 +401,12 @@ import {
   type SettingsTabId,
 } from "@/lib/settingsCatalog";
 import {
-  accountDisplayName,
-  accountInitials,
-  isAccountConnected,
-  loadCachedSuperGrokBrand,
-  resolveWelcomeBrandKind,
-  saveCachedSuperGrokBrand,
-  superGrokBrandKind,
-  type SuperGrokBrandKind,
-} from "@/lib/accountUi";
+  profileDisplayName,
+  profileInitials,
+  type NeutralAccountStatus,
+  type NeutralSavedAccount,
+} from "@/lib/displayIdentity";
+import { runtimeAvailability } from "@/lib/runtimeAvailability";
 import { Tip } from "@/components/ui/tooltip";
 import {
   WindowControls,
@@ -964,8 +961,8 @@ export default function App() {
   const [showChatFind, setShowChatFind] = useState(false);
   const [chatFindQuery, setChatFindQuery] = useState("");
   const [chatFindIndex, setChatFindIndex] = useState(0);
-  const [savedAccounts, setSavedAccounts] = useState<api.SavedAccount[]>([]);
-  const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
+  const [savedAccounts] = useState<NeutralSavedAccount[]>([]);
+  const [activeAccountId] = useState<string | null>(null);
   const [perm, setPerm] = useState<PermissionPayload | null>(null);
   const permBarRef = useRef<HTMLDivElement | null>(null);
   const [askUser, setAskUser] = useState<AskUserPayload | null>(null);
@@ -1012,7 +1009,7 @@ export default function App() {
   const tr = useMemo(() => createT(locale), [locale]);
   const trRef = useRef(tr);
   trRef.current = tr;
-  const [modelId, setModelId] = useState(DEFAULT_MODEL_ID);
+  const [modelId, setModelId] = useState(defaultModelId ?? "");
   const [effort, setEffort] = useState(DEFAULT_EFFORT);
   const [mode, setMode] = useState("agent");
   const modeRef = useRef(mode);
@@ -1020,7 +1017,7 @@ export default function App() {
   const [policy, setPolicy] = useState("ask");
   /** Live selectable models from Host (official CLI catalog only; not providers). */
   const [availableModels, setAvailableModels] =
-    useState<ModelOption[]>(GROK_BUILD_MODELS);
+    useState<ModelOption[]>([...STATIC_MODEL_CATALOG]);
   /** Where model/permission chips are remembered. */
   const [prefsScope, setPrefsScope] =
     useState<ComposerPrefsScope>("global");
@@ -1142,10 +1139,10 @@ export default function App() {
   /** Epoch ms when the current agent turn became busy (for elapsed UI). */
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   const [resizingAside, setResizingAside] = useState(false);
-  const [account, setAccount] = useState<api.AccountStatus | null>(null);
-  const [accountLoading, setAccountLoading] = useState(false);
+  const [account] = useState<NeutralAccountStatus | null>(null);
+  const [accountLoading] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
-  const [loginHint, setLoginHint] = useState<string | null>(null);
+  const [loginHint] = useState<string | null>(null);
   const platform = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
     if (ua.includes("mac")) return "mac" as const;
@@ -1319,12 +1316,12 @@ export default function App() {
 
   const applyComposerPrefs = useCallback(
     (prefs: api.ComposerPrefs, catalog: ModelOption[]) => {
-      const models = catalog.length > 0 ? catalog : GROK_BUILD_MODELS;
+      const models = catalog.length > 0 ? catalog : STATIC_MODEL_CATALOG;
       let nextModelId: string;
       if (prefs.modelId && isValidModelId(prefs.modelId, models)) {
         nextModelId = prefs.modelId;
       } else {
-        nextModelId = pickDefaultModelId(models);
+        nextModelId = pickDefaultModelId(models) ?? "";
       }
       setModelId(nextModelId);
       const model = findModel(nextModelId, models);
@@ -1398,7 +1395,7 @@ export default function App() {
                 source: m.source,
                 isDefault: m.isDefault,
               }))
-            : GROK_BUILD_MODELS;
+            : [...STATIC_MODEL_CATALOG];
         setAvailableModels(catalog);
         const prefs = await api
           .composerPrefsResolve({ projectId: null, sessionId: null })
@@ -1406,11 +1403,7 @@ export default function App() {
         if (prefs) {
           applyComposerPrefs(prefs, catalog);
         }
-        // Light account chip (display only; never login on phone).
-        const st = await api
-          .accountStatus({ refreshBilling: false })
-          .catch(() => null);
-        if (st) setAccount(st);
+        // Account chip removed in Task 6 — state stays null on phone preview.
       } catch {
         /* never reset gate — soft-fail optional RPCs */
       }
@@ -1433,7 +1426,16 @@ export default function App() {
         api.projectsList(),
         api.sessionsList(),
         api.settingsGet(),
-        api.probeCli(),
+        // probeCli was removed in Task 6 — neutral stub until OMP Runtime exists.
+        Promise.resolve({
+          found: false,
+          path: null as string | null,
+          version: null as string | null,
+          source: "",
+          cliAuthPresent: false,
+          versionSupported: true as boolean | undefined,
+          minVersion: null as string | null,
+        }),
         api.modelsListAvailable().catch(() => null),
       ]);
       setProjects(
@@ -1483,7 +1485,7 @@ export default function App() {
                 reasoningEfforts: efforts,
               };
             })
-          : GROK_BUILD_MODELS;
+          : [...STATIC_MODEL_CATALOG];
       setAvailableModels(catalog);
       if (
         settings.composerPrefsScope &&
@@ -1507,7 +1509,7 @@ export default function App() {
           const mid =
             settings.modelId && isValidModelId(settings.modelId, catalog)
               ? settings.modelId
-              : pickDefaultModelId(catalog);
+              : pickDefaultModelId(catalog) ?? "";
           const model = findModel(mid, catalog);
           setEffort(
             isValidEffort(settings.effort || "", model)
@@ -1523,7 +1525,7 @@ export default function App() {
             modelsRes?.defaultModelId &&
               isValidModelId(modelsRes.defaultModelId, catalog)
               ? modelsRes.defaultModelId
-              : pickDefaultModelId(catalog),
+              : pickDefaultModelId(catalog) ?? "",
           );
         }
       }
@@ -6958,8 +6960,6 @@ export default function App() {
     session.state !== "connecting";
   // Live billing can take seconds (quota network). Cache last mark so the
   // welcome logo paints immediately — the SVG itself is inline, not a fetch.
-  const [cachedBrandKind, setCachedBrandKind] =
-    useState<SuperGrokBrandKind | null>(() => loadCachedSuperGrokBrand());
   /** Active inference channel: custom relay identity replaces official account chrome. */
   const [activeCustomProvider, setActiveCustomProvider] =
     useState<api.CustomProvider | null>(null);
@@ -6987,36 +6987,6 @@ export default function App() {
   useEffect(() => {
     void refreshVoiceGate();
   }, [customRouteActive, refreshVoiceGate]);
-  const liveBrandKind = useMemo(
-    () =>
-      superGrokBrandKind(
-        account?.billing,
-        !!account?.profile?.signedIn,
-      ),
-    [account?.billing, account?.profile?.signedIn],
-  );
-  useEffect(() => {
-    // Do not cache Heavy while on a custom route — welcome mark is always SuperGrok.
-    if (customRouteActive) return;
-    if (liveBrandKind) {
-      saveCachedSuperGrokBrand(liveBrandKind);
-      setCachedBrandKind(liveBrandKind);
-      return;
-    }
-    if (account && !account.profile.signedIn) {
-      saveCachedSuperGrokBrand(null);
-      setCachedBrandKind(null);
-    }
-  }, [liveBrandKind, account, customRouteActive]);
-  const welcomeBrandKind = useMemo(
-    () =>
-      resolveWelcomeBrandKind(liveBrandKind, cachedBrandKind, {
-        accountReady: account != null,
-        signedIn: !!account?.profile?.signedIn,
-        customRoute: customRouteActive,
-      }),
-    [liveBrandKind, cachedBrandKind, account, customRouteActive],
-  );
 
   // Floating composer height → chat bottom pad so messages can scroll under it.
   useEffect(() => {
@@ -7041,7 +7011,6 @@ export default function App() {
     showComposerPlus,
     messages.length,
     welcomeSession,
-    welcomeBrandKind,
   ]);
 
   const stop = async () => {
@@ -7850,49 +7819,12 @@ export default function App() {
     [ensureConnected, navigateSettings, openDoctor, stop],
   );
 
+  // Account/quota/billing wrappers were removed in Task 6. The surface is
+  // inert (state stays null) until OMP Runtime restores an equivalent path.
   const refreshAccount = useCallback(
-    async (opts?: { refreshBilling?: boolean }) => {
-      if (!api.isTauri()) return;
-      setAccountLoading(true);
-      try {
-        const st = await api.accountStatus({
-          refreshBilling: opts?.refreshBilling ?? true,
-          manualCliPath: manualCliPath || null,
-        });
-        setAccount(st);
-        setSetup((s) => ({
-          ...s,
-          auth: isAccountConnected(st),
-          cli: st.cliFound || s.cli,
-        }));
-        try {
-          const list = await api.accountsList();
-          setSavedAccounts(list.profiles ?? []);
-          setActiveAccountId(list.activeId ?? null);
-        } catch {
-          // multi-account list is best-effort
-        }
-        // Usage line on tray menu (Codex-style)
-        void api.trayRefresh();
-      } catch (e) {
-        console.warn("account status failed", e);
-      } finally {
-        setAccountLoading(false);
-      }
-    },
-    [manualCliPath],
+    async (_opts?: { refreshBilling?: boolean }) => {},
+    [],
   );
-
-  const refreshSavedAccounts = useCallback(async () => {
-    if (!api.isTauri()) return;
-    try {
-      const list = await api.accountsList();
-      setSavedAccounts(list.profiles ?? []);
-      setActiveAccountId(list.activeId ?? null);
-    } catch {
-      /* ignore */
-    }
-  }, []);
 
   /** Import markdown/JSON transcript as a new local session (from PR #24). */
   const importChatTranscript = useCallback(async () => {
@@ -8325,221 +8257,19 @@ export default function App() {
     ],
   );
 
+  // Account login/logout/save/switch/remove wrappers were removed in Task 6.
+  // These no-op stubs keep the call sites compiling until OMP Runtime restores
+  // an equivalent identity surface.
   const runAccountLogin = useCallback(
-    async (method: "oauth" | "device" = "oauth"): Promise<boolean> => {
-      if (!api.isTauri()) {
-        showToast(tr("error.needTauri"));
-        return false;
-      }
-      setAccountBusy(true);
-      setLoginHint(null);
-      try {
-        const res = await api.accountLogin(method);
-        if (res.ok) {
-          setLoginHint(null);
-          showToast(tr("account.loginOk"), 2800);
-        } else if (res.timedOut) {
-          const msg = `${tr("account.loginTimeout")} ${tr(
-            "account.loginUnreachableHint",
-          )}`;
-          setLoginHint(msg);
-          showToast(msg, 10000);
-        } else {
-          const msg = res.message || tr("account.loginFailed");
-          setLoginHint(msg);
-          showToast(msg, 6000);
-        }
-        if (res.deviceUrl) {
-          try {
-            await api.openExternalUrl(res.deviceUrl);
-          } catch {
-            /* host may already open it */
-          }
-          showToast(
-            [res.deviceUrl, res.deviceCode ? `code: ${res.deviceCode}` : ""]
-              .filter(Boolean)
-              .join(" · "),
-            10000,
-          );
-        }
-        await refreshAccount({ refreshBilling: true });
-        await refreshSavedAccounts();
-        // Drop live agent so next send re-spawns with synced auth.json in agent-home.
-        if (res.ok && api.isTauri()) {
-          try {
-            await api.sessionDisconnect();
-            setSession({ ...IDLE_SNAPSHOT });
-          } catch {
-            /* ignore */
-          }
-        }
-        return !!res.ok;
-      } catch (e) {
-        const msg = String(e);
-        setLoginHint(msg);
-        showToast(msg, 4500);
-        return false;
-      } finally {
-        setAccountBusy(false);
-      }
-    },
-    [refreshAccount, refreshSavedAccounts, showToast, tr],
+    async (_method?: "oauth" | "device"): Promise<boolean> => false,
+    [],
   );
-
-  /** Abort a running login (OAuth/device) so the user can pick another method
-   *  without restarting the app. The backend kills the `grok login` child. */
-  const cancelAccountLogin = useCallback(async () => {
-    try {
-      await api.accountLoginCancel();
-    } catch {
-      /* ignore — still unlock UI */
-    }
-    setAccountBusy(false);
-  }, []);
-
-  const runSaveAccount = useCallback(async () => {
-    if (!api.isTauri()) return;
-    setAccountBusy(true);
-    try {
-      await api.accountSaveCurrent();
-      await refreshSavedAccounts();
-      showToast(tr("account.profileSaved"), 2500);
-    } catch (e) {
-      showToast(String(e), 4500);
-    } finally {
-      setAccountBusy(false);
-    }
-  }, [refreshSavedAccounts, showToast, tr]);
-
-  /**
-   * Save current login (if any), then start OAuth so the user can add another
-   * account without losing the previous snapshot.
-   */
-  const runAddAccount = useCallback(async () => {
-    if (!api.isTauri()) {
-      showToast(tr("error.needTauri"));
-      return;
-    }
-    // Snapshot current auth first so switcher keeps it.
-    if (account?.profile?.signedIn) {
-      setAccountBusy(true);
-      try {
-        await api.accountSaveCurrent();
-        await refreshSavedAccounts();
-        showToast(tr("account.profileSaved"), 1800);
-      } catch (e) {
-        // Still try login — user may want a fresh account even if save fails.
-        showToast(String(e), 3500);
-      } finally {
-        setAccountBusy(false);
-      }
-    }
-    await runAccountLogin("oauth");
-  }, [
-    account?.profile?.signedIn,
-    refreshSavedAccounts,
-    runAccountLogin,
-    showToast,
-    tr,
-  ]);
-
-  const runSwitchAccount = useCallback(
-    async (id: string) => {
-      if (!api.isTauri()) return;
-      setAccountBusy(true);
-      try {
-        await api.accountSwitch(id);
-        await refreshAccount({ refreshBilling: true });
-        await refreshSavedAccounts();
-        try {
-          await api.sessionDisconnect();
-        } catch {
-          /* ignore */
-        }
-        setSession({ ...IDLE_SNAPSHOT });
-        showToast(tr("account.profileSwitched"), 2500);
-      } catch (e) {
-        showToast(String(e), 4500);
-      } finally {
-        setAccountBusy(false);
-      }
-    },
-    [refreshAccount, refreshSavedAccounts, showToast, tr],
-  );
-
-  const runRemoveAccount = useCallback(
-    (id: string) => {
-      if (!api.isTauri()) return;
-      const label =
-        savedAccounts.find((a) => a.id === id)?.label || id.slice(0, 8);
-      setAppDialog({
-        kind: "confirm",
-        title: tr("account.profileRemove"),
-        message: tr("account.profilesHint"),
-        confirmLabel: tr("account.profileRemove"),
-        danger: true,
-        onConfirm: async () => {
-          setAccountBusy(true);
-          try {
-            await api.accountRemove(id);
-            await refreshSavedAccounts();
-            showToast(tr("account.profileRemoved"), 2200);
-          } catch (e) {
-            showToast(String(e), 4500);
-          } finally {
-            setAccountBusy(false);
-          }
-        },
-      });
-      void label;
-    },
-    [refreshSavedAccounts, savedAccounts, showToast, tr],
-  );
-
-  const runAccountLogout = useCallback(async () => {
-    if (!api.isTauri()) return;
-    setAccountBusy(true);
-    try {
-      await api.accountLogout();
-      await refreshAccount({ refreshBilling: false });
-      await refreshSavedAccounts();
-      try {
-        await api.sessionDisconnect();
-        setSession({ ...IDLE_SNAPSHOT });
-      } catch {
-        /* ignore */
-      }
-    } catch (e) {
-      showToast(String(e), 4500);
-    } finally {
-      setAccountBusy(false);
-    }
-  }, [refreshAccount, refreshSavedAccounts, showToast]);
-
-  // Account boot: paint fast from disk cache first, then refresh quota on network.
-  // Welcome SuperGrok logo depends on billing tier — waiting only on the slow
-  // path made the mark look like a "slow image" even though it is inline SVG.
-  useEffect(() => {
-    if (!api.isTauri()) return;
-    let cancelled = false;
-    void (async () => {
-      await refreshAccount({ refreshBilling: false });
-      if (cancelled) return;
-      await refreshAccount({ refreshBilling: true });
-      if (cancelled) return;
-      await refreshSavedAccounts();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshAccount, refreshSavedAccounts]);
-
-  useEffect(() => {
-    if (appView === "settings" && settingsSection === "account") {
-      void refreshAccount({ refreshBilling: true });
-      void refreshSavedAccounts();
-    }
-  }, [appView, settingsSection, refreshAccount, refreshSavedAccounts]);
+  const cancelAccountLogin = useCallback(async () => {}, []);
+  const runSaveAccount = useCallback(async () => {}, []);
+  const runAddAccount = useCallback(async () => {}, []);
+  const runSwitchAccount = useCallback(async (_id: string) => {}, []);
+  const runRemoveAccount = useCallback((_id: string) => {}, []);
+  const runAccountLogout = useCallback(async () => {}, []);
 
   const settingsLabels = useMemo(() => {
     const keys = [
@@ -8894,7 +8624,14 @@ export default function App() {
             void api.settingsGet().then((s) =>
               api.settingsSet({ ...s, manualCliPath: v || null }),
             );
-            void api.probeCli(v || undefined).then((cli) => {
+            // probeCli was removed in Task 6 — neutral stub until OMP Runtime exists.
+            void Promise.resolve({
+              found: false,
+              path: null as string | null,
+              version: null as string | null,
+              source: "",
+              cliAuthPresent: false,
+            }).then((cli) => {
               setCliInfo({
                 found: cli.found,
                 path: cli.path,
@@ -9093,8 +8830,12 @@ export default function App() {
           onCancelLogin={() => void cancelAccountLogin()}
           onAccountLogout={() => void runAccountLogout()}
           onAccountRefresh={() => void refreshAccount({ refreshBilling: true })}
-          onAccountManageUsage={() => void api.accountOpenUsage()}
-          onAccountSubscribe={() => void api.accountOpenSubscribe()}
+          onAccountManageUsage={() => {
+            // accountOpenUsage removed in Task 6 — no-op until OMP Runtime.
+          }}
+          onAccountSubscribe={() => {
+            // accountOpenSubscribe removed in Task 6 — no-op until OMP Runtime.
+          }}
           onSaveAccount={() => void runSaveAccount()}
           onAddAccount={() => void runAddAccount()}
           onSwitchAccount={(id) => void runSwitchAccount(id)}
@@ -9775,7 +9516,7 @@ export default function App() {
                       activeCustomProvider.name.trim() || activeCustomProvider.id,
                     )[0]?.toUpperCase() || "P"
                   : account?.profile
-                    ? accountInitials(account.profile)
+                    ? profileInitials(account.profile)
                     : "G"}
               </div>
               <div className="user-meta">
@@ -9783,7 +9524,7 @@ export default function App() {
                   {activeCustomProvider
                     ? activeCustomProvider.name.trim() || activeCustomProvider.id
                     : account?.profile
-                      ? accountDisplayName(account.profile, tr("common.local"))
+                      ? profileDisplayName(account.profile, tr("common.local"))
                       : tr("common.local")}
                 </span>
                 {(() => {
@@ -10118,6 +9859,13 @@ export default function App() {
             />
           ) : (
           <>
+          {!runtimeAvailability.available && (
+            <div className="conn-bar" role="status" data-testid="runtime-unavailable">
+              <span style={{ fontSize: 12, opacity: 0.9, marginRight: 8 }}>
+                OMP Runtime is not connected
+              </span>
+            </div>
+          )}
           {activeProject && isProjectPathMissing(activeProject.pathOk) && (
             <div className="conn-bar">
               <span style={{ fontSize: 12, opacity: 0.9, marginRight: 8 }}>
@@ -10489,7 +10237,7 @@ export default function App() {
               (welcomeSession ? " composer-wrap--welcome" : "")
             }
           >
-            {welcomeSession && welcomeBrandKind ? (
+            {welcomeSession ? (
               <div className="composer-welcome-mark">
                 <OmpLogo size={64} />
               </div>
@@ -11332,6 +11080,7 @@ export default function App() {
                       type="button"
                       className="icon-btn icon-btn--primary"
                       disabled={
+                        !runtimeAvailability.available ||
                         (!effectiveCanSend &&
                           !shouldEnqueueSend(session.state, connecting)) ||
                         (isDraftEmpty(parseStoredContent(draft)) &&

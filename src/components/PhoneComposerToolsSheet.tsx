@@ -18,14 +18,13 @@ import {
   IconPlus,
 } from "@/components/icons";
 import {
-  GROK_BUILD_EFFORTS,
-  GROK_BUILD_MODELS,
+  availableModels,
   PERMISSION_POLICIES,
   SESSION_MODES,
   type EffortOption,
   type ModelOption,
   type PermissionPolicyId,
-} from "@/lib/grokCatalog";
+} from "@/lib/modelOptions";
 import type { ContextUsageDisplay } from "@/lib/contextUsage";
 import { formatTokenCount } from "@/lib/contextUsage";
 
@@ -83,7 +82,7 @@ export type PhoneComposerToolsSheetProps = {
   projects: PhoneProjectOption[];
   modelId: string;
   effort: string;
-  models?: ModelOption[];
+  models?: readonly ModelOption[];
   mode: string;
   policy: string;
   contextDisplay: ContextUsageDisplay;
@@ -172,7 +171,7 @@ export function PhoneComposerToolsSheet({
   projects,
   modelId,
   effort,
-  models = GROK_BUILD_MODELS,
+  models = availableModels,
   mode,
   policy,
   contextDisplay,
@@ -187,7 +186,7 @@ export function PhoneComposerToolsSheet({
 }: PhoneComposerToolsSheetProps) {
   const titleId = useId();
   const [panel, setPanel] = useState<PhoneToolsPanel>("root");
-  const modelList = models.length > 0 ? models : GROK_BUILD_MODELS;
+  const modelList = models.length > 0 ? models : availableModels;
   const modelLabel =
     modelList.find((m) => m.id === modelId)?.label ?? modelId;
 
@@ -381,7 +380,7 @@ export function PhoneComposerToolsSheet({
           )}
 
           {panel === "effort" &&
-            GROK_BUILD_EFFORTS.map((e) => (
+            ([] as EffortOption[]).map((e) => (
               <button
                 key={e.id}
                 type="button"

@@ -6,13 +6,12 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import type { AccountStatus, SavedAccount } from "@/lib/api";
 import {
-  accountDisplayName,
-  accountInitials,
-  tierLabel,
-  usagePercent,
-} from "@/lib/accountUi";
+  profileDisplayName,
+  profileInitials,
+  type NeutralAccountStatus,
+  type NeutralSavedAccount,
+} from "@/lib/displayIdentity";
 import {
   formatCompactNumber,
   formatDuration,
@@ -104,7 +103,7 @@ export interface AccountPanelLabels {
 }
 
 export interface AccountPanelProps {
-  status: AccountStatus | null;
+  status: NeutralAccountStatus | null;
   loading: boolean;
   busy: boolean;
   locale: string;
@@ -112,7 +111,7 @@ export interface AccountPanelProps {
   labels: AccountPanelLabels;
   compact?: boolean;
   loginHint?: string | null;
-  savedAccounts?: SavedAccount[];
+  savedAccounts?: NeutralSavedAccount[];
   activeAccountId?: string | null;
   onLoginOauth: () => void;
   onLoginDevice: () => void;
@@ -130,7 +129,7 @@ export interface AccountPanelProps {
   onImportChat?: () => void;
 }
 
-function rowInitials(a: SavedAccount): string {
+function rowInitials(a: NeutralSavedAccount): string {
   const src = (a.displayName || a.label || a.email || "?").trim();
   const parts = src.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) {
@@ -176,12 +175,11 @@ export function AccountPanel({
   const profile = status?.profile;
   const signedIn = !!profile?.signedIn;
   const name = profile
-    ? accountDisplayName(profile, t("common.local"))
+    ? profileDisplayName(profile, t("common.local"))
     : t("common.local");
-  const initials = profile ? accountInitials(profile) : "G";
-  const channel = status?.channel ?? "none";
+  const initials = profile ? profileInitials(profile) : "G";
   const billing = status?.billing;
-  const usedPct = billing ? usagePercent(billing) : null;
+  const usedPct: number | null = null;
   /** Same absolute clock as sidebar UserMenu (`MM-DD HH:mm`). */
   const resetTime = formatQuotaResetTime(billing?.resetsAt);
 
@@ -240,10 +238,12 @@ export function AccountPanel({
       : usedPct != null
         ? Math.max(0, 100 - usedPct)
         : null;
-  const products = (billing?.products ?? []).filter(
-    (p) => p.usedPercent > 0 || p.productId === 1 || p.productId === 2,
-  );
-  const plan = billing ? tierLabel(billing, channel) : "—";
+  const products = (billing?.products ?? []) as Array<{
+    usedPercent: number;
+    productId: number;
+    label: string;
+  }>;
+  const plan = signedIn ? "Grok Build" : "—";
   const hasQuota = signedIn && !!billing?.available && remaining != null;
 
   const canManageAccounts =

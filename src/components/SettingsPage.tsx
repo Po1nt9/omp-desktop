@@ -60,19 +60,20 @@ import type {
   ComposerPrefsScope,
   ModelOption,
   PermissionPolicyId,
-} from "@/lib/grokCatalog";
+} from "@/lib/modelOptions";
 import {
   COMPOSER_PREFS_SCOPES,
   PERMISSION_POLICIES,
-} from "@/lib/grokCatalog";
-import type { AccountStatus, DetectedEditor } from "@/lib/api";
+} from "@/lib/modelOptions";
+import type { DetectedEditor } from "@/lib/api";
+import type { NeutralAccountStatus, NeutralSavedAccount } from "@/lib/displayIdentity";
 import * as api from "@/lib/api";
 import { AccountPanel } from "@/components/AccountPanel";
 import { ProvidersPanel } from "@/components/ProvidersPanel";
 import { ExtensionsPanel } from "@/components/ExtensionsPanel";
 import { ProjectInspectPanel } from "@/components/ProjectInspectPanel";
 import { PermissionRulesPanel } from "@/components/PermissionRulesPanel";
-import { ManagedSetupPanel } from "@/components/ManagedSetupPanel";
+// ManagedSetupPanel removed in Task 9 (dead component — Grok setup surface).
 import { GlassModal } from "@/components/GlassModal";
 import { RemoteImLayout } from "@/components/RemoteImLayout";
 import { MirrorConnectPanel } from "@/components/MirrorConnectPanel";
@@ -239,12 +240,12 @@ export interface SettingsPageProps {
   };
   onDoctor: () => void;
   versionFooter: string;
-  /** Official Grok Build account (membership / usage). */
-  account: AccountStatus | null;
+  /** Account surface (inert after Task 6 — always null). */
+  account: NeutralAccountStatus | null;
   accountLoading: boolean;
   accountBusy: boolean;
   loginHint?: string | null;
-  savedAccounts?: import("@/lib/api").SavedAccount[];
+  savedAccounts?: NeutralSavedAccount[];
   activeAccountId?: string | null;
   onAccountLoginOauth: () => void;
   onAccountLoginDevice: () => void;
@@ -2294,13 +2295,7 @@ export function SettingsPage({
             {activeTab === "providers" ? (
               <ProvidersPanel
                 locale={resolveLocale(locale)}
-                officialAvailable={
-                  !!(
-                    account?.profile?.signedIn ||
-                    account?.cliAuthPresent ||
-                    account?.hasOfficialKey
-                  )
-                }
+                officialAvailable={!!account?.profile?.signedIn}
                 onProviderActivated={onProviderActivated}
               />
             ) : (
@@ -3012,19 +3007,7 @@ export function SettingsPage({
                     />
                   </div>
                 </div>
-                <div
-                  className={
-                    "settings-card pi-settings-block" +
-                    rowHighlight("settings-anchor-managedSetup")
-                  }
-                  id="settings-anchor-managedSetup"
-                >
-                  <ManagedSetupPanel
-                    locale={resolveLocale(locale)}
-                    cliFound={cliInfo.found}
-                    onOpenAccount={() => navigateTo("account", "official")}
-                  />
-                </div>
+                {/* ManagedSetupPanel removed in Task 9 — dead Grok setup surface. */}
               </>
             )}
           </>
@@ -3220,156 +3203,18 @@ function ShortcutsSettingsPanel({
   );
 }
 
-/** Shared-mode: list / import Grok Build CLI sessions from GROK_HOME. */
+/** Shared-mode: CLI sessions import panel.
+ *  The backend APIs (cliSessionsList, cliSessionImport, cliSessionsImportAll)
+ *  were removed in Task 8. This stub renders nothing until an OMP Runtime
+ *  equivalent restores the feature. */
 function CliSessionsPanel({
-  t,
-  onImported,
+  t: _t,
+  onImported: _onImported,
 }: {
   t: (key: MessageKey, vars?: Record<string, string | number>) => string;
   onImported?: () => void;
 }) {
-  const [rows, setRows] = useState<api.CliSessionSummary[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    if (!api.isTauri()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await api.cliSessionsList();
-      setRows(list);
-    } catch (e) {
-      setError(String(e));
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  const importOne = async (row: api.CliSessionSummary) => {
-    setBusyId(row.agentSessionId);
-    setError(null);
-    setStatus(null);
-    try {
-      await api.cliSessionImport(row.agentSessionId, { dir: row.dir });
-      setStatus(t("settings.cliSessionsImportedOne", { title: row.title }));
-      await refresh();
-      onImported?.();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const importAll = async () => {
-    setBusyId("__all__");
-    setError(null);
-    setStatus(null);
-    try {
-      const imported = await api.cliSessionsImportAll(50);
-      setStatus(
-        t("settings.cliSessionsImportedN", { n: String(imported.length) }),
-      );
-      await refresh();
-      onImported?.();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const pending = rows.filter((r) => !r.alreadyLinked).length;
-
-  return (
-    <div className="settings-row settings-row--stack">
-      <div className="settings-row__text">
-        <div className="settings-row__label">{t("settings.cliSessions")}</div>
-        <div className="settings-row__desc">{t("settings.cliSessionsDesc")}</div>
-      </div>
-      <div className="settings-cli-sessions">
-        <div className="settings-cli-sessions__actions">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            disabled={loading || !!busyId}
-            onClick={() => void refresh()}
-          >
-            {t("resources.refresh")}
-          </button>
-          <button
-            type="button"
-            className="btn btn--solid"
-            disabled={loading || !!busyId || pending === 0}
-            onClick={() => void importAll()}
-          >
-            {busyId === "__all__"
-              ? t("settings.cliSessionsImporting")
-              : t("settings.cliSessionsImportAll", { n: String(pending) })}
-          </button>
-        </div>
-        {error ? (
-          <div className="settings-cli-sessions__err" role="alert">
-            {error}
-          </div>
-        ) : null}
-        {status ? (
-          <div className="settings-cli-sessions__ok" role="status">
-            {status}
-          </div>
-        ) : null}
-        {loading && rows.length === 0 ? (
-          <div className="settings-cli-sessions__empty">
-            {t("settings.cliSessionsLoading")}
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="settings-cli-sessions__empty">
-            {t("settings.cliSessionsEmpty")}
-          </div>
-        ) : (
-          <ul className="settings-cli-sessions__list">
-            {rows.slice(0, 40).map((r) => (
-              <li key={r.agentSessionId} className="settings-cli-sessions__item">
-                <div className="settings-cli-sessions__meta">
-                  <div className="settings-cli-sessions__title">{r.title}</div>
-                  <div className="settings-cli-sessions__sub">
-                    {r.cwd || r.agentSessionId.slice(0, 12)}
-                    {r.numMessages
-                      ? ` · ${t("settings.cliSessionsMsgs", { n: String(r.numMessages) })}`
-                      : ""}
-                  </div>
-                </div>
-                {r.alreadyLinked ? (
-                  <span className="settings-cli-sessions__badge">
-                    {t("settings.cliSessionsLinked")}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    disabled={!!busyId}
-                    onClick={() => void importOne(r)}
-                  >
-                    {busyId === r.agentSessionId
-                      ? t("settings.cliSessionsImporting")
-                      : t("settings.cliSessionsImport")}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
+  return null;
 }
 
 function AboutUpdateRow({

@@ -293,10 +293,6 @@ export async function acpTestConnection(addr: string) {
   return invoke<AcpProbeResult>("acp_test_connection", { addr });
 }
 
-export async function pickCliBinary() {
-  return invoke<string | null>("pick_cli_binary");
-}
-
 export async function openExternalUrl(url: string) {
   return invoke<void>("open_external_url", { url });
 }
