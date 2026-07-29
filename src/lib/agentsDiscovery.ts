@@ -1,8 +1,8 @@
 /**
  * Pure helpers for Settings → Extensions → Agents / Personas.
- * Definition files live under ~/.grok/agents (+ project .grok/agents)
- * and ~/.grok/personas (+ project .grok/personas). Bundled agents are
- * under ~/.grok/bundled/agents (read-only reference).
+ * Definition files live under ~/runtime-home/agents (+ project runtime-home/agents)
+ * and ~/runtime-home/personas (+ project runtime-home/personas). Bundled agents are
+ * under ~/runtime-home/bundled/agents (read-only reference).
  *
  * Runtime selection uses CLI flags / config — the App only lists and opens
  * files (no fake "set active agent" without ACP session switch support).
@@ -59,7 +59,7 @@ function joinPath(...parts: string[]): string {
   return segs.join(sep);
 }
 
-/** `~/.grok` style root from a user home directory. */
+/** Runtime home style root from a user home directory. */
 export function grokHomeFromUserHome(userHome: string): string {
   const home = (userHome ?? "").trim().replace(/[/\\]+$/g, "");
   if (!home) return ".grok";
@@ -69,7 +69,7 @@ export function grokHomeFromUserHome(userHome: string): string {
 
 /**
  * Absolute directories where agent definition files are discovered.
- * `projectPath` is the workbench project root (not GROK_HOME).
+ * `projectPath` is the workbench project root (not the runtime home).
  */
 export function resolveAgentsDirs(
   userHome: string,

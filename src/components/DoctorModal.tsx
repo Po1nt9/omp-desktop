@@ -1,6 +1,6 @@
 /**
  * Structured Doctor health UI — checks with ok/warn/fail, re-run, copy,
- * support zip, reset app data, and Grok Build CLI `doctor --json` section.
+ * support zip, reset app data, and OMP Runtime `doctor --json` section.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,7 +26,7 @@ import {
   type CliDoctorView,
   type DoctorFixHandle,
 } from "@/lib/cliDoctor";
-// CliUpdateRow removed in Task 9 — dead Grok CLI update surface.
+// CliUpdateRow removed in Task 9 — dead runtime update surface.
 import { redact } from "@/lib/redact";
 
 export type DoctorModalProps = {
@@ -699,7 +699,7 @@ export function DoctorModal({
                 <div className="doctor-advanced__label">{t("doctor.cliUpdate")}</div>
                 <p className="doctor-advanced__hint">{t("doctor.cliUpdateHint")}</p>
               </div>
-              {/* CliUpdateRow removed in Task 9 — dead Grok CLI update surface. */}
+              {/* CliUpdateRow removed in Task 9 — dead runtime update surface. */}
             </div>
             <div className="doctor-advanced__row">
               <div className="doctor-advanced__text">

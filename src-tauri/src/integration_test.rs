@@ -135,7 +135,7 @@ mod integration {
             commands.len()
         );
 
-        // Every Tauri command removed by the Grok CLI / account backend
+        // Every Tauri command removed by the runtime / account backend
         // deletion must stay removed. These names are the actual
         // `commands::<name>` identifiers from the pre-deletion `main` branch's
         // `generate_handler!` block (enumerated via `comm -23` between main and

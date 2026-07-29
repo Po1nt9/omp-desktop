@@ -96,7 +96,7 @@ pub fn write_support_bundle(doctor_json: &str) -> Result<PathBuf, String> {
     }
 
     // README for the recipient
-    let readme = "Grok App support bundle\n\
+    let readme = "OMP Desktop support bundle\n\
 \n\
 Contents:\n\
 - doctor.json — health checks (paths only, no keys)\n\
@@ -303,7 +303,7 @@ pub fn write_session_bundle(
     // ── logs/ — app log dir (if any) ───────────────────────────────────────
     append_app_logs(&mut zip, opts)?;
 
-    // ── agent/ — Grok Build session trail ──────────────────────────────────
+    // ── agent/ — OMP Runtime session trail ──────────────────────────────────
     if let Some(dir) = agent_dir.as_ref() {
         append_agent_session_files(&mut zip, opts, dir)?;
         let note = serde_json::json!({
@@ -330,7 +330,7 @@ pub fn write_session_bundle(
     }
 
     let readme = format!(
-        "Grok App session diagnostic bundle\n\
+        "OMP Desktop session diagnostic bundle\n\
 \n\
 Session: {session_id}\n\
 Title: {}\n\
@@ -344,9 +344,9 @@ Contents:\n\
 - host/settings.json — app settings (secrets redacted)\n\
 - host/runtime.json — live/parked process snapshot (if attached)\n\
 - host/project.json — bound project (if any)\n\
-- host/cli_probe.json — Grok Build CLI discovery\n\
+- host/cli_probe.json — OMP Runtime discovery\n\
 - logs/ — recent App log files (if present)\n\
-- agent/ — Grok Build session trail (events, history, terminal logs)\n\
+- agent/ — OMP Runtime session trail (events, history, terminal logs)\n\
 \n\
 Never includes secrets.json, OS keychain material, or raw API keys.\n\
 Attach this zip when reporting bugs such as early end_turn / mid-task stop.\n\
@@ -700,13 +700,13 @@ mod tests {
         fs::write(tmp.join("secrets.json"), r#"{"officialApiKey":"sk-test"}"#).unwrap();
         fs::write(tmp.join("settings.json"), "{}").unwrap();
 
-        std::env::set_var("GROK_APP_HOME", &tmp);
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
         let result = reset_app_data(true).expect("reset");
         assert!(result["ok"].as_bool().unwrap());
         assert!(tmp.join("secrets.json").is_file());
         assert!(!tmp.join("sessions_index.json").is_file());
         assert!(tmp.join("sessions").is_dir()); // recreated empty
-        std::env::remove_var("GROK_APP_HOME");
+        std::env::remove_var("OMP_DESKTOP_HOME");
         let _ = fs::remove_dir_all(&tmp);
     }
 
@@ -723,7 +723,7 @@ mod tests {
         fs::write(tmp.join("settings.json"), r#"{"locale":"en"}"#).unwrap();
         fs::write(tmp.join("secrets.json"), r#"{"officialApiKey":"sk-secret"}"#).unwrap();
 
-        std::env::set_var("GROK_APP_HOME", &tmp);
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
         let zip_path = write_support_bundle(r#"{"summary":{"ok":1}}"#).expect("bundle");
         assert!(zip_path.is_file());
         let bytes = fs::read(&zip_path).unwrap();
@@ -732,7 +732,7 @@ mod tests {
         assert!(!as_str.contains("secrets.json"));
         assert!(!as_str.contains("sk-secret"));
         let _ = fs::remove_file(&zip_path);
-        std::env::remove_var("GROK_APP_HOME");
+        std::env::remove_var("OMP_DESKTOP_HOME");
         let _ = fs::remove_dir_all(&tmp);
     }
 
@@ -752,7 +752,7 @@ mod tests {
             .unwrap();
         fs::write(tmp.join("logs").join("app.log"), "log sk-session-secret-value end").unwrap();
 
-        std::env::set_var("GROK_APP_HOME", &tmp);
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
         let session = store::create_session(None, Some("Export test".into()), false)
             .expect("create session");
         store::append_message(
@@ -784,7 +784,7 @@ mod tests {
         assert!(as_str.contains("host/messages.json") || as_str.contains("messages.json"));
         assert!(as_str.contains("README.txt") || as_str.contains("meta.json"));
         let _ = fs::remove_file(&zip_path);
-        std::env::remove_var("GROK_APP_HOME");
+        std::env::remove_var("OMP_DESKTOP_HOME");
         let _ = fs::remove_dir_all(&tmp);
     }
 }

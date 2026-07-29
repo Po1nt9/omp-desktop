@@ -317,7 +317,7 @@ fn build_history_bootstrap(app_session_id: &str) -> Option<String> {
     picked.reverse();
 
     let mut body = String::from(
-        "[Prior conversation context — this chat continues an existing Grok App session. \
+        "[Prior conversation context — this chat continues an existing OMP Desktop session. \
 The agent process was restarted; use the following transcript for continuity ONLY. \
 Rules: do NOT re-greet; do NOT restate, quote, or re-answer prior assistant turns; \
 do NOT reprint the transcript in your reply; answer ONLY the new user message below.]\n\n",
@@ -415,7 +415,7 @@ fn extract_tool_content_snippets(
     (before, after)
 }
 
-/// When user asks to open a Grok App / foreign agent session by UUID, steer tools.
+/// When user asks to open an OMP Desktop / foreign agent session by UUID, steer tools.
 fn session_lookup_host_hint(user_text: &str) -> Option<String> {
     let t = user_text.trim();
     // UUID v4-ish
@@ -436,12 +436,12 @@ fn session_lookup_host_hint(user_text: &str) -> Option<String> {
     }
     Some(
         "[Host hint — session lookup]\n\
-This looks like a request to read a **Grok App / agent session** by UUID.\n\
+This looks like a request to read an **OMP Desktop / agent session** by UUID.\n\
 Do **not** scan the whole home directory or assume Claude/Codex/Cursor storage first.\n\
 Prefer, in order:\n\
-1. Grok App journal: `~/Library/Application Support/com.grokapp.grok-app/sessions/<id>/messages.json` \
+1. OMP Desktop journal: `~/Library/Application Support/com.omp-desktop.omp-desktop/sessions/<id>/messages.json` \
 (and `sessions_index.json` for meta).\n\
-2. Grok agent-home: `…/com.grokapp.grok-app/agent-home/sessions/<encoded-cwd>/<agentSessionId>/` \
+2. OMP agent-home: `…/com.omp-desktop.omp-desktop/agent-home/sessions/<encoded-cwd>/<agentSessionId>/` \
 (chat_history.jsonl, updates.jsonl) — map app session id via sessions_index.agentSessionId.\n\
 3. Only if missing there, try Claude/Codex/Cursor resume paths with a **narrow** query.\n\
 Avoid unbounded `find ~` / multi-GB scans; use index files and known roots.\n\
@@ -3176,7 +3176,7 @@ impl SessionManager {
                 if auto {
                     let acp = self.inner.lock().as_ref().and_then(|s| s.acp.clone());
                     if let Some(acp) = acp {
-                        // Grok Build shell prompts use underscore optionIds (allow_once /
+                        // OMP Runtime shell prompts use underscore optionIds (allow_once /
                         // allow_command_always / reject). Hyphenated ACP-style fallbacks
                         // are rejected as "unknown permission option".
                         let option_id = pick_option_id(&options, "allow_once")
@@ -4194,7 +4194,7 @@ impl SessionManager {
     /// Used before re-sending an edited last user message so the previous assistant
     /// reply is replaced, not stacked.
     ///
-    /// Agent path: `x.ai/rewind/execute` (Grok Build extension).
+    /// Agent path: `x.ai/rewind/execute` (OMP Runtime extension).
     /// Local path: truncate `messages.json` to keep only messages before the last user row.
     /// Drop the last user turn before an edit-resend.
     ///
@@ -5588,7 +5588,7 @@ mod session_routing_tests {
         ));
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::create_dir_all(&tmp);
-        std::env::set_var("GROK_APP_HOME", &tmp);
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
         let _ = crate::paths::ensure_app_dirs();
         let sid = "replay-gate-test-session";
         let _ = store::append_message(
@@ -5619,7 +5619,7 @@ mod session_routing_tests {
             },
         );
         assert!(SessionManager::journal_has_assistant_after_last_user(sid));
-        std::env::remove_var("GROK_APP_HOME");
+        std::env::remove_var("OMP_DESKTOP_HOME");
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

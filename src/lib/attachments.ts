@@ -1,6 +1,6 @@
 /**
  * Composer attachments from drag-drop (or future pickers).
- * Sent to the agent as Grok Build `@path` references.
+ * Sent to the agent as OMP Runtime `@path` references.
  *
  * Also: session-relative media path helpers for in-chat image/video cards
  * (`images/1.jpg`, `videos/1.mp4`, markdown links, absolute paths).
@@ -213,7 +213,7 @@ export function extractImagePathsFromContent(content: string): Attachment[] {
 
 /**
  * Project / session relative media paths:
- * - Grok Build: `images/1.jpg`, `videos/1.mp4` (agent session dir)
+ * - OMP Runtime: `images/1.jpg`, `videos/1.mp4` (agent session dir)
  * - Skill outputs: `outputs/xhx-media-gen/foo.png` (project cwd)
  * Also any multi-segment relative path with a media extension (no `..`).
  */

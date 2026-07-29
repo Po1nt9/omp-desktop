@@ -1,5 +1,5 @@
 /**
- * Current-session prompt history picker (Grok Build `/history`).
+ * Current-session prompt history picker (OMP Runtime `/history`).
  * Newest-first list + optional fuzzy filter; Enter/click selects into composer.
  */
 

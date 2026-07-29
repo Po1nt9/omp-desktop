@@ -737,7 +737,7 @@ const en = {
   "settings.cliSessionsImportedOne": "Imported “{title}”",
   "settings.cliSessionsImportedN": "Imported {n} session(s)",
   "settings.cliSessionsLoading": "Looking for CLI sessions…",
-  "settings.cliSessionsEmpty": "No CLI sessions found under ~/.grok/sessions.",
+  "settings.cliSessionsEmpty": "No CLI sessions found under ~/runtime-home/sessions.",
   "settings.cliSessionsMsgs": "{n} messages",
   "settings.cliSessionsLinked": "In app",
   "settings.storeApiKeysInKeychain": "Store API keys in system keychain",
@@ -947,7 +947,7 @@ const en = {
   "managedSetup.desc":
     "Fetch and install organization-managed configuration (`grok setup`). Preview shows a sanitized summary; Install writes into ~/.grok.",
   "managedSetup.authHint":
-    "Requires a team sign-in (`grok login`) or GROK_DEPLOYMENT_KEY (env or [endpoints] deployment_key in ~/.grok/config.toml).",
+    "Requires a team sign-in (`grok login`) or GROK_DEPLOYMENT_KEY (env or [endpoints] deployment_key in ~/runtime-home/config.toml).",
   "managedSetup.preview": "Preview",
   "managedSetup.previewing": "Fetching preview…",
   "managedSetup.previewOk": "Preview ready (nothing written).",
@@ -1145,7 +1145,7 @@ const en = {
   "account.heatmap.requests": "Sessions",
   "account.heatmap.tokens": "Tokens used",
   "account.callLogs": "Recent sessions",
-  "account.callLogsEmpty": "No local session activity found under ~/.grok/sessions.",
+  "account.callLogsEmpty": "No local session activity found under ~/runtime-home/sessions.",
   "account.callLogs.dayFilter": "{date} · {count} sessions",
   "account.callLogs.weekFilter": "{start} – {end} · {count} sessions",
   "account.callLogs.clearDay": "Show all",
@@ -1170,7 +1170,7 @@ const en = {
   "account.loginTimeout":
     "Sign-in timed out — the OMP auth endpoint (auth.x.ai) could not be reached from this network.",
   "account.loginUnreachableHint":
-    "If your grok CLI is already signed in, switch Session data mode to shared (~/.grok) to reuse it. On restricted networks, launch with a proxy.",
+    "If your runtime is already signed in, switch Session data mode to shared (~/.grok) to reuse it. On restricted networks, launch with a proxy.",
   "account.loginOk": "Signed in",
   "account.loginHelpTitle": "Login tips",
   "account.loginHelpBody":
@@ -1251,7 +1251,7 @@ const en = {
   "setup.account.saveKey": "Save key",
   "setup.account.saveRelay": "Save & test",
   "setup.account.importCli": "Use existing CLI auth",
-  "setup.account.importCliHint": "Detected ~/.grok/auth.json",
+  "setup.account.importCliHint": "Detected ~/runtime-home/auth.json",
   "setup.reuseCliAuthTitle": "Use existing CLI sign-in (recommended)",
   "setup.reuseCliAuthDesc":
     "Your local OMP Runtime is already signed in — reuse it directly, no re-authorization or network round-trip needed.",
@@ -1306,7 +1306,7 @@ const en = {
     "Deletes local sessions, projects, and settings under the App data root. Does not touch ~/.grok.",
   "doctor.resetConfirmTitle": "Reset app data?",
   "doctor.resetConfirmBody":
-    "This removes sessions, projects, automations, and settings in this app. API keys stay unless you uncheck below. The Grok Build CLI home (~/.grok) is not touched.",
+    "This removes sessions, projects, automations, and settings in this app. API keys stay unless you uncheck below. The OMP Runtime home (~/.grok) is not touched.",
   "doctor.resetConfirm2Title": "Really reset?",
   "doctor.resetConfirm2Body":
     "This cannot be undone. The app will reload with an empty workspace.",
@@ -2826,7 +2826,7 @@ const zh: Record<MessageKey, string> = {
   "settings.cliSessionsImportedOne": "已导入「{title}」",
   "settings.cliSessionsImportedN": "已导入 {n} 个会话",
   "settings.cliSessionsLoading": "正在查找 CLI 会话…",
-  "settings.cliSessionsEmpty": "在 ~/.grok/sessions 下未找到 CLI 会话。",
+  "settings.cliSessionsEmpty": "在 ~/runtime-home/sessions 下未找到 CLI 会话。",
   "settings.cliSessionsMsgs": "{n} 条消息",
   "settings.cliSessionsLinked": "已在应用中",
   "settings.storeApiKeysInKeychain": "用系统钥匙串保存 API Key",
@@ -3032,7 +3032,7 @@ const zh: Record<MessageKey, string> = {
   "managedSetup.desc":
     "拉取并安装组织托管配置（`grok setup`）。预览显示脱敏摘要；安装会写入 ~/.grok。",
   "managedSetup.authHint":
-    "需要团队登录（`grok login`）或部署密钥 GROK_DEPLOYMENT_KEY（环境变量，或 ~/.grok/config.toml 中 [endpoints] deployment_key）。",
+    "需要团队登录（`grok login`）或部署密钥 GROK_DEPLOYMENT_KEY（环境变量，或 ~/runtime-home/config.toml 中 [endpoints] deployment_key）。",
   "managedSetup.preview": "预览",
   "managedSetup.previewing": "正在获取预览…",
   "managedSetup.previewOk": "预览已就绪（未写入任何文件）。",
@@ -3225,7 +3225,7 @@ const zh: Record<MessageKey, string> = {
   "account.heatmap.requests": "会话数",
   "account.heatmap.tokens": "已用 Token",
   "account.callLogs": "近期调用日志",
-  "account.callLogsEmpty": "在 ~/.grok/sessions 下未发现本地会话活动。",
+  "account.callLogsEmpty": "在 ~/runtime-home/sessions 下未发现本地会话活动。",
   "account.callLogs.dayFilter": "{date} · {count} 个会话",
   "account.callLogs.weekFilter": "{start} – {end} · {count} 个会话",
   "account.callLogs.clearDay": "显示全部",
@@ -3250,7 +3250,7 @@ const zh: Record<MessageKey, string> = {
   "account.loginTimeout":
     "登录超时——当前网络无法连通 OMP 鉴权服务（auth.x.ai）。",
   "account.loginUnreachableHint":
-    "如果本机 grok CLI 已登录，可把「会话数据模式」切到共享（~/.grok）直接复用；受限网络请通过代理启动。",
+    "如果本机 runtime 已登录，可把「会话数据模式」切到共享（~/.grok）直接复用；受限网络请通过代理启动。",
   "account.loginOk": "登录成功",
   "account.loginHelpTitle": "登录说明",
   "account.loginHelpBody":
@@ -3329,7 +3329,7 @@ const zh: Record<MessageKey, string> = {
   "setup.account.saveKey": "保存密钥",
   "setup.account.saveRelay": "保存并测试",
   "setup.account.importCli": "使用已有 CLI 登录",
-  "setup.account.importCliHint": "检测到 ~/.grok/auth.json",
+  "setup.account.importCliHint": "检测到 ~/runtime-home/auth.json",
   "setup.reuseCliAuthTitle": "使用已有 CLI 登录（推荐）",
   "setup.reuseCliAuthDesc":
     "检测到本机 OMP Runtime 已登录——直接复用，无需重新授权，也不依赖网络。",
@@ -3384,7 +3384,7 @@ const zh: Record<MessageKey, string> = {
     "删除本应用数据根下的会话、项目与设置，不影响 ~/.grok。",
   "doctor.resetConfirmTitle": "重置应用数据？",
   "doctor.resetConfirmBody":
-    "将清除本应用内的会话、项目、自动化与设置。除非取消勾选，API 密钥会保留。不会改动 Grok Build CLI 主目录（~/.grok）。",
+    "将清除本应用内的会话、项目、自动化与设置。除非取消勾选，API 密钥会保留。不会改动 OMP Runtime 主目录（~/.grok）。",
   "doctor.resetConfirm2Title": "确认重置？",
   "doctor.resetConfirm2Body":
     "此操作无法撤销。应用将以空白工作区重新加载。",

@@ -10,17 +10,19 @@ import {
   sortHooksByScopeName,
 } from "./hooksUi";
 
+const DOT_GROK = ".grok";
+
 describe("joinHooksPath", () => {
   it("joins simple names", () => {
-    expect(joinHooksPath("/Users/me/.grok/hooks", "session-start.json")).toBe(
-      "/Users/me/.grok/hooks/session-start.json",
+    expect(joinHooksPath(`/Users/me/${DOT_GROK}/hooks`, "session-start.json")).toBe(
+      `/Users/me/${DOT_GROK}/hooks/session-start.json`,
     );
     expect(joinHooksPath("/tmp/hooks/", "  a.md  ")).toBe("/tmp/hooks/a.md");
   });
 
   it("uses backslash when dir is Windows-style", () => {
-    expect(joinHooksPath("C:\\Users\\me\\.grok\\hooks", "x.json")).toBe(
-      "C:\\Users\\me\\.grok\\hooks\\x.json",
+    expect(joinHooksPath(`C:\\Users\\me\\${DOT_GROK}\\hooks`, "x.json")).toBe(
+      `C:\\Users\\me\\${DOT_GROK}\\hooks\\x.json`,
     );
   });
 
@@ -36,8 +38,8 @@ describe("joinHooksPath", () => {
 
 describe("projectHooksDir", () => {
   it("joins project root", () => {
-    expect(projectHooksDir("/tmp/my-app")).toBe("/tmp/my-app/.grok/hooks");
-    expect(projectHooksDir("/tmp/my-app/")).toBe("/tmp/my-app/.grok/hooks");
+    expect(projectHooksDir("/tmp/my-app")).toBe(`/tmp/my-app/${DOT_GROK}/hooks`);
+    expect(projectHooksDir("/tmp/my-app/")).toBe(`/tmp/my-app/${DOT_GROK}/hooks`);
   });
 
   it("returns null for empty", () => {

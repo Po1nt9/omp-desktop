@@ -3,7 +3,7 @@
 //! Sources mirror CLI `--agent <NAME>` resolution:
 //! - Built-ins: explore, plan, general-purpose
 //! - User: `<runtime-home>/agents/*.md`
-//! - Project: `<cwd>/.grok/agents/*.md`
+//! - Project: `<cwd>/runtime-home/agents/*.md`
 //! - Bundled reference: `<runtime-home>/bundled/agents/*.md` (same names as built-ins)
 
 use std::fs;
@@ -293,19 +293,19 @@ mod tests {
     fn merge_priority_project_user_bundled_builtin() {
         let user = vec![(
             "explore".into(),
-            PathBuf::from("/u/.grok/agents/explore.md"),
+            PathBuf::from("/u/runtime-home/agents/explore.md"),
         )];
         let project = vec![(
             "explore".into(),
-            PathBuf::from("/p/.grok/agents/explore.md"),
+            PathBuf::from("/p/runtime-home/agents/explore.md"),
         )];
         let bundled = vec![(
             "plan".into(),
-            PathBuf::from("/u/.grok/bundled/agents/plan.md"),
+            PathBuf::from("/u/runtime-home/bundled/agents/plan.md"),
         )];
         let custom = vec![(
             "custom".into(),
-            PathBuf::from("/u/.grok/agents/custom.md"),
+            PathBuf::from("/u/runtime-home/agents/custom.md"),
         )];
         let user_all = [user, custom].concat();
         let agents = merge_agent_catalog(BUILTIN_AGENT_NAMES, &user_all, &project, &bundled);
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(by["explore"].source, AgentCatalogSource::Project);
         assert_eq!(
             by["explore"].path.as_deref(),
-            Some("/p/.grok/agents/explore.md")
+            Some("/p/runtime-home/agents/explore.md")
         );
         assert_eq!(by["custom"].source, AgentCatalogSource::User);
         assert_eq!(by["plan"].source, AgentCatalogSource::Bundled);

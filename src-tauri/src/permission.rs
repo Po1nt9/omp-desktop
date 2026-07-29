@@ -8,16 +8,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionPolicy {
-    /// Grok Build `default` — ask every tool that needs approval (unless session cache hits).
+    /// OMP Runtime `default` — ask every tool that needs approval (unless session cache hits).
     Ask,
     AllowOnce,
     AllowForSession,
-    /// Grok Build `dontAsk` — deny anything not pre-approved (no interactive prompt).
+    /// OMP Runtime `dontAsk` — deny anything not pre-approved (no interactive prompt).
     DontAsk,
-    /// Grok Build `acceptEdits` — auto-approve file edit tools inside project.
+    /// OMP Runtime `acceptEdits` — auto-approve file edit tools inside project.
     AcceptEdits,
     Deny,
-    /// Grok Build `bypassPermissions` / YOLO — settings only, never default chip.
+    /// OMP Runtime `bypassPermissions` / YOLO — settings only, never default chip.
     AlwaysApprove,
 }
 
@@ -55,7 +55,7 @@ impl PermissionPolicy {
     }
 }
 
-/// Tools treated as file edits for `acceptEdits` mode (aligned with Grok Build docs).
+/// Tools treated as file edits for `acceptEdits` mode (aligned with OMP Runtime docs).
 pub fn is_edit_tool(tool_name: &str) -> bool {
     let t = tool_name.to_lowercase();
     matches!(
@@ -435,7 +435,7 @@ pub fn may_auto_allow_download(
 
 /// Decide whether Host may auto-approve without UI.
 ///
-/// Rules (H05 + §17.3 + Grok Build permission modes):
+/// Rules (H05 + §17.3 + OMP Runtime permission modes):
 /// - Outside project → never auto (even with session cache; AlwaysApprove is the only global YOLO)
 /// - Deny / DontAsk policy → never auto-allow
 /// - Session cache hit + in-project → auto (even when chip policy is Ask — "Allow for session")

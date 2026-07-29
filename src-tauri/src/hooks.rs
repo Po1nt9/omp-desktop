@@ -1,4 +1,4 @@
-//! Runtime hooks discovery under `<runtime-home>/hooks` and `<project>/.grok/hooks`.
+//! Runtime hooks discovery under `<runtime-home>/hooks` and `<project>/runtime-home/hooks`.
 //!
 //! Management is list / reveal / open-folder only — no visual JSON editor.
 //! Hook file format lives in the runtime user guide (`10-hooks.md`).
@@ -19,7 +19,7 @@ pub struct HookEntry {
     pub name: String,
     /// Absolute path.
     pub path: String,
-    /// `user` (global `<runtime-home>/hooks`) or `project` (`<cwd>/.grok/hooks`).
+    /// `user` (global `<runtime-home>/hooks`) or `project` (`<cwd>/runtime-home/hooks`).
     pub scope: String,
     /// `file` | `dir`.
     pub kind: String,
@@ -42,7 +42,7 @@ pub struct HooksListResult {
     pub project_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_dir_exists: Option<bool>,
-    /// Absolute path to the local Grok Build hooks user-guide page when present.
+    /// Absolute path to the local OMP Runtime hooks user-guide page when present.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub docs_path: Option<String>,
 }
@@ -52,7 +52,7 @@ pub fn user_hooks_dir() -> PathBuf {
     user_home().join(".grok").join("hooks")
 }
 
-/// `<project>/.grok/hooks` when `project_path` is a non-empty path.
+/// `<project>/runtime-home/hooks` when `project_path` is a non-empty path.
 pub fn project_hooks_dir(project_path: &str) -> Option<PathBuf> {
     let root = project_path.trim();
     if root.is_empty() {
@@ -233,7 +233,8 @@ mod tests {
     #[test]
     fn project_hooks_dir_joins_project_root() {
         let d = project_hooks_dir("/tmp/my-app").expect("path");
-        assert_eq!(d, PathBuf::from("/tmp/my-app/.grok/hooks"));
+        let expected = PathBuf::from("/tmp/my-app").join(".grok").join("hooks");
+        assert_eq!(d, expected);
         assert!(project_hooks_dir("").is_none());
         assert!(project_hooks_dir("   ").is_none());
     }

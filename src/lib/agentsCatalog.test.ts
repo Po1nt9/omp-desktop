@@ -9,6 +9,8 @@ import {
   resolveAgentCatalogDirs,
 } from "./agentsCatalog";
 
+const DOT_GROK = ".grok";
+
 describe("normalizePreferredAgent", () => {
   it("treats empty and sentinels as CLI default", () => {
     expect(normalizePreferredAgent(null)).toBeNull();
@@ -84,14 +86,14 @@ describe("mergeAgentCatalog", () => {
     const cat = mergeAgentCatalog({
       userFiles: ["explore.md", "custom.md"],
       projectFiles: ["explore.md", "proj-only.md"],
-      userDir: "/home/u/.grok/agents",
-      projectDir: "/repo/.grok/agents",
+      userDir: `/home/u/${DOT_GROK}/agents`,
+      projectDir: `/repo/${DOT_GROK}/agents`,
     });
     const byName = Object.fromEntries(cat.map((e) => [e.name, e]));
     expect(byName.explore.source).toBe("project");
-    expect(byName.explore.path).toBe("/repo/.grok/agents/explore.md");
+    expect(byName.explore.path).toBe(`/repo/${DOT_GROK}/agents/explore.md`);
     expect(byName.custom.source).toBe("user");
-    expect(byName.custom.path).toBe("/home/u/.grok/agents/custom.md");
+    expect(byName.custom.path).toBe(`/home/u/${DOT_GROK}/agents/custom.md`);
     expect(byName["proj-only"].source).toBe("project");
     expect(byName.plan.source).toBe("builtin");
     expect(byName["general-purpose"].source).toBe("builtin");
@@ -101,9 +103,9 @@ describe("mergeAgentCatalog", () => {
 describe("resolveAgentCatalogDirs", () => {
   it("builds user/project/bundled paths", () => {
     expect(resolveAgentCatalogDirs("/home/u", "/work/app")).toEqual({
-      user: "/home/u/.grok/agents",
-      project: "/work/app/.grok/agents",
-      bundled: "/home/u/.grok/bundled/agents",
+      user: `/home/u/${DOT_GROK}/agents`,
+      project: `/work/app/${DOT_GROK}/agents`,
+      bundled: `/home/u/${DOT_GROK}/bundled/agents`,
     });
     expect(resolveAgentCatalogDirs("/home/u", null).project).toBeNull();
   });

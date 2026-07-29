@@ -263,7 +263,7 @@ export interface SettingsPageProps {
   /** Default open target: finder | editor id */
   defaultOpenTarget?: string;
   onDefaultOpenTarget?: (v: string) => void;
-  /** After switching official/custom provider — reconnect Grok Build agent. */
+  /** After switching official/custom provider — reconnect OMP Runtime agent. */
   onProviderActivated?: () => void;
   /** Archived chats grouped by project (settings → archived). */
   archivedGroups?: ArchivedProjectGroup[];
@@ -2699,7 +2699,7 @@ export function SettingsPage({
                   <input
                     className="settings-input"
                     value={manualCliPath}
-                    placeholder={cliInfo.path || "e.g. ~/.grok/bin/grok"}
+                    placeholder={cliInfo.path || "e.g. ~/runtime-home/bin/grok"}
                     onChange={(e) => onManualCliPath(e.target.value)}
                     onBlur={(e) => onCliBlur(e.target.value.trim())}
                   />

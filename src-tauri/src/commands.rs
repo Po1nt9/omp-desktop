@@ -212,13 +212,13 @@ pub async fn acp_test_connection(
     Ok(crate::acp_client::probe_acp_server(addr).await)
 }
 
-/// Native file picker for a Grok Build binary (manual path).
+/// Native file picker for an OMP Runtime binary (manual path).
 #[tauri::command]
 pub async fn pick_cli_binary() -> Result<Option<String>, String> {
     let file = tauri::async_runtime::spawn_blocking(|| {
         // `mut` required on Windows: we rebind after add_filter.
         let mut dlg =
-            rfd::FileDialog::new().set_title("Select Grok Build binary / 选择 Grok Build 可执行文件");
+            rfd::FileDialog::new().set_title("Select OMP Runtime binary / 选择 OMP Runtime 可执行文件");
         #[cfg(target_os = "windows")]
         {
             dlg = dlg.add_filter("Executable", &["exe", "cmd", "bat"]);
@@ -1249,7 +1249,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     checks.push(doctor_check(
         "cli",
         "fail",
-        "Grok Build CLI",
+        "OMP Runtime",
         "Agent runtime is unavailable in this build.".into(),
         serde_json::json!({
             "found": false,
@@ -1359,7 +1359,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
         }),
     ));
 
-    // Grok Build CLI `doctor --json` (terminal/clipboard/color findings).
+    // OMP Runtime `doctor --json` (terminal/clipboard/color findings).
     // Runs on a blocking pool so slow/hung CLI cannot stall the async runtime.
     let cli_doctor = tauri::async_runtime::spawn_blocking(run_cli_doctor_json)
         .await
@@ -1410,7 +1410,7 @@ const CLI_DOCTOR_TIMEOUT_SECS: u64 = 15;
 fn run_cli_doctor_json() -> serde_json::Value {
     serde_json::json!({
         "available": false,
-        "error": "runtime_unavailable: Grok Build CLI is unavailable in this build",
+        "error": "runtime_unavailable: OMP Runtime is unavailable in this build",
         "reason": "runtime_unavailable",
         "report": serde_json::Value::Null,
         "exitOk": false,
@@ -1501,7 +1501,7 @@ pub async fn export_session_bundle(
     .await
 }
 
-/// Export the Grok Build CLI session trace (`grok trace <agent_id> --local`).
+/// Export the OMP Runtime session trace (`grok trace <agent_id> --local`).
 /// Resolves `agent_session_id` from live/parked runtime or session meta.
 /// Opens a save dialog for the `.tar.gz` and reveals the file.
 #[tauri::command]
@@ -1539,7 +1539,7 @@ fn session_trace_export_blocking(
     // Plan 1 fail-closed: the agent runtime is unavailable, so `grok trace`
     // cannot run. Returns `runtime_unavailable`. No `cli_probe` dependency or
     // runtime home env coupling remains.
-    Err("runtime_unavailable: Grok Build CLI is unavailable in this build".into())
+    Err("runtime_unavailable: OMP Runtime is unavailable in this build".into())
 }
 
 /// Save dialog + reveal. Always runs rfd/copy on a blocking thread so async
@@ -1672,7 +1672,7 @@ pub struct McpDto {
 fn run_grok_inspect(_project_path: Option<&str>) -> (Option<serde_json::Value>, Option<String>) {
     (
         None,
-        Some("runtime_unavailable: Grok Build CLI is unavailable in this build".into()),
+        Some("runtime_unavailable: OMP Runtime is unavailable in this build".into()),
     )
 }
 
@@ -2274,9 +2274,9 @@ pub async fn extensions_enable_all_skills(
     .map_err(|e| e.to_string())?
 }
 
-// ── Plugins via Grok Build CLI (`grok plugin …` + `inspect` + config.toml) ──
+// ── Plugins via OMP Runtime (`grok plugin …` + `inspect` + config.toml) ──
 //
-// Keep field semantics aligned with Grok Build:
+// Keep field semantics aligned with OMP Runtime:
 // - install inventory: `grok plugin list --json` (status/name/version/source/…)
 // - enable/disable: runtime config.toml `[plugins].disabled` / CLI enable|disable
 // - scope + component counts: `grok inspect --json` → `plugins[]`
@@ -2313,11 +2313,11 @@ pub struct PluginDto {
     pub path: Option<String>,
     /// Install status from `plugin list --json` (usually `"installed"`). Not enable/disable.
     pub status: String,
-    /// Load state from Grok Build config (`[plugins].disabled` / enable CLI).
+    /// Load state from OMP Runtime config (`[plugins].disabled` / enable CLI).
     pub enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repo_key: Option<String>,
-    /// Grok Build scope: user / project / cli / custom path / marketplace name.
+    /// OMP Runtime scope: user / project / cli / custom path / marketplace name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
     /// Component inventory from `grok inspect` (skills / agents / hooks / mcp).
@@ -2331,11 +2331,11 @@ pub struct PluginDto {
 /// probed or spawned. Returns `runtime_unavailable` for every caller. No
 /// `cli_probe` dependency remains.
 fn run_grok_cli_args(_args: &[&str], _timeout_secs: u64) -> Result<(String, String, bool), String> {
-    Err("runtime_unavailable: Grok Build CLI is unavailable in this build".into())
+    Err("runtime_unavailable: OMP Runtime is unavailable in this build".into())
 }
 
 /// Path to the user-level Grok config that tracks plugin enable/disable.
-/// Same file Grok Build reads for `[plugins].enabled` / `[plugins].disabled`.
+/// Same file OMP Runtime reads for `[plugins].enabled` / `[plugins].disabled`.
 fn user_grok_config_toml() -> std::path::PathBuf {
     crate::process_util::user_home().join(".grok").join("config.toml")
 }
@@ -2391,7 +2391,7 @@ pub fn parse_plugins_toml_string_array(toml_text: &str, key: &str) -> std::colle
     out
 }
 
-/// Grok Build config: plugin IDs or plain names listed under `[plugins].disabled`.
+/// OMP Runtime config: plugin IDs or plain names listed under `[plugins].disabled`.
 pub fn parse_plugins_disabled_names(toml_text: &str) -> std::collections::HashSet<String> {
     parse_plugins_toml_string_array(toml_text, "disabled")
 }
@@ -2432,7 +2432,7 @@ fn load_disabled_plugin_entries() -> std::collections::HashSet<String> {
     }
 }
 
-/// Match Grok Build disabled entries: plain name or full id `scope/hash/name`.
+/// Match OMP Runtime disabled entries: plain name or full id `scope/hash/name`.
 pub fn plugin_matches_disabled(
     name: &str,
     repo_key: Option<&str>,
@@ -2682,7 +2682,7 @@ fn collect_plugins_list() -> Result<Vec<PluginDto>, String> {
     parse_plugin_list_json(&stdout, &disabled, &inspect_extra)
 }
 
-/// List installed plugins (Grok Build inventory + enable state + inspect extras).
+/// List installed plugins (OMP Runtime inventory + enable state + inspect extras).
 /// Always returns Ok; on CLI missing / failure, `plugins` is empty and `error` is set.
 #[tauri::command]
 pub async fn plugins_list() -> Result<serde_json::Value, String> {
@@ -4635,7 +4635,7 @@ pub async fn providers_list() -> Result<crate::providers::ProvidersListResult, S
     crate::providers::list_custom_providers()
 }
 
-/// Activate official Grok Build or a custom provider; returns updated list.
+/// Activate official OMP Runtime or a custom provider; returns updated list.
 #[tauri::command]
 pub async fn providers_activate(
     source: String,
@@ -4855,11 +4855,11 @@ mod project_inspect_tests {
         let out = build_project_inspect_summary(
             None,
             Some("/tmp/p"),
-            Some("Grok Build CLI not found".into()),
+            Some("OMP Runtime not found".into()),
             vec![],
         );
         assert_eq!(out["skills"]["total"], 0);
-        assert_eq!(out["error"], "Grok Build CLI not found");
+        assert_eq!(out["error"], "OMP Runtime not found");
     }
 }
 
@@ -5567,7 +5567,7 @@ pub async fn hooks_ensure_dir(
 
 // ── Hooks manager (list / reveal / open folder) ─────────────────────────────
 
-/// List hook files under the runtime hooks dir and optionally `<project>/.grok/hooks`.
+/// List hook files under the runtime hooks dir and optionally `<project>/runtime-home/hooks`.
 #[tauri::command]
 pub async fn hooks_list(project_path: Option<String>) -> Result<crate::hooks::HooksListResult, String> {
     let path = project_path
@@ -5855,7 +5855,7 @@ pub async fn permission_rules_set(
     .await
     .map_err(|e| e.to_string())??;
 
-    // Grok Build reads rules at session start — soft-respawn so the next turn
+    // OMP Runtime reads rules at session start — soft-respawn so the next turn
     // reloads config without a full disconnect toast.
     mgr.soft_respawn(&app).await;
     Ok(result)
@@ -5959,7 +5959,7 @@ pub fn refuse_remove_main_worktree(
 /// Plan 1 fail-closed: the agent runtime is unavailable, so `grok mcp doctor`
 /// cannot run. Returns `runtime_unavailable`. No `cli_probe` dependency remains.
 fn run_mcp_doctor(_name: Option<&str>) -> Result<crate::extensions::McpDoctorReport, String> {
-    Err("runtime_unavailable: Grok Build CLI is unavailable in this build".into())
+    Err("runtime_unavailable: OMP Runtime is unavailable in this build".into())
 }
 
 // from PR #83
@@ -6443,7 +6443,7 @@ pub fn worktree_paths_equal(a: &str, b: &str) -> bool {
 
 const SETUP_CMD_TIMEOUT_SECS: u64 = 60;
 
-/// Clear Grok Build cross-session memory (`grok memory clear`).
+/// Clear OMP Runtime cross-session memory (`grok memory clear`).
 #[tauri::command]
 pub async fn memory_clear(
     cwd: Option<String>,

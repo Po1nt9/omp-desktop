@@ -1,5 +1,5 @@
 /**
- * Remote IM types — Settings GUI + Bridge + Grok Build ACP only.
+ * Remote IM types — Settings GUI + Bridge + OMP Runtime ACP only.
  * Spec: docs/llm-wiki/remote-im.md
  */
 

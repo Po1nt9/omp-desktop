@@ -805,7 +805,7 @@ export async function sessionMessages(id: string) {
   >("session_messages", { id });
 }
 
-/** Agent session folder under GROK_HOME (contains images/, etc.). */
+/** Agent session folder under the runtime home (contains images/, etc.). */
 export async function sessionMediaRoot(id: string) {
   return invoke<string | null>("session_media_root", { id });
 }
@@ -1068,7 +1068,7 @@ export interface DoctorReport {
   checks: DoctorCheck[];
   /** Flat snapshot for copy/export (no secrets). */
   raw: Record<string, unknown>;
-  /** Grok Build CLI `doctor --json` envelope (optional for older hosts). */
+  /** OMP Runtime `doctor --json` envelope (optional for older hosts). */
   cliDoctor?: CliDoctorPayload | null;
 }
 
@@ -1179,7 +1179,7 @@ export async function exportSessionBundle(sessionId: string) {
 }
 
 /**
- * Export Grok Build CLI session trace via `grok trace <agentSessionId> --local`.
+ * Export OMP Runtime session trace via `grok trace <agentSessionId> --local`.
  * Requires a linked agent session id. Opens a native save dialog for the `.tar.gz`.
  */
 export async function sessionTraceExport(sessionId: string) {
@@ -1243,7 +1243,7 @@ export async function projectInspect(projectPath?: string | null) {
 
 // ── Plugins via `grok plugin …` ─────────────────────────────────────────────
 
-/** Component counts from `grok inspect` plugins[].provides — Grok Build shape. */
+/** Component counts from `grok inspect` plugins[].provides — OMP Runtime shape. */
 export interface PluginProvidesDto {
   skills: number;
   agents: number;
@@ -1259,10 +1259,10 @@ export interface PluginDto {
   path?: string | null;
   /** Install status from `plugin list --json` (usually "installed"). */
   status: string;
-  /** Load state from Grok Build config / enable|disable CLI. */
+  /** Load state from OMP Runtime config / enable|disable CLI. */
   enabled: boolean;
   repoKey?: string | null;
-  /** Grok Build scope: user / project / cli / marketplace name. */
+  /** OMP Runtime scope: user / project / cli / marketplace name. */
   scope?: string | null;
   provides?: PluginProvidesDto | null;
 }
@@ -1394,7 +1394,7 @@ export async function providersList() {
   return invoke<ProvidersListResult>("providers_list");
 }
 
-/** CC Switch Grok Build provider preview (no full API key). */
+/** CC Switch OMP Runtime provider preview (no full API key). */
 export interface CcSwitchProviderPreview {
   sourceId: string;
   name: string;
@@ -1427,7 +1427,7 @@ export interface CcSwitchImportResult {
   providers?: ProvidersListResult | null;
 }
 
-/** Read-only scan of local CC Switch `cc-switch.db` (Grok Build tab). */
+/** Read-only scan of local CC Switch `cc-switch.db` (OMP Runtime tab). */
 export async function providersCcSwitchScan() {
   return invoke<CcSwitchScanResult>("providers_cc_switch_scan");
 }
@@ -1448,7 +1448,7 @@ export async function providersCcSwitchImport(body: {
   });
 }
 
-/** Switch to official Grok Build or a custom provider (writes config.toml default). */
+/** Switch to official OMP Runtime or a custom provider (writes config.toml default). */
 export async function providersActivate(
   source: "official" | "custom",
   providerId?: string | null,

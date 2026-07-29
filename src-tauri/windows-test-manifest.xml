@@ -12,7 +12,7 @@
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity
     version="0.1.9.0"
-    name="GrokApp.LibTest"
+    name="OmpDesktop.LibTest"
     type="win32"
   />
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">

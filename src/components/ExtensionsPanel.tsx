@@ -95,7 +95,7 @@ export function ExtensionsPanel({
   const [detailsTitle, setDetailsTitle] = useState("");
   const [detailsBody, setDetailsBody] = useState("");
   const [detailsLoading, setDetailsLoading] = useState(false);
-  /** Grok Build Plugins tab filter: all | enabled | disabled */
+  /** OMP Runtime Plugins tab filter: all | enabled | disabled */
   const [pluginFilter, setPluginFilter] = useState<PluginFilter>("all");
   const [installSource, setInstallSource] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -574,7 +574,7 @@ export function ExtensionsPanel({
         </div>
       )}
 
-      {/* Plugins — same inventory as Grok Build `plugin list` / Plugins tab */}
+      {/* Plugins — same inventory as OMP Runtime `plugin list` / Plugins tab */}
       {tab === "plugins" && (
       <>
       <h2 className="settings-page__h2" id="settings-anchor-ext-plugins">

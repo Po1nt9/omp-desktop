@@ -93,7 +93,7 @@ export function isCliMissingError(error: string | null | undefined): boolean {
   const e = error.toLowerCase();
   return (
     e.includes("cli not found") ||
-    e.includes("grok build cli not found") ||
+    e.includes("runtime not found") ||
     (e.includes("not found") && e.includes("cli"))
   );
 }
@@ -188,7 +188,7 @@ export function sortPluginsByName<T extends { name: string }>(plugins: T[]): T[]
 
 /**
  * Load-state label for badges. Separate from CLI install `status`
- * (Grok Build keeps those as distinct concepts).
+ * (OMP Runtime keeps those as distinct concepts).
  */
 export function pluginLoadLabel(enabled?: boolean): "enabled" | "disabled" {
   return enabled === false ? "disabled" : "enabled";
@@ -202,7 +202,7 @@ export function pluginStatusTone(
   return pluginLoadLabel(enabled);
 }
 
-/** Compact meta: scope · version · marketplace/source — mirrors Grok Build list row. */
+/** Compact meta: scope · version · marketplace/source — mirrors OMP Runtime list row. */
 export function pluginMetaLine(plugin: PluginLike): string {
   const parts: string[] = [];
   const scope = (plugin.scope ?? "").trim();
@@ -235,7 +235,7 @@ export function pluginMetaLine(plugin: PluginLike): string {
 }
 
 /**
- * Grok Build TUI-style provides summary:
+ * OMP Runtime TUI-style provides summary:
  * "6 skills · hooks · 1 MCP" (omit zero counts).
  */
 export function pluginProvidesLine(plugin: PluginLike): string {
@@ -263,7 +263,7 @@ export function pluginRowKey(plugin: PluginLike): string {
 
 export type PluginFilter = "all" | "enabled" | "disabled";
 
-/** Filter like Grok Build Plugins tab `f` (all / enabled / disabled). */
+/** Filter like OMP Runtime Plugins tab `f` (all / enabled / disabled). */
 export function filterPluginsByLoadState<T extends { enabled?: boolean }>(
   plugins: T[],
   filter: PluginFilter,

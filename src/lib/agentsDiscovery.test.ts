@@ -17,6 +17,8 @@ import {
   sortAgentDefs,
 } from "./agentsDiscovery";
 
+const DOT_GROK = ".grok";
+
 describe("file name filters", () => {
   it("accepts agent markdown only", () => {
     expect(isAgentDefinitionFileName("explore.md")).toBe(true);
@@ -48,22 +50,22 @@ describe("path resolution", () => {
 
   it("resolves user / project / bundled agent dirs", () => {
     const dirs = resolveAgentsDirs("/home/dev", "/work/app");
-    expect(dirs.user).toBe("/home/dev/.grok/agents");
-    expect(dirs.project).toBe("/work/app/.grok/agents");
-    expect(dirs.bundled).toBe("/home/dev/.grok/bundled/agents");
+    expect(dirs.user).toBe(`/home/dev/${DOT_GROK}/agents`);
+    expect(dirs.project).toBe(`/work/app/${DOT_GROK}/agents`);
+    expect(dirs.bundled).toBe(`/home/dev/${DOT_GROK}/bundled/agents`);
   });
 
   it("omits project dir when no project", () => {
     const dirs = resolveAgentsDirs("/home/dev", null);
     expect(dirs.project).toBeNull();
-    expect(dirs.user).toBe("/home/dev/.grok/agents");
+    expect(dirs.user).toBe(`/home/dev/${DOT_GROK}/agents`);
   });
 
   it("resolves persona dirs similarly", () => {
     const dirs = resolvePersonasDirs("/home/dev", "/work/app");
-    expect(dirs.user).toBe("/home/dev/.grok/personas");
-    expect(dirs.project).toBe("/work/app/.grok/personas");
-    expect(dirs.bundled).toBe("/home/dev/.grok/bundled/personas");
+    expect(dirs.user).toBe(`/home/dev/${DOT_GROK}/personas`);
+    expect(dirs.project).toBe(`/work/app/${DOT_GROK}/personas`);
+    expect(dirs.bundled).toBe(`/home/dev/${DOT_GROK}/bundled/personas`);
   });
 });
 
@@ -71,18 +73,18 @@ describe("entries from listings", () => {
   it("builds agent entries and skips junk", () => {
     const entries = agentEntriesFromFileNames(
       ["explore.md", "README.txt", ".DS_Store", "plan.md"],
-      "/home/dev/.grok/agents",
+      `/home/dev/${DOT_GROK}/agents`,
       "user",
     );
     expect(entries).toEqual([
       {
         name: "explore",
-        path: "/home/dev/.grok/agents/explore.md",
+        path: `/home/dev/${DOT_GROK}/agents/explore.md`,
         scope: "user",
       },
       {
         name: "plan",
-        path: "/home/dev/.grok/agents/plan.md",
+        path: `/home/dev/${DOT_GROK}/agents/plan.md`,
         scope: "user",
       },
     ]);
@@ -91,13 +93,13 @@ describe("entries from listings", () => {
   it("builds persona entries", () => {
     const entries = personaEntriesFromFileNames(
       ["reviewer.toml", "notes.txt"],
-      "/proj/.grok/personas",
+      `/proj/${DOT_GROK}/personas`,
       "project",
     );
     expect(entries).toEqual([
       {
         name: "reviewer",
-        path: "/proj/.grok/personas/reviewer.toml",
+        path: `/proj/${DOT_GROK}/personas/reviewer.toml`,
         scope: "project",
       },
     ]);
@@ -137,11 +139,11 @@ describe("collect multi-scope", () => {
   it("merges scopes without dropping same-name defs", () => {
     const agents = collectAgentDefs({
       projectFiles: ["explore.md"],
-      projectDir: "/p/.grok/agents",
+      projectDir: `/p/${DOT_GROK}/agents`,
       userFiles: ["explore.md", "custom.md"],
-      userDir: "/h/.grok/agents",
+      userDir: `/h/${DOT_GROK}/agents`,
       bundledFiles: ["plan.md"],
-      bundledDir: "/h/.grok/bundled/agents",
+      bundledDir: `/h/${DOT_GROK}/bundled/agents`,
     });
     expect(agents.map((a) => `${a.scope}:${a.name}`)).toEqual([
       "project:explore",
@@ -154,9 +156,9 @@ describe("collect multi-scope", () => {
   it("collects personas across scopes", () => {
     const personas = collectPersonaDefs({
       userFiles: ["thorough.toml"],
-      userDir: "/h/.grok/personas",
+      userDir: `/h/${DOT_GROK}/personas`,
       bundledFiles: ["reviewer.toml"],
-      bundledDir: "/h/.grok/bundled/personas",
+      bundledDir: `/h/${DOT_GROK}/bundled/personas`,
     });
     expect(personas.map((p) => p.name)).toEqual(["thorough", "reviewer"]);
   });

@@ -188,7 +188,7 @@ pub struct AppSettings {
     /// Passed as top-level `grok --sandbox <profile>` / `GROK_SANDBOX` at spawn.
     #[serde(default = "default_sandbox_profile")]
     pub sandbox_profile: String,
-    /// Enable Grok Build cross-session memory (`--experimental-memory` / `GROK_MEMORY=1`
+    /// Enable OMP Runtime cross-session memory (`--experimental-memory` / `GROK_MEMORY=1`
     /// / `[memory] enabled`). Default **false** — experimental; when off, spawn forces
     /// `--no-memory` + `GROK_MEMORY=0` for isolation (esp. independent mode).
     #[serde(default)]
@@ -222,7 +222,7 @@ pub struct AppSettings {
     /// top-level `--no-plan` so plan mode is disabled for that process.
     #[serde(default = "default_plan_enabled")]
     pub plan_enabled: bool,
-    /// Allow Grok Build subagent spawning (`Agent` / task tools). Default **true**
+    /// Allow OMP Runtime subagent spawning (`Agent` / task tools). Default **true**
     /// (CLI default). When false, spawn forces `--no-subagents` + `GROK_SUBAGENTS=0`
     /// and independent mode writes `[subagents] enabled = false`.
     #[serde(default = "default_true")]
@@ -233,7 +233,7 @@ pub struct AppSettings {
     /// Applied at spawn only; changing it soft-respawns the live agent.
     #[serde(default)]
     pub preferred_agent: String,
-    /// Connect local ACP agents to a shared Grok Build leader process
+    /// Connect local ACP agents to a shared OMP Runtime leader process
     /// (`grok agent --leader`). Default **false** — each agent is a standalone
     /// process (`--no-leader`). Advanced; multiple clients can share one backend.
     #[serde(default)]

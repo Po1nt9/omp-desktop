@@ -109,7 +109,7 @@ export function UserMenu({
   const resetTime = formatQuotaResetTime(
     (billing as { resetsAt?: string } | undefined)?.resetsAt,
   );
-  const tier = signedIn ? "Grok Build" : "—";
+  const tier = signedIn ? "OMP Runtime" : "—";
 
   const panel =
     open && pos && typeof document !== "undefined"

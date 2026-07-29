@@ -48,7 +48,7 @@ pub struct ProvidersListResult {
     pub agent_home: String,
 }
 
-/// Built-in model id used when routing back to official Grok Build / SuperGrok.
+/// Built-in model id used when routing back to official OMP Runtime / runtime.
 pub const OFFICIAL_DEFAULT_MODEL: &str = "grok";
 
 /// Catalog model preferred for composer / official spawn when none is set.
@@ -60,7 +60,7 @@ pub const OFFICIAL_CATALOG_MODEL: &str = "";
 /// Which inference channel the agent should use.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActiveRoute {
-    /// Built-in xAI / SuperGrok (OIDC via auth.json).
+    /// Built-in xAI / runtime (OIDC via auth.json).
     Official,
     /// OpenAI-compatible relay section id in config.toml (`[model.<id>]`).
     Custom { id: String },
@@ -139,7 +139,7 @@ fn normalize_backend(v: Option<&str>) -> String {
     }
 }
 
-/// Grok Build joins `{base_url}/chat/completions` (or `/responses`).
+/// OMP Runtime joins `{base_url}/chat/completions` (or `/responses`).
 /// OpenAI-compatible relays almost always expect `…/v1` as the base.
 /// Without it, requests hit `https://host/chat/completions` (404/HTML) and the
 /// agent may retry for minutes with no user-visible progress.

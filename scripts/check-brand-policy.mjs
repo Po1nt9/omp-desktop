@@ -3,6 +3,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
+  directoryExclusions,
   repositoryExclusions,
   rules,
   structuredAllowlist,
@@ -78,7 +79,7 @@ export function checkRepository(root) {
     const metadata = record.slice(0, tab).split(" ");
     const file = normalizeRepositoryPath(record.slice(tab + 1));
     const mode = metadata[0];
-    if ((mode !== "100644" && mode !== "100755") || repositoryExclusions.has(file) || !textExtensions.has(path.posix.extname(file))) continue;
+    if ((mode !== "100644" && mode !== "100755") || repositoryExclusions.has(file) || directoryExclusions.some((pattern) => pattern.test(file)) || !textExtensions.has(path.posix.extname(file))) continue;
 
     const content = fs.readFileSync(path.join(root, file));
     if (content.includes(0)) continue;

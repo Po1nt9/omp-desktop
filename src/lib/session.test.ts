@@ -961,7 +961,7 @@ describe("session projection", () => {
     const fromAgent = presentErrorBanner(
       {
         code: "CLI_TOO_OLD",
-        message: "grok CLI 0.2.101 is older than the required 0.2.112",
+        message: "runtime 0.2.101 is older than the required 0.2.112",
       },
       null,
       "en",
@@ -972,7 +972,7 @@ describe("session projection", () => {
     // From the launch-time probe (coded localError string).
     const fromLocal = presentErrorBanner(
       null,
-      "CLI_TOO_OLD: grok CLI 0.2.101 < required 0.2.112",
+      "CLI_TOO_OLD: runtime 0.2.101 < required 0.2.112",
       "en",
     );
     expect(fromLocal?.code).toBe("CLI_TOO_OLD");

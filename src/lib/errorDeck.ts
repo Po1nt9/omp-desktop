@@ -228,7 +228,7 @@ export function classifyErrorMessage(raw: string | null | undefined): ErrorDeckC
     s.includes("command not found") ||
     s.includes("no such file") ||
     s.includes("not found in path") ||
-    s.includes("grok build not found") ||
+    s.includes("runtime not found") ||
     s.includes("cli not found") ||
     (s.includes("executable") && s.includes("not"))
   ) {

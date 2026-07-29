@@ -1,5 +1,5 @@
 /**
- * Subagent spawning — pure flag / env helpers for Grok Build agents.
+ * Subagent spawning — pure flag / env helpers for OMP Runtime agents.
  *
  * CLI surface (enabled by default):
  *   - `--no-subagents` (top-level `grok` flag, before `agent`)

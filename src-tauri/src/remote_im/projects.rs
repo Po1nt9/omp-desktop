@@ -8,7 +8,7 @@ use std::path::PathBuf;
 pub fn load_trusted_projects() -> Vec<TrustedProject> {
     let roots = [
         app_data_root(),
-        PathBuf::from(std::env::var("GROK_APP_HOME").unwrap_or_default()),
+        PathBuf::from(std::env::var("OMP_DESKTOP_HOME").unwrap_or_default()),
     ];
     for root in roots {
         if root.as_os_str().is_empty() {

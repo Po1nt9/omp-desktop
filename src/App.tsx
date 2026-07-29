@@ -1531,7 +1531,7 @@ export default function App() {
       }
       if (cli.versionSupported === false) {
         setLocalError(
-          `CLI_TOO_OLD: grok CLI ${cli.version ?? "?"} < required ${
+          `CLI_TOO_OLD: runtime ${cli.version ?? "?"} < required ${
             cli.minVersion ?? ""
           }`.trim(),
         );

@@ -1,7 +1,7 @@
 /**
  * Right resource pane — Codex-inspired workbench:
  * multi-tabs · breadcrumb toolbar · preview | file tree · open-with menu.
- * Original implementation for Grok App (Tauri + React).
+ * Original implementation for OMP Desktop (Tauri + React).
  */
 
 import {
@@ -1871,7 +1871,7 @@ export function ResourceViewer({
   }
 
   /**
-   * Single chrome row (Grok Desktop / Codex):
+   * Single chrome row (OMP Desktop / Codex):
    *   [ file tabs … ] [ 打开位置 ] [ tree ] [ close ]
    * No breadcrumb title row — basename lives only in the tab.
    * Nested path is available via tab title attribute.

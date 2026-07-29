@@ -1,7 +1,7 @@
 /**
  * Composer prompt history — CLI-like ↑/↓ recall + `/history` picker.
  *
- * Scope matches Grok Build: **current session only** (not cross-session).
+ * Scope matches OMP Runtime: **current session only** (not cross-session).
  * History is newest-first (index 0 = most recent user message).
  * Index `null` means not browsing (live draft).
  */

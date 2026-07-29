@@ -82,7 +82,7 @@ export function pathRelativeToProject(
 }
 
 /**
- * Tools that mutate files — aligned with Host `is_edit_tool` + common Grok Build names.
+ * Tools that mutate files — aligned with Host `is_edit_tool` + common OMP Runtime names.
  */
 export function isEditToolKind(kind: string | null | undefined): boolean {
   const t = (kind || "").toLowerCase().trim();

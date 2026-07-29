@@ -471,7 +471,7 @@ export const SETTINGS_ENTRIES: readonly SettingsEntry[] = [
       "account.addAccount",
       "account.importChat",
     ],
-    keywords: ["login", "oauth", "supergrok", "quota", "account"],
+    keywords: ["login", "oauth", "omp", "quota", "account"],
   },
   {
     id: "account.providers",

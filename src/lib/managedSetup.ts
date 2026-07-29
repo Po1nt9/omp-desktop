@@ -114,7 +114,7 @@ export function classifySetupError(message: string | null | undefined): ManagedS
   if (!m.trim()) return "other";
   if (
     m.includes("cli not found") ||
-    m.includes("grok build cli not found") ||
+    m.includes("runtime not found") ||
     m.includes("no such file")
   ) {
     return "cli_missing";

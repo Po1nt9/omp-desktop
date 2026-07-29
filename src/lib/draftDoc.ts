@@ -1,7 +1,7 @@
 /**
  * Composer draft document model: text segments + inline skill chips.
  * Storage / user bubbles use stable tokens `[[skill:name]]`.
- * Agent prompts serialize skills as `/name` (Grok Build invocable form).
+ * Agent prompts serialize skills as `/name` (OMP Runtime invocable form).
  */
 
 export type DraftSegment =

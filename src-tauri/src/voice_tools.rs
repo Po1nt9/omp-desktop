@@ -9,7 +9,7 @@ pub fn tool_definitions() -> Vec<Value> {
     vec![
         function_tool(
             "list_sessions",
-            "List recent Grok Build agent sessions for the current project (id, title, busy).",
+            "List recent OMP Runtime agent sessions for the current project (id, title, busy).",
             json!({
                 "type": "object",
                 "properties": {
@@ -19,7 +19,7 @@ pub fn tool_definitions() -> Vec<Value> {
         ),
         function_tool(
             "create_agent_session",
-            "Create a new Grok Build agent session in the active project to do coding work. Prefer this for multi-step implementation tasks.",
+            "Create a new OMP Runtime agent session in the active project to do coding work. Prefer this for multi-step implementation tasks.",
             json!({
                 "type": "object",
                 "properties": {
@@ -82,7 +82,7 @@ pub fn live_voice_instructions(project_path: Option<&str>, project_name: Option<
         .or(project_path)
         .unwrap_or("the current workspace");
     format!(
-        r#"You are Grok Live Voice in the Grok desktop coding workbench.
+        r#"You are OMP Live Voice in the OMP Desktop coding workbench.
 You speak briefly and clearly. You can listen and talk while coding agents work.
 
 Project: {project}

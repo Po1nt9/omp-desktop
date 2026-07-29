@@ -243,7 +243,7 @@ export function AccountPanel({
     productId: number;
     label: string;
   }>;
-  const plan = signedIn ? "Grok Build" : "—";
+  const plan = signedIn ? "OMP Runtime" : "—";
   const hasQuota = signedIn && !!billing?.available && remaining != null;
 
   const canManageAccounts =

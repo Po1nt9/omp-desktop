@@ -65,7 +65,7 @@
     }
   },
   "underscoreOptionIds": {
-    "_comment": "Grok Build shell prompts sometimes use underscore optionIds",
+    "_comment": "OMP Runtime shell prompts sometimes use underscore optionIds",
     "options": [
       { "optionId": "allow_once", "name": "Allow once", "kind": "allow_once" },
       { "optionId": "allow_always", "name": "Allow always", "kind": "allow_always" },

@@ -29,7 +29,7 @@ export function joinHooksPath(
   return `${d}${sep}${n}`;
 }
 
-/** Project hooks dir: `<project>/.grok/hooks`. */
+/** Project hooks dir: `<project>/runtime-home/hooks`. */
 export function projectHooksDir(projectPath: string | null | undefined): string | null {
   const root = (projectPath ?? "").trim().replace(/[/\\]+$/, "");
   if (!root) return null;

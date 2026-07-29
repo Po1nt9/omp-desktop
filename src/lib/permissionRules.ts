@@ -1,7 +1,7 @@
 /**
  * Pure helpers for Settings → Permissions rule editor.
  *
- * Grok Build compact form in config.toml:
+ * OMP Runtime compact form in config.toml:
  *   [permission]
  *   deny = ["Bash(rm -rf *)"]
  *   allow = ["Bash(git *)"]

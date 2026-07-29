@@ -1,6 +1,6 @@
 /**
  * Settings → Permissions: edit compact [permission] allow / deny / ask rules
- * in the active GROK_HOME config.toml.
+ * in the active runtime home config.toml.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";

@@ -56,7 +56,7 @@ const FAILED_STATUSES = new Set(["failed", "error", "rejected"]);
 const CANCELLED_STATUSES = new Set(["cancelled", "canceled"]);
 
 /**
- * Tool kinds that commonly represent multi-step / background work in Grok Build.
+ * Tool kinds that commonly represent multi-step / background work in OMP Runtime.
  * Matching is advisory for UI emphasis; every tool_step can still appear as a task.
  */
 const LONG_RUNNING_KINDS = new Set([

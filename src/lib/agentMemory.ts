@@ -1,5 +1,5 @@
 /**
- * Cross-session memory (Grok Build experimental) — pure flag / env helpers.
+ * Cross-session memory (OMP Runtime experimental) — pure flag / env helpers.
  *
  * CLI surface:
  *   - `--experimental-memory` / `--no-memory` (top-level `grok` flags)

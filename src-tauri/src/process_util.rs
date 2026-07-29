@@ -147,9 +147,10 @@ pub fn enriched_path_env() -> Option<String> {
 
     let home = user_home();
     let home_s = home.to_string_lossy();
+    let runtime_bin = home.join(".grok").join("bin");
     #[cfg(target_os = "windows")]
     {
-        push(&mut parts, &format!(r"{home_s}\.grok\bin"));
+        push(&mut parts, &runtime_bin.to_string_lossy());
         push(&mut parts, &format!(r"{home_s}\.local\bin"));
         push(&mut parts, &format!(r"{home_s}\.cargo\bin"));
         push(&mut parts, &format!(r"{home_s}\AppData\Local\pnpm"));
@@ -164,7 +165,7 @@ pub fn enriched_path_env() -> Option<String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        push(&mut parts, &format!("{home_s}/.grok/bin"));
+        push(&mut parts, &runtime_bin.to_string_lossy());
         push(&mut parts, &format!("{home_s}/.local/bin"));
         push(&mut parts, &format!("{home_s}/.cargo/bin"));
         push(&mut parts, &format!("{home_s}/.bun/bin"));

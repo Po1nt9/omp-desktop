@@ -1,5 +1,5 @@
 /**
- * Resource-pane code preview — highlight.js (same stack as Grok Desktop)
+ * Resource-pane code preview — highlight.js (same stack as OMP Desktop)
  * with light/dark themes bound to `data-theme` on documentElement.
  */
 

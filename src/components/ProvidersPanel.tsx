@@ -27,7 +27,7 @@ export interface ProvidersPanelProps {
   locale: Locale;
   /** Official OAuth / CLI auth / official API key present. */
   officialAvailable?: boolean;
-  /** Called after switching official/custom so host can reconnect Grok Build. */
+  /** Called after switching official/custom so host can reconnect OMP Runtime. */
   onProviderActivated?: () => void;
 }
 

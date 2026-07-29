@@ -1,5 +1,5 @@
 /**
- * Parse Grok Build CLI `doctor --json` into safe UI rows.
+ * Parse OMP Runtime `doctor --json` into safe UI rows.
  *
  * Schema (v1): schemaVersion, facts, findings[], probeNotes[], counts.
  * Never surfaces secret-like values — only host/env facts and findings.
@@ -471,7 +471,7 @@ export function parseCliDoctorEnvelope(input: unknown): CliDoctorView {
     return {
       available: false,
       reason: asString(input.reason),
-      error: error ?? "Grok Build CLI doctor unavailable",
+      error: error ?? "OMP Runtime doctor unavailable",
       schemaVersion: null,
       checks: [],
       facts: {},

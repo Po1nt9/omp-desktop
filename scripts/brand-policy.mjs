@@ -19,8 +19,20 @@ export const rules = [
 
 export const wholeFileAllowlist = new Set([
   "scripts/brand-policy.mjs",
+  "scripts/check-provenance.mjs",
+  "scripts/check-provenance.test.mjs",
+  "provenance/README.md",
+  "provenance/upstreams.json",
+  "provenance/omp-patches.json",
   "THIRD_PARTY_NOTICES",
+  "CHANGELOG.md",
+  "docs/superpowers/plans/2026-07-28-repository-brand-baseline.md",
+  "docs/superpowers/specs/2026-07-28-omp-desktop-design.md",
 ]);
+
+export const directoryExclusions = [
+  /^docs\/upstream-history\/grok-app\//,
+];
 
 export const repositoryExclusions = new Set([
   "scripts/check-brand-policy.test.mjs",

@@ -1878,7 +1878,7 @@ mod live_handshake_tests {
                     Err(which::Error::CannotFindBinaryPath)
                 }
             }
-        }).expect("grok cli");
+        }).expect("runtime");
         let cwd = std::env::current_dir().unwrap();
         let t0 = std::time::Instant::now();
         let (client, mut events) = AcpClient::spawn(cli, cwd).expect("spawn");

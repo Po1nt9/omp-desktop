@@ -704,7 +704,7 @@ export const zhTW: Record<MessageKey, string> = {
   "settings.cliSessionsImportedOne": "已匯入「{title}」",
   "settings.cliSessionsImportedN": "已匯入 {n} 個工作階段",
   "settings.cliSessionsLoading": "正在尋找 CLI 工作階段…",
-  "settings.cliSessionsEmpty": "在 ~/.grok/sessions 下找不到 CLI 工作階段。",
+  "settings.cliSessionsEmpty": "在 ~/runtime-home/sessions 下找不到 CLI 工作階段。",
   "settings.cliSessionsMsgs": "{n} 則訊息",
   "settings.cliSessionsLinked": "已在應用程式中",
   "settings.storeApiKeysInKeychain": "以系統鑰匙圈儲存 API Key",
@@ -910,7 +910,7 @@ export const zhTW: Record<MessageKey, string> = {
   "managedSetup.desc":
     "擷取並安裝組織託管設定（`grok setup`）。預覽顯示去敏摘要；安裝會寫入 ~/.grok。",
   "managedSetup.authHint":
-    "需要團隊登入（`grok login`）或部署金鑰 GROK_DEPLOYMENT_KEY（環境變數，或 ~/.grok/config.toml 中 [endpoints] deployment_key）。",
+    "需要團隊登入（`grok login`）或部署金鑰 GROK_DEPLOYMENT_KEY（環境變數，或 ~/runtime-home/config.toml 中 [endpoints] deployment_key）。",
   "managedSetup.preview": "預覽",
   "managedSetup.previewing": "正在取得預覽…",
   "managedSetup.previewOk": "預覽已就緒（未寫入任何檔案）。",
@@ -1103,7 +1103,7 @@ export const zhTW: Record<MessageKey, string> = {
   "account.heatmap.requests": "對話數",
   "account.heatmap.tokens": "已用 Token",
   "account.callLogs": "近期呼叫日誌",
-  "account.callLogsEmpty": "在 ~/.grok/sessions 下未發現本機對話活動。",
+  "account.callLogsEmpty": "在 ~/runtime-home/sessions 下未發現本機對話活動。",
   "account.callLogs.dayFilter": "{date} · {count} 個對話",
   "account.callLogs.weekFilter": "{start} – {end} · {count} 個對話",
   "account.callLogs.clearDay": "顯示全部",
@@ -1128,7 +1128,7 @@ export const zhTW: Record<MessageKey, string> = {
   "account.loginTimeout":
     "登入逾時——目前網路無法連上 OMP 驗證服務（auth.x.ai）。",
   "account.loginUnreachableHint":
-    "如果本機 grok CLI 已登入，可將「對話資料模式」切換為共用（~/.grok）直接沿用；受限網路請透過代理啟動。",
+    "如果本機 runtime 已登入，可將「對話資料模式」切換為共用（~/.grok）直接沿用；受限網路請透過代理啟動。",
   "account.loginOk": "登入成功",
   "account.loginHelpTitle": "登入說明",
   "account.loginHelpBody":
@@ -1207,7 +1207,7 @@ export const zhTW: Record<MessageKey, string> = {
   "setup.account.saveKey": "儲存金鑰",
   "setup.account.saveRelay": "儲存並測試",
   "setup.account.importCli": "使用現有 CLI 登入",
-  "setup.account.importCliHint": "偵測到 ~/.grok/auth.json",
+  "setup.account.importCliHint": "偵測到 ~/runtime-home/auth.json",
   "setup.reuseCliAuthTitle": "使用既有 CLI 登入（建議）",
   "setup.reuseCliAuthDesc":
     "偵測到本機 OMP Runtime 已登入——直接沿用，無需重新授權，也不依賴網路。",
@@ -1262,7 +1262,7 @@ export const zhTW: Record<MessageKey, string> = {
     "刪除本應用資料根下的工作階段、專案與設定，不影響 ~/.grok。",
   "doctor.resetConfirmTitle": "重設應用資料？",
   "doctor.resetConfirmBody":
-    "將清除本應用內的工作階段、專案、自動化與設定。除非取消勾選，API 金鑰會保留。不會改動 Grok Build CLI 主目錄（~/.grok）。",
+    "將清除本應用內的工作階段、專案、自動化與設定。除非取消勾選，API 金鑰會保留。不會改動 OMP Runtime 主目錄（~/.grok）。",
   "doctor.resetConfirm2Title": "確認重設？",
   "doctor.resetConfirm2Body":
     "此操作無法復原。應用將以空白工作區重新載入。",

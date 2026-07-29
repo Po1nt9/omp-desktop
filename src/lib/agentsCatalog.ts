@@ -1,10 +1,10 @@
 /**
- * Pure helpers for discovering selectable Grok Build agent definitions.
+ * Pure helpers for discovering selectable OMP Runtime agent definitions.
  *
  * Sources (CLI `--agent <NAME>`):
  * - Built-ins: explore, plan, general-purpose
- * - User: ~/.grok/agents/*.md
- * - Project: <project>/.grok/agents/*.md
+ * - User: ~/runtime-home/agents/*.md
+ * - Project: <project>/runtime-home/agents/*.md
  *
  * Runtime selection is spawn-time only (`grok --agent NAME agent stdio`).
  * Changing the preferred agent requires reconnect / new session — no mid-turn
@@ -21,7 +21,7 @@ export type AgentCatalogEntry = {
   path?: string | null;
 };
 
-/** Well-known built-in agent names shipped with Grok Build. */
+/** Well-known built-in agent names shipped with OMP Runtime. */
 export const BUILTIN_AGENT_NAMES = [
   "explore",
   "general-purpose",

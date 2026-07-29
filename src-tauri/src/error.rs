@@ -20,7 +20,7 @@ pub enum AgentErrorCode {
     ConnectFailed,
     /// Max concurrent agent processes reached (I02).
     ProcessLimit,
-    /// Installed grok CLI predates the flag set this app spawns with.
+    /// Installed runtime predates the flag set this app spawns with.
     /// Without this code the failure surfaces as `AgentCrashed`, which points
     /// the user nowhere (NEW-03).
     CliTooOld,

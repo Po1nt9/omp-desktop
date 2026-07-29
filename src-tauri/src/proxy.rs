@@ -5,7 +5,7 @@
 //!
 //! - `system` (default): honor the OS proxy. On Windows the system proxy lives
 //!   in the WinINET registry and is **not** exported as env vars, so GUI-spawned
-//!   children (grok CLI, login, updaters) would silently bypass it — we read the
+//!   children (runtime, login, updaters) would silently bypass it — we read the
 //!   registry and inject `HTTP_PROXY`/`HTTPS_PROXY` ourselves. On macOS we ask
 //!   `scutil --proxy`. Plain env vars win when already present.
 //! - `manual`: use `proxy_url` from Settings verbatim.

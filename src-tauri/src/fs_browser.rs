@@ -1587,7 +1587,7 @@ mod tests {
         fs::create_dir_all(&a).unwrap();
         fs::create_dir_all(&b).unwrap();
         fs::create_dir_all(&t).unwrap();
-        fs::write(a.join("正文.md"), b"# grok app\n").unwrap();
+        fs::write(a.join("正文.md"), b"# omp desktop\n").unwrap();
         fs::write(b.join("正文.md"), b"# codex\n").unwrap();
         fs::write(t.join("正文.md"), b"# template\n").unwrap();
 

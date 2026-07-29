@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use crate::paths::{agent_config_toml, app_data_root, ensure_app_dirs};
 use crate::permission::PermissionPolicy;
 
-/// Map App policy → `[ui] permission_mode` values used by Grok Build config.toml.
+/// Map App policy → `[ui] permission_mode` values used by OMP Runtime config.toml.
 pub fn ui_permission_mode(policy: &str) -> &'static str {
     match PermissionPolicy::parse(policy) {
         PermissionPolicy::AcceptEdits => "acceptEdits",

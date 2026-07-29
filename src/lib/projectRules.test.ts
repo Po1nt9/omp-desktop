@@ -11,12 +11,14 @@ import {
   selectExistingProjectRules,
 } from "./projectRules";
 
+const DOT_GROK = ".grok";
+
 describe("normalizeRuleRelativePath", () => {
   it("strips ./ and backslashes", () => {
     expect(normalizeRuleRelativePath("./AGENTS.md")).toBe("AGENTS.md");
     expect(normalizeRuleRelativePath(".\\CLAUDE.md")).toBe("CLAUDE.md");
-    expect(normalizeRuleRelativePath("/.grok/rules/foo.md")).toBe(
-      ".grok/rules/foo.md",
+    expect(normalizeRuleRelativePath(`/${DOT_GROK}/rules/foo.md`)).toBe(
+      `${DOT_GROK}/rules/foo.md`,
     );
     expect(normalizeRuleRelativePath("  a/b/  ")).toBe("a/b");
   });

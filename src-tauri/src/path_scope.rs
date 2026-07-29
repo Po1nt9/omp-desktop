@@ -137,8 +137,8 @@ mod tests {
 
     fn with_isolated_roots(project: &Path, app: &Path, include_temp: bool, f: impl FnOnce()) {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let prev = std::env::var("GROK_APP_HOME").ok();
-        std::env::set_var("GROK_APP_HOME", app);
+        let prev = std::env::var("OMP_DESKTOP_HOME").ok();
+        std::env::set_var("OMP_DESKTOP_HOME", app);
         let _ = fs::create_dir_all(app);
         let _ = fs::create_dir_all(project);
         let projects_file = app.join("projects.json");
@@ -165,8 +165,8 @@ mod tests {
         *extra_grants().write() = Vec::new();
         *roots().write() = Vec::new();
         match prev {
-            Some(v) => std::env::set_var("GROK_APP_HOME", v),
-            None => std::env::remove_var("GROK_APP_HOME"),
+            Some(v) => std::env::set_var("OMP_DESKTOP_HOME", v),
+            None => std::env::remove_var("OMP_DESKTOP_HOME"),
         }
     }
 

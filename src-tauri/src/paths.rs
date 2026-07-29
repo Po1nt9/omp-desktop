@@ -9,10 +9,10 @@ use directories::ProjectDirs;
 pub(crate) static APP_HOME_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn app_data_root() -> PathBuf {
-    if let Ok(custom) = std::env::var("GROK_APP_HOME") {
+    if let Ok(custom) = std::env::var("OMP_DESKTOP_HOME") {
         return PathBuf::from(custom);
     }
-    if let Some(proj) = ProjectDirs::from("com", "grokapp", "grok-app") {
+    if let Some(proj) = ProjectDirs::from("com", "omp-desktop", "omp-desktop") {
         return proj.data_dir().to_path_buf();
     }
     // Fallback

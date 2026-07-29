@@ -8,6 +8,8 @@ import {
   summarizeInspectJson,
 } from "./projectInspect";
 
+const DOT_GROK = ".grok";
+
 const SAMPLE_INSPECT = {
   grokVersion: "0.2.111",
   channel: "stable",
@@ -26,7 +28,7 @@ const SAMPLE_INSPECT = {
     {
       name: "demo-plugin",
       scope: "user",
-      path: "/home/u/.grok/installed-plugins/demo",
+      path: `/home/u/${DOT_GROK}/installed-plugins/demo`,
       enabled: true,
       provides: { skills: 2, agents: 0, hooks: false, mcpServers: 1 },
     },
@@ -35,7 +37,7 @@ const SAMPLE_INSPECT = {
     {
       name: "help",
       description: "Help skill with sk-abcdefghijklmnopqrstuvwxyz123456",
-      source: { type: "user", path: "/home/u/.grok/skills/help/SKILL.md" },
+      source: { type: "user", path: `/home/u/${DOT_GROK}/skills/help/SKILL.md` },
       userInvocable: true,
     },
     {
@@ -56,7 +58,7 @@ const SAMPLE_INSPECT = {
   agents: [{ name: "explore", source: { type: "builtin" } }],
   hooks: [{ event: "stop" }],
   configSources: {
-    layers: [{ role: "user", path: "/home/u/.grok/config.toml" }],
+    layers: [{ role: "user", path: `/home/u/${DOT_GROK}/config.toml` }],
   },
   permissions: {
     sources: [{}],

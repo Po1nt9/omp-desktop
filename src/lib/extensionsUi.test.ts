@@ -63,7 +63,7 @@ describe("enable-set merge / filter", () => {
 
 describe("isCliMissingError", () => {
   it("detects host CLI missing message", () => {
-    expect(isCliMissingError("Grok Build CLI not found")).toBe(true);
+    expect(isCliMissingError("OMP Runtime not found")).toBe(true);
     expect(isCliMissingError("CLI not found")).toBe(true);
   });
 
@@ -144,7 +144,7 @@ describe("shortPathLabel", () => {
 
   it("truncates long paths keeping basename tail", () => {
     const long =
-      "/Users/someone/Library/Application Support/com.grokapp.grok-app/agent-home/skills/my-skill/SKILL.md";
+      "/Users/someone/Library/Application Support/com.omp-desktop.omp-desktop/agent-home/skills/my-skill/SKILL.md";
     const label = shortPathLabel(long, 40);
     expect(label.startsWith("…")).toBe(true);
     expect(label.length).toBeLessThanOrEqual(40);
@@ -165,11 +165,11 @@ describe("mergeInspectErrors", () => {
 
   it("prefers CLI missing message", () => {
     expect(
-      mergeInspectErrors("Grok Build CLI not found", "timeout"),
-    ).toBe("Grok Build CLI not found");
+      mergeInspectErrors("OMP Runtime not found", "timeout"),
+    ).toBe("OMP Runtime not found");
     expect(
-      mergeInspectErrors("timeout", "Grok Build CLI not found"),
-    ).toBe("Grok Build CLI not found");
+      mergeInspectErrors("timeout", "OMP Runtime not found"),
+    ).toBe("OMP Runtime not found");
   });
 
   it("dedupes identical messages", () => {
@@ -183,8 +183,8 @@ describe("mergeInspectErrors", () => {
   it("includes plugins error and prefers CLI missing across three", () => {
     expect(mergeInspectErrors("a", "b", "c")).toBe("a · b · c");
     expect(
-      mergeInspectErrors("timeout", null, "Grok Build CLI not found"),
-    ).toBe("Grok Build CLI not found");
+      mergeInspectErrors("timeout", null, "OMP Runtime not found"),
+    ).toBe("OMP Runtime not found");
   });
 });
 
@@ -202,7 +202,7 @@ describe("plugin helpers", () => {
     expect(pluginStatusTone("installed", true)).toBe("enabled");
   });
 
-  it("builds plugin meta, provides, and row key like Grok Build", () => {
+  it("builds plugin meta, provides, and row key like OMP Runtime", () => {
     expect(
       pluginMetaLine({
         name: "demo",
@@ -238,7 +238,7 @@ describe("plugin helpers", () => {
     expect(pluginRowKey({ name: "solo" })).toBe("solo");
   });
 
-  it("filters by load state (Grok Build f key)", () => {
+  it("filters by load state (OMP Runtime f key)", () => {
     const rows = [
       { name: "a", enabled: true },
       { name: "b", enabled: false },
