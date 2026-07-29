@@ -1,4 +1,4 @@
-//! Message engine: ACL, slash commands, Grok turns, project/session bind.
+//! Message engine: ACL, slash commands, Agent turns (fail-closed), project/session bind.
 
 use super::app_sessions;
 use super::control_plane::{
@@ -6,7 +6,6 @@ use super::control_plane::{
     format_project_menu, format_session_menu, list_sessions_for_project, parse_card_action,
     resolve_turn_intent, AppSessionEntry, CardAction, PendingMode, ScopeBinding, TurnIntent,
 };
-use super::grok_agent;
 use super::outbound::{self, OutboundRouter};
 use super::projects::{self, load_trusted_projects};
 use super::session::SessionStore;
@@ -14,7 +13,6 @@ use super::slash::{self, BuiltinCommand};
 use super::types::{ChannelInstance, IncomingMessage};
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -28,6 +26,14 @@ struct PendingPick {
 enum PickKind {
     Project,
     Session,
+}
+
+/// Result of a remote Agent turn in the fail-closed shell. Until an OMP
+/// Runtime is connected, every turn surfaces `runtime_unavailable`.
+pub(crate) struct AgentTurnResult {
+    pub text: String,
+    pub session_id: Option<String>,
+    pub error: Option<String>,
 }
 
 pub struct Engine {
@@ -423,15 +429,13 @@ impl Engine {
             }
             BuiltinCommand::Status => {
                 let s = self.store.get_or_create(scope, default_wd);
-                let binary = grok_agent::resolve_grok_binary();
                 let text = format!(
-                    "**Status**\n- project: `{}`\n- work_dir: `{}`\n- agent_session: `{}`\n- mode: {:?}\n- turns: {}\n- grok: `{}`\n- channel: `{}`",
+                    "**Status**\n- project: `{}`\n- work_dir: `{}`\n- agent_session: `{}`\n- mode: {:?}\n- turns: {}\n- runtime: `unavailable`\n- channel: `{}`",
                     s.project_id.as_deref().unwrap_or("-"),
                     s.work_dir,
                     s.agent_session_id.as_deref().unwrap_or("-"),
                     s.pending_mode,
                     s.turn_count,
-                    binary.display(),
                     msg.channel
                 );
                 let _ = self.reply_msg(msg, &text).await;
@@ -652,13 +656,13 @@ impl Engine {
         }
     }
 
-    async fn run_agent_turn(
+    pub(crate) async fn run_agent_turn(
         &self,
         msg: &IncomingMessage,
         scope: &str,
         default_wd: &str,
         prompt: &str,
-    ) {
+    ) -> AgentTurnResult {
         let binding = self.store.get_or_create(scope, default_wd);
         if binding.project_id.is_none() && binding.work_dir.is_empty() {
             let t = if self.lang == "en" {
@@ -667,7 +671,11 @@ impl Engine {
                 "尚未绑定项目。请先发送 /p。"
             };
             let _ = self.reply_msg(msg, t).await;
-            return;
+            return AgentTurnResult {
+                text: String::new(),
+                session_id: None,
+                error: Some(t.into()),
+            };
         }
 
         self.aborts.lock().insert(scope.to_string(), false);
@@ -680,7 +688,7 @@ impl Engine {
         let _ = self.reply_msg(msg, thinking).await;
 
         let intent = resolve_turn_intent(&binding);
-        let (wd, resume_id) = match &intent {
+        let (_wd, resume_id) = match &intent {
             TurnIntent::NewSession { work_dir } => (work_dir.clone(), None),
             TurnIntent::ResumeSession {
                 work_dir,
@@ -688,14 +696,16 @@ impl Engine {
             } => (work_dir.clone(), Some(agent_session_id.clone())),
         };
 
-        let result = grok_agent::run_turn(
-            &PathBuf::from(&wd),
-            prompt,
-            resume_id.as_deref(),
-            self.allow_remote_yolo,
-            None,
-        )
-        .await;
+        // Plan 1 fail-closed: OMP Runtime is not connected in this build.
+        // Every remote Agent turn surfaces `runtime_unavailable` — never
+        // spawns a process or silently succeeds.
+        let result = AgentTurnResult {
+            text: String::new(),
+            session_id: None,
+            error: Some(
+                "runtime_unavailable: OMP Runtime is not connected in this build.".into(),
+            ),
+        };
 
         let mut next = binding_after_agent_turn(
             &binding,
@@ -712,11 +722,11 @@ impl Engine {
         }
 
         let had_error = result.error.is_some();
-        let text = if let Some(err) = result.error {
+        let text = if let Some(err) = result.error.as_ref() {
             if result.text.is_empty() {
                 format!("Error: {err}")
             } else {
-                result.text
+                result.text.clone()
             }
         } else if result.text.is_empty() {
             if self.lang == "en" {
@@ -725,7 +735,7 @@ impl Engine {
                 "（空回复）".into()
             }
         } else {
-            result.text
+            result.text.clone()
         };
 
         let is_error = had_error || text.starts_with("Error:");
@@ -742,6 +752,8 @@ impl Engine {
         for chunk in chunk_text(&text, 3500) {
             let _ = self.reply_msg(msg, &chunk).await;
         }
+
+        result
     }
 
     async fn reply_msg(&self, msg: &IncomingMessage, text: &str) -> Result<(), String> {
@@ -887,5 +899,37 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(3), engine.handle(msg))
             .await
             .expect("handle(/p) deadlocked on pending mutex re-entry");
+    }
+
+    /// Plan 1 fail-closed: every remote Agent turn must surface
+    /// `runtime_unavailable` — never spawn a process or silently succeed.
+    #[tokio::test]
+    async fn remote_agent_turn_fails_closed_without_runtime() {
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let msg = IncomingMessage {
+            channel: "weixin".into(),
+            instance_id: "test-fail-closed".into(),
+            message_id: "m1".into(),
+            chat_id: "peer@im.wechat".into(),
+            chat_type: "p2p".into(),
+            sender_id: "peer@im.wechat".into(),
+            content: "inspect this repository".into(),
+            mentioned_bot: true,
+        };
+        // Non-empty work_dir so run_agent_turn does not early-return for
+        // "no project bound".
+        let result = engine
+            .run_agent_turn(&msg, "test-scope", "/tmp/omp-test", "hi")
+            .await;
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap_or("")
+                .contains("runtime_unavailable"),
+            "remote agent turn must surface runtime_unavailable, got: {:?}",
+            result.error
+        );
     }
 }
