@@ -57,6 +57,7 @@ mod voice_stt;
 mod voice_tools;
 mod remote_im;
 mod runtime_availability;
+mod supervisor;
 
 use std::sync::Arc;
 
