@@ -32,7 +32,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ## Plan 5: Todo, Subagent, Branch, Rewind, Attachments, Diagnostics
 
-**Status:** Not started
+**Status:** ✅ Complete
 **Depends on:** Plan 4 (for MCP/diagnostics wiring)
 **Spec:** Master design §3 item 5
 
@@ -206,8 +206,8 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 | 1. Repository & Brand Baseline | ✅ Complete | - | - |
 | 2. Extension Protocol | ✅ Complete | - | - |
 | 3. Supervisor, Core ACP, Event Journal | ✅ Complete | - | - |
-| 4. Config, Provider, MCP, Skills, Credentials | 📋 Not started | Medium-High | None |
-| 5. Todo, Subagent, Branch, Rewind, Attachments | 📋 Not started | Medium | None |
+| 4. Config, Provider, MCP, Skills, Credentials | ✅ Complete | Medium-High | None |
+| 5. Todo, Subagent, Branch, Rewind, Attachments | ✅ Complete | Medium | None |
 | 6. i18n | 📋 Not started | Medium | None |
 | 7. Remote Hub | 📋 Not started | High | Server infra |
 | 8. Channels | 📋 Not started | Very High | Platform APIs |
