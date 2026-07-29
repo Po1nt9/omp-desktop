@@ -8,6 +8,13 @@
       "description": "OMP Desktop v1 Extension Protocol: versioned _omp/desktop/v1/* namespace, schema bundle, dispatcher, handlers, legacy compat",
       "plan": "2026-07-29-omp-desktop-extension-protocol",
       "commit": "1333fd28c4f283c9960f0a8030ac1fcad13f3802"
+    },
+    {
+      "id": "plan-3-v1-handler-wiring",
+      "branch": "desktop-v1-protocol",
+      "description": "Plan 3: wire v1 handlers to real OMP resources with normalizers",
+      "plan": "2026-07-29-plan-3-supervisor-core-acp",
+      "commit": "238d64a2432f8f4b5acc3c0c4636e617106c6363"
     }
   ]
 }
