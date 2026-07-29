@@ -27,7 +27,9 @@ export const wholeFileAllowlist = new Set([
   "THIRD_PARTY_NOTICES",
   "CHANGELOG.md",
   "docs/superpowers/plans/2026-07-28-repository-brand-baseline.md",
+  "docs/superpowers/plans/2026-07-29-omp-desktop-extension-protocol.md",
   "docs/superpowers/specs/2026-07-28-omp-desktop-design.md",
+  "docs/superpowers/verification/2026-07-28-plan-1-baseline.md",
 ]);
 
 export const directoryExclusions = [
