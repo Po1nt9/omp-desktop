@@ -15,7 +15,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  GROK_BUILD_MODELS,
+  availableModels,
   PERMISSION_POLICIES,
   SESSION_MODES,
   effortDisplayLabel,
@@ -23,7 +23,7 @@ import {
   findModel,
   type ModelOption,
   type PermissionPolicyId,
-} from "@/lib/grokCatalog";
+} from "@/lib/modelOptions";
 import { Tip } from "@/components/ui/tooltip";
 import {
   IconAlertTriangle,
@@ -184,7 +184,7 @@ export interface ComposerModelMenuProps {
   modelId: string;
   effort: string;
   /** Live selectable models only (from Host catalog). */
-  models?: ModelOption[];
+  models?: readonly ModelOption[];
   labels: {
     model: string;
     effort: string;
@@ -212,14 +212,14 @@ function resolveEffortLabel(
 export function ComposerModelMenu({
   modelId,
   effort,
-  models = GROK_BUILD_MODELS,
+  models = availableModels,
   labels,
   onModel,
   onEffort,
 }: ComposerModelMenuProps) {
   const [nested, setNested] = useState<Nested>(null);
   const menu = usePortalMenu(240, 280, nested ?? "root");
-  const modelList = models.length > 0 ? models : GROK_BUILD_MODELS;
+  const modelList = models.length > 0 ? models : availableModels;
   const activeModel = findModel(modelId, modelList);
   const effortList = effortsForModel(activeModel);
 

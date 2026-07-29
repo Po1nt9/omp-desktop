@@ -633,14 +633,6 @@ export const SETTINGS_ENTRIES: readonly SettingsEntry[] = [
     descKeys: ["inspect.desc"],
     keywords: ["inspect", "project inspect"],
   },
-  {
-    id: "runtime.managedSetup",
-    section: "runtime",
-    tab: "tools",
-    anchorId: "settings-anchor-managedSetup",
-    labelKey: "managedSetup.title",
-    keywords: ["managed setup", "grok setup"],
-  },
   // ── remote_im (Remote control) ──
   {
     id: "remote_im.root",

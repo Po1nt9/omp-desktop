@@ -26,7 +26,7 @@ import {
   type CliDoctorView,
   type DoctorFixHandle,
 } from "@/lib/cliDoctor";
-import { CliUpdateRow } from "@/components/CliUpdateRow";
+// CliUpdateRow removed in Task 9 — dead Grok CLI update surface.
 import { redact } from "@/lib/redact";
 
 export type DoctorModalProps = {
@@ -699,13 +699,7 @@ export function DoctorModal({
                 <div className="doctor-advanced__label">{t("doctor.cliUpdate")}</div>
                 <p className="doctor-advanced__hint">{t("doctor.cliUpdateHint")}</p>
               </div>
-              <CliUpdateRow
-                t={t}
-                cliFound={
-                  report?.checks?.find((c) => c.id === "cli")?.level !== "fail"
-                }
-                compact
-              />
+              {/* CliUpdateRow removed in Task 9 — dead Grok CLI update surface. */}
             </div>
             <div className="doctor-advanced__row">
               <div className="doctor-advanced__text">
