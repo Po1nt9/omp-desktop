@@ -52,7 +52,10 @@ pub struct ProvidersListResult {
 pub const OFFICIAL_DEFAULT_MODEL: &str = "grok";
 
 /// Catalog model preferred for composer / official spawn when none is set.
-pub const OFFICIAL_CATALOG_MODEL: &str = "grok-4.5";
+///
+/// Plan 1 neutral catalog: empty string — no hardcoded Grok model fallback.
+/// The catalog is empty until a runtime integration supplies live models.
+pub const OFFICIAL_CATALOG_MODEL: &str = "";
 
 /// Which inference channel the agent should use.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -418,7 +421,7 @@ pub fn maybe_migrate_legacy_relay(
     let model = default_model
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .unwrap_or("grok-4.5");
+        .unwrap_or("");
     let _ = upsert_custom_provider(UpsertProviderInput {
         id: "relay".into(),
         model: model.into(),
@@ -579,7 +582,7 @@ pub fn is_custom_provider_id(id: &str) -> bool {
 /// - Custom route: must pass the **provider section id** (e.g. `yunyi`) and
 ///   **must not** have OIDC `auth.json` in GROK_HOME (else Auth:Oidc hits the
 ///   relay base_url → 401).
-/// - Official route: pass a catalog id (`grok-4.5`); needs `auth.json`.
+/// - Official route: pass a catalog id; needs `auth.json`.
 pub fn agent_spawn_model_id(composer_model: &str) -> String {
     match active_route() {
         ActiveRoute::Custom { id } => id,

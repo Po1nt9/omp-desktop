@@ -57,7 +57,7 @@ pub struct ComposerPrefs {
 impl Default for ComposerPrefs {
     fn default() -> Self {
         Self {
-            model_id: "grok-4.5".into(),
+            model_id: String::new(),
             // Balanced default: faster than high, deeper than low.
             effort: "medium".into(),
             mode: "agent".into(),
@@ -1337,7 +1337,7 @@ fn global_prefs(settings: &AppSettings) -> (String, String, String, String) {
             .model_id
             .clone()
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| "grok-4.5".into()),
+            .unwrap_or_default(),
         settings
             .effort
             .clone()

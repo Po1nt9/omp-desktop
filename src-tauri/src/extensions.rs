@@ -8,7 +8,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -20,7 +19,6 @@ use crate::paths::{
 };
 use crate::store;
 
-const MCP_LIST_TIMEOUT_SECS: u64 = 8;
 const MCP_CACHE_TTL: Duration = Duration::from_secs(30);
 
 /// App-side enable prefs for MCP servers and skills.
@@ -515,39 +513,11 @@ pub fn invalidate_mcp_cache() {
     }
 }
 
-fn fetch_mcp_list_json(project_cwd: Option<&str>) -> Option<Vec<McpServerDef>> {
-    let settings = store::load_settings();
-    let probe = crate::cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let cli_path = probe.path.filter(|_| probe.found)?;
-
-    let cwd = project_cwd
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from);
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = Command::new(&cli_path);
-        cmd.arg("mcp").arg("list").arg("--json");
-        if let Some(dir) = cwd {
-            cmd.current_dir(dir);
-        }
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let _ = tx.send(cmd.output());
-    });
-
-    let output = rx
-        .recv_timeout(Duration::from_secs(MCP_LIST_TIMEOUT_SECS))
-        .ok()?
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_mcp_list_json(stdout.trim())
+fn fetch_mcp_list_json(_project_cwd: Option<&str>) -> Option<Vec<McpServerDef>> {
+    // Plan 1 fail-closed: `grok mcp list --json` requires the agent runtime,
+    // which is unavailable. Returns `None` so callers fall back to config-only
+    // discovery. No CLI probe or process spawn remains.
+    None
 }
 
 /// Parse `grok mcp list --json` payload into server defs.
@@ -641,94 +611,11 @@ fn parse_string_map(v: Option<&Value>) -> Option<HashMap<String, String>> {
     }
 }
 
-fn fetch_mcp_from_inspect(project_cwd: Option<&str>) -> Vec<McpServerDef> {
-    // Reuse inspect path via CLI without pulling private helpers — light spawn.
-    let settings = store::load_settings();
-    let probe = crate::cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Vec::new();
-    };
-    let cwd = project_cwd
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from);
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = Command::new(&cli_path);
-        cmd.arg("inspect").arg("--json");
-        if let Some(dir) = cwd {
-            cmd.current_dir(dir);
-        }
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let _ = tx.send(cmd.output());
-    });
-    let Ok(Ok(output)) = rx.recv_timeout(Duration::from_secs(MCP_LIST_TIMEOUT_SECS)) else {
-        return Vec::new();
-    };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let Ok(v) = serde_json::from_str::<Value>(stdout.trim()) else {
-        return Vec::new();
-    };
-    let Some(arr) = v
-        .get("mcpServers")
-        .or_else(|| v.get("mcp"))
-        .and_then(|x| x.as_array())
-    else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for item in arr {
-        let name = item
-            .get("name")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if name.is_empty() {
-            continue;
-        }
-        let transport = item
-            .get("transport")
-            .and_then(|x| x.as_str())
-            .map(|s| s.to_ascii_lowercase());
-        let target = item
-            .get("target")
-            .and_then(|x| x.as_str())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
-        let mut command = None;
-        let mut url = None;
-        match transport.as_deref() {
-            Some("http") | Some("sse") => url = target.clone(),
-            _ => {
-                if let Some(ref t) = target {
-                    if t.starts_with("http://") || t.starts_with("https://") {
-                        url = Some(t.clone());
-                    } else {
-                        command = Some(t.clone());
-                    }
-                }
-            }
-        }
-        out.push(McpServerDef {
-            name,
-            command,
-            args: None,
-            env: None,
-            url,
-            headers: None,
-            transport,
-            enabled: None,
-            scope: None,
-        });
-    }
-    out
+fn fetch_mcp_from_inspect(_project_cwd: Option<&str>) -> Vec<McpServerDef> {
+    // Plan 1 fail-closed: `grok inspect --json` requires the agent runtime,
+    // which is unavailable. Returns an empty list. No CLI probe or process
+    // spawn remains.
+    Vec::new()
 }
 
 /// Build ACP mcpServers for the current prefs + discovered defs.

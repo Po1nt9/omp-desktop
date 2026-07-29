@@ -1,4 +1,4 @@
-//! App data roots: independent default `~/.grok-app` (Win: %APPDATA%/grok-app).
+//! App data roots: independent default app data dir (Win: %APPDATA%/grok-app).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -60,7 +60,7 @@ pub fn attachments_paste_dir() -> PathBuf {
     dir
 }
 
-/// GROK_HOME for independent mode: App-owned agent profile (providers, config).
+/// Agent profile root (config.toml / optional auth) — App-owned.
 pub fn agent_home_dir() -> PathBuf {
     app_data_root().join("agent-home")
 }
@@ -69,11 +69,10 @@ pub fn agent_config_toml() -> PathBuf {
     agent_home_dir().join("config.toml")
 }
 
-/// Resolve GROK_HOME for a spawned agent process.
-pub fn resolve_agent_grok_home(session_data_mode: &str) -> PathBuf {
-    if session_data_mode == "shared" {
-        return crate::process_util::user_home().join(".grok");
-    }
+/// Resolve the agent profile home for a spawned process.
+/// Runtime-owned session data mode is no longer coupled to a foreign CLI home;
+/// always returns the App-owned agent-home directory.
+pub fn resolve_agent_grok_home(_session_data_mode: &str) -> PathBuf {
     let _ = ensure_app_dirs();
     agent_home_dir()
 }
@@ -110,8 +109,8 @@ pub fn extensions_file() -> PathBuf {
     app_data_root().join("extensions.json")
 }
 
-/// Percent-encode a path the way Grok Build names session folders under
-/// `GROK_HOME/sessions/` (encodeURIComponent of the absolute cwd).
+/// Percent-encode a path the way session folders are named under
+/// the agent home `sessions/` tree (encodeURIComponent of the absolute cwd).
 pub fn percent_encode_path_component(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for &b in s.as_bytes() {
@@ -130,18 +129,18 @@ pub fn percent_encode_path_component(s: &str) -> String {
 }
 
 /// Locate the on-disk agent session directory for a given agent session id.
-/// Layout: `{GROK_HOME}/sessions/{percent-encoded-cwd}/{agent_session_id}/`
+/// Layout: `{agent_home}/sessions/{percent-encoded-cwd}/{agent_session_id}/`
 ///
 /// `cwd_hint` (project path) avoids a directory scan when known.
 pub fn find_agent_session_dir(
     agent_session_id: &str,
     cwd_hint: Option<&str>,
-    session_data_mode: &str,
+    _session_data_mode: &str,
 ) -> Option<PathBuf> {
     if agent_session_id.is_empty() {
         return None;
     }
-    let home = resolve_agent_grok_home(session_data_mode);
+    let home = resolve_agent_grok_home(_session_data_mode);
     let sessions = home.join("sessions");
     if !sessions.is_dir() {
         return None;

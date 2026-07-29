@@ -5,7 +5,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::cli_probe;
 use crate::session_manager::{SessionManager, SessionSnapshot};
 use crate::store::{self, AppSettings, Project, SessionMeta};
 
@@ -1191,15 +1190,10 @@ fn doctor_check(
 #[tauri::command]
 pub async fn doctor_report() -> Result<serde_json::Value, String> {
     let settings = store::load_settings();
-    let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
+    // Plan 1 fail-closed: no CLI probe runs. The agent runtime is unavailable.
     let projects = store::load_projects();
     let sessions = store::load_sessions_index();
     let secrets = store::load_secrets();
-    let auth_path_buf = crate::process_util::user_home()
-        .join(".grok")
-        .join("auth.json");
-    let auth_ok = auth_path_buf.is_file();
-    let auth_path = auth_path_buf.display().to_string();
     let data_root_path = crate::paths::app_data_root();
     let data_root = data_root_path.display().to_string();
     let log_dir_path = data_root_path.join("logs");
@@ -1221,14 +1215,12 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     // Flat snapshot for clipboard / legacy consumers (no secret values).
     let raw = serde_json::json!({
         "cli": {
-            "found": probe.found,
-            "path": probe.path,
-            "version": probe.version,
-            "source": probe.source,
+            "found": false,
+            "path": null,
+            "version": null,
+            "source": "runtime_unavailable",
         },
         "auth": {
-            "cliAuthJson": auth_ok,
-            "authPath": auth_path,
             "hasOfficialKey": has_official_key,
             "hasRelay": has_relay,
             "secretsBackend": secrets_backend,
@@ -1253,42 +1245,22 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
 
     let mut checks: Vec<DoctorCheck> = Vec::with_capacity(5);
 
-    // 1) CLI
-    if probe.found {
-        let ver = probe.version.as_deref().unwrap_or("unknown");
-        let path = probe.path.as_deref().unwrap_or("—");
-        checks.push(doctor_check(
-            "cli",
-            "ok",
-            "Grok Build CLI",
-            format!("Found {ver} ({}) at {path}", probe.source),
-            serde_json::json!({
-                "found": true,
-                "path": probe.path,
-                "version": probe.version,
-                "source": probe.source,
-            }),
-        ));
-    } else {
-        checks.push(doctor_check(
-            "cli",
-            "fail",
-            "Grok Build CLI",
-            "Grok Build CLI not found. Install from Settings → Runtime or the setup wizard."
-                .into(),
-            serde_json::json!({
-                "found": false,
-                "path": probe.path,
-                "version": probe.version,
-                "source": probe.source,
-                "candidatesTried": probe.candidates_tried,
-            }),
-        ));
-    }
+    // 1) CLI — Plan 1 fail-closed: runtime unavailable.
+    checks.push(doctor_check(
+        "cli",
+        "fail",
+        "Grok Build CLI",
+        "Agent runtime is unavailable in this build.".into(),
+        serde_json::json!({
+            "found": false,
+            "path": null,
+            "version": null,
+            "source": "runtime_unavailable",
+        }),
+    ));
 
-    // 2) Auth — warn if no CLI auth, official key, or relay
+    // 2) Auth — warn if no official key or relay
     let auth_sources: Vec<&str> = [
-        auth_ok.then_some("cliAuthJson"),
         has_official_key.then_some("officialKey"),
         has_relay.then_some("relay"),
     ]
@@ -1300,12 +1272,8 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
             "auth",
             "warn",
             "Authentication",
-            format!(
-                "No CLI auth (~/.grok/auth.json), official API key, or relay configured. Path: {auth_path}"
-            ),
+            "No official API key or relay configured.".into(),
             serde_json::json!({
-                "cliAuthJson": auth_ok,
-                "authPath": auth_path,
                 "hasOfficialKey": has_official_key,
                 "hasRelay": has_relay,
             }),
@@ -1317,8 +1285,6 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
             "Authentication",
             format!("Auth available via: {}", auth_sources.join(", ")),
             serde_json::json!({
-                "cliAuthJson": auth_ok,
-                "authPath": auth_path,
                 "hasOfficialKey": has_official_key,
                 "hasRelay": has_relay,
             }),
@@ -1437,122 +1403,33 @@ const CLI_DOCTOR_TIMEOUT_SECS: u64 = 15;
 
 /// Run probed CLI `doctor --json`. Returns a stable envelope for the UI parser.
 /// Never includes secret values — only CLI doctor facts/findings/probeNotes.
+///
+/// Plan 1 fail-closed: the agent runtime is unavailable, so `grok doctor`
+/// cannot run. Returns a stable `runtime_unavailable` envelope. No
+/// `cli_probe` dependency remains.
 fn run_cli_doctor_json() -> serde_json::Value {
-    match run_grok_cli_args(&["doctor", "--json"], CLI_DOCTOR_TIMEOUT_SECS) {
-        Ok((stdout, stderr, status_ok)) => {
-            let trimmed = stdout.trim();
-            if trimmed.is_empty() {
-                // An old CLI rejects `--json` with a raw clap error like
-                // `error: unexpected argument '--'`. Surfacing that verbatim tells
-                // the user nothing actionable, so map it to the real cause (NEW-03).
-                if looks_like_unsupported_flag(&stderr) {
-                    return serde_json::json!({
-                        "available": false,
-                        "error": format!(
-                            "grok CLI does not support `doctor --json`; version {} or newer is required",
-                            crate::cli_probe::min_cli_version_str()
-                        ),
-                        "reason": "cli_too_old",
-                        "minVersion": crate::cli_probe::min_cli_version_str(),
-                        "report": serde_json::Value::Null,
-                        "exitOk": status_ok,
-                    });
-                }
-                let detail = if stderr.trim().is_empty() {
-                    "grok doctor returned no output".to_string()
-                } else {
-                    format!("grok doctor returned no JSON: {}", truncate_cli_err(&stderr, 240))
-                };
-                return serde_json::json!({
-                    "available": false,
-                    "error": detail,
-                    "report": serde_json::Value::Null,
-                    "exitOk": status_ok,
-                });
-            }
-            match serde_json::from_str::<serde_json::Value>(trimmed) {
-                Ok(report) => serde_json::json!({
-                    "available": true,
-                    "error": serde_json::Value::Null,
-                    "report": report,
-                    "exitOk": status_ok,
-                }),
-                Err(e) => serde_json::json!({
-                    "available": false,
-                    "error": format!("Failed to parse grok doctor JSON: {e}"),
-                    "report": serde_json::Value::Null,
-                    "exitOk": status_ok,
-                    "stdoutPreview": truncate_cli_err(trimmed, 200),
-                }),
-            }
-        }
-        Err(e) => serde_json::json!({
-            "available": false,
-            "error": e,
-            "report": serde_json::Value::Null,
-        }),
-    }
+    serde_json::json!({
+        "available": false,
+        "error": "runtime_unavailable: Grok Build CLI is unavailable in this build",
+        "reason": "runtime_unavailable",
+        "report": serde_json::Value::Null,
+        "exitOk": false,
+    })
 }
 
-/// Grok endpoints probed by the network self-check (NEW-02 / NEW-07).
-const NET_PROBE_TARGETS: &[(&str, &str)] = &[
-    ("auth", "https://auth.x.ai/.well-known/openid-configuration"),
-    ("chat", "https://cli-chat-proxy.grok.com/"),
-    ("api", "https://api.x.ai/"),
-];
-
-/// Per-endpoint reachability probe through the effective proxy. Any HTTP
-/// response (including 401/404) counts as reachable — we test the network
-/// path, not authentication. Short curl-style probes can pass while streaming
-/// fails, so this is a hint, not a guarantee.
+/// Per-endpoint reachability probe through the effective proxy.
+///
+/// Plan 1 fail-closed: the agent runtime is unavailable, so direct xAI
+/// endpoint probes are removed. Returns a stable `runtime_unavailable`
+/// envelope with an empty target list. No direct xAI network code remains.
 #[tauri::command]
 pub async fn network_probe() -> Result<serde_json::Value, String> {
-    let client = crate::proxy::apply_to_reqwest(reqwest::Client::builder())
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .timeout(std::time::Duration::from_secs(8))
-        .user_agent("grok-app-net-probe")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let mut results = Vec::new();
-    for (key, url) in NET_PROBE_TARGETS {
-        let started = std::time::Instant::now();
-        let out = client.get(*url).send().await;
-        let ms = started.elapsed().as_millis() as u64;
-        match out {
-            Ok(resp) => results.push(serde_json::json!({
-                "key": key,
-                "url": url,
-                "ok": true,
-                "status": resp.status().as_u16(),
-                "millis": ms,
-            })),
-            Err(e) => results.push(serde_json::json!({
-                "key": key,
-                "url": url,
-                "ok": false,
-                // reqwest errors don't leak proxy credentials in Display.
-                "error": e.to_string(),
-                "millis": ms,
-            })),
-        }
-    }
-    let all_ok = results
-        .iter()
-        .all(|r| r.get("ok").and_then(|v| v.as_bool()).unwrap_or(false));
-    Ok(serde_json::json!({ "allOk": all_ok, "targets": results }))
-}
-
-/// Heuristic: stderr shapes an old CLI emits when it rejects a flag the app
-/// depends on (clap's `unexpected argument` / `unrecognized option` family).
-/// Used to translate raw CLI noise into a "CLI too old" diagnosis (NEW-03).
-fn looks_like_unsupported_flag(stderr: &str) -> bool {
-    let s = stderr.to_ascii_lowercase();
-    s.contains("unexpected argument")
-        || s.contains("unrecognized option")
-        || s.contains("unknown flag")
-        || s.contains("unknown option")
-        || s.contains("invalid option")
+    Ok(serde_json::json!({
+        "allOk": false,
+        "targets": [],
+        "source": "runtime_unavailable",
+        "error": "Network probe is unavailable in this build.",
+    }))
 }
 
 fn truncate_cli_err(s: &str, max: usize) -> String {
@@ -1656,129 +1533,13 @@ pub async fn session_trace_export(
 const TRACE_EXPORT_TIMEOUT_SECS: u64 = 90;
 
 fn session_trace_export_blocking(
-    session_id: &str,
-    live_agent_session_id: Option<&str>,
+    _session_id: &str,
+    _live_agent_session_id: Option<&str>,
 ) -> Result<serde_json::Value, String> {
-    let meta = store::load_sessions_index()
-        .into_iter()
-        .find(|s| s.id == session_id)
-        .ok_or_else(|| format!("session not found: {session_id}"))?;
-
-    let agent_sid = live_agent_session_id
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .or_else(|| {
-            meta.agent_session_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-        })
-        .ok_or_else(|| {
-            "No agent session linked. Start a conversation first so the App has an agent session id."
-                .to_string()
-        })?;
-
-    let settings = store::load_settings();
-    let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
-    };
-    let grok_home = crate::paths::resolve_agent_grok_home(&settings.session_data_mode);
-
-    let short: String = agent_sid.chars().take(8).collect();
-    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    let tmp = std::env::temp_dir().join(format!("grok-trace-{short}-{stamp}.tar.gz"));
-    let tmp_s = tmp.to_string_lossy().to_string();
-
-    let args = vec![
-        "trace".to_string(),
-        agent_sid.clone(),
-        "--local".to_string(),
-        "-o".to_string(),
-        tmp_s.clone(),
-        "--json".to_string(),
-    ];
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = std::process::Command::new(&cli_path);
-        cmd.args(&args);
-        cmd.env("GROK_HOME", &grok_home);
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let _ = tx.send(cmd.output());
-    });
-
-    let output = match rx.recv_timeout(std::time::Duration::from_secs(TRACE_EXPORT_TIMEOUT_SECS)) {
-        Ok(Ok(o)) => o,
-        Ok(Err(e)) => {
-            return Err(store::redact_text(&format!("Failed to run grok trace: {e}")));
-        }
-        Err(_) => {
-            return Err(format!(
-                "grok trace timed out after {TRACE_EXPORT_TIMEOUT_SECS}s"
-            ));
-        }
-    };
-
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
-    if !output.status.success() {
-        let msg = if !stderr.is_empty() {
-            stderr
-        } else if !stdout.is_empty() {
-            stdout
-        } else {
-            "grok trace failed".into()
-        };
-        return Err(store::redact_text(&msg)
-            .trim()
-            .chars()
-            .take(1200)
-            .collect());
-    }
-
-    // Prefer the archive we asked for; fall back to JSON local_path from CLI.
-    let archive = if tmp.is_file() {
-        tmp
-    } else {
-        let from_json = serde_json::from_str::<serde_json::Value>(&stdout)
-            .ok()
-            .and_then(|v| {
-                v.get("local_path")
-                    .and_then(|p| p.as_str())
-                    .map(|s| std::path::PathBuf::from(s))
-            });
-        match from_json {
-            Some(p) if p.is_file() => p,
-            _ => {
-                let detail = if !stdout.is_empty() {
-                    store::redact_text(&stdout)
-                } else {
-                    "archive file not created".into()
-                };
-                return Err(format!(
-                    "grok trace succeeded but archive missing: {}",
-                    detail.trim().chars().take(400).collect::<String>()
-                ));
-            }
-        }
-    };
-
-    let suggested = format!("grok-trace-{short}.tar.gz");
-    // Already on a blocking thread (session_trace_export spawns us).
-    save_and_reveal_file_blocking(
-        archive,
-        "Save session trace",
-        &suggested,
-        "Trace archive",
-        &["tar.gz".into(), "gz".into(), "tgz".into()],
-    )
+    // Plan 1 fail-closed: the agent runtime is unavailable, so `grok trace`
+    // cannot run. Returns `runtime_unavailable`. No `cli_probe` dependency or
+    // GROK_HOME env coupling remains.
+    Err("runtime_unavailable: Grok Build CLI is unavailable in this build".into())
 }
 
 /// Save dialog + reveal. Always runs rfd/copy on a blocking thread so async
@@ -1904,56 +1665,15 @@ pub struct McpDto {
 
 /// Run probed CLI: `grok inspect --json` with optional project cwd.
 /// Returns (parsed JSON, error message). Never panics; empty on failure.
-fn run_grok_inspect(project_path: Option<&str>) -> (Option<serde_json::Value>, Option<String>) {
-    let settings = store::load_settings();
-    let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return (None, Some("Grok Build CLI not found".into()));
-    };
-
-    let cwd = project_path
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(std::path::PathBuf::from);
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = std::process::Command::new(&cli_path);
-        cmd.arg("inspect").arg("--json");
-        if let Some(dir) = cwd {
-            cmd.current_dir(dir);
-        }
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let result = cmd.output();
-        let _ = tx.send(result);
-    });
-
-    match rx.recv_timeout(std::time::Duration::from_secs(INSPECT_TIMEOUT_SECS)) {
-        Ok(Ok(output)) => {
-            if !output.status.success() {
-                let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                let msg = if err.is_empty() {
-                    format!("grok inspect exited with {}", output.status)
-                } else {
-                    // Truncate; never log secrets (inspect should not print keys)
-                    err.chars().take(400).collect()
-                };
-                return (None, Some(msg));
-            }
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            match serde_json::from_str::<serde_json::Value>(stdout.trim()) {
-                Ok(v) => (Some(v), None),
-                Err(e) => (None, Some(format!("Failed to parse grok inspect JSON: {e}"))),
-            }
-        }
-        Ok(Err(e)) => (None, Some(format!("Failed to run grok inspect: {e}"))),
-        Err(_) => (None, Some(format!(
-            "grok inspect timed out after {INSPECT_TIMEOUT_SECS}s"
-        ))),
-    }
+///
+/// Plan 1 fail-closed: the agent runtime is unavailable, so `grok inspect`
+/// cannot run. Returns `(None, Some("runtime_unavailable: …"))`. No
+/// `cli_probe` dependency remains.
+fn run_grok_inspect(_project_path: Option<&str>) -> (Option<serde_json::Value>, Option<String>) {
+    (
+        None,
+        Some("runtime_unavailable: Grok Build CLI is unavailable in this build".into()),
+    )
 }
 
 fn normalize_skill_source(source: &serde_json::Value) -> (String, Option<String>) {
@@ -2606,35 +2326,12 @@ pub struct PluginDto {
 }
 
 /// Run probed CLI with the given args. Returns (stdout, stderr, ok).
-fn run_grok_cli_args(args: &[&str], timeout_secs: u64) -> Result<(String, String, bool), String> {
-    let settings = store::load_settings();
-    let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
-    };
-
-    let args_owned: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = std::process::Command::new(&cli_path);
-        cmd.args(&args_owned);
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let result = cmd.output();
-        let _ = tx.send(result);
-    });
-
-    match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            Ok((stdout, stderr, output.status.success()))
-        }
-        Ok(Err(e)) => Err(format!("Failed to run grok: {e}")),
-        Err(_) => Err(format!("grok command timed out after {timeout_secs}s")),
-    }
+///
+/// Plan 1 fail-closed: the agent runtime is unavailable, so no CLI can be
+/// probed or spawned. Returns `runtime_unavailable` for every caller. No
+/// `cli_probe` dependency remains.
+fn run_grok_cli_args(_args: &[&str], _timeout_secs: u64) -> Result<(String, String, bool), String> {
+    Err("runtime_unavailable: Grok Build CLI is unavailable in this build".into())
 }
 
 /// Path to the user-level Grok config that tracks plugin enable/disable.
@@ -4922,29 +4619,6 @@ pub async fn session_import_transcript_file(
 
 // ── Custom providers (agent-home config.toml) ───────────────────────────────
 
-/// Scan CC Switch Grok Build providers (read-only SQLite).
-#[tauri::command]
-pub async fn providers_cc_switch_scan(
-) -> Result<crate::cc_switch_import::CcSwitchScanResult, String> {
-    Ok(tauri::async_runtime::spawn_blocking(
-        crate::cc_switch_import::scan_cc_switch_providers,
-    )
-    .await
-    .map_err(|e| e.to_string())?)
-}
-
-/// Import selected CC Switch Grok Build providers into App custom providers.
-#[tauri::command]
-pub async fn providers_cc_switch_import(
-    body: crate::cc_switch_import::CcSwitchImportRequest,
-) -> Result<crate::cc_switch_import::CcSwitchImportResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::cc_switch_import::import_cc_switch_providers(body)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
 #[tauri::command]
 pub async fn providers_list() -> Result<crate::providers::ProvidersListResult, String> {
     // One-time migration of legacy single relay secrets → multi-provider config.
@@ -6281,55 +5955,11 @@ pub fn refuse_remove_main_worktree(
 // from PR #68
 
 /// Invoke CLI doctor with GROK_HOME matching session_data_mode.
-fn run_mcp_doctor(name: Option<&str>) -> Result<crate::extensions::McpDoctorReport, String> {
-    let settings = store::load_settings();
-    let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Err("Grok Build CLI not found".into());
-    };
-    let grok_home = crate::paths::resolve_agent_grok_home(&settings.session_data_mode);
-
-    let mut args: Vec<String> = vec!["mcp".into(), "doctor".into(), "--json".into()];
-    if let Some(n) = name {
-        args.push(n.to_string());
-    }
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = std::process::Command::new(&cli_path);
-        cmd.args(&args);
-        cmd.env("GROK_HOME", &grok_home);
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let _ = tx.send(cmd.output());
-    });
-
-    match rx.recv_timeout(std::time::Duration::from_secs(MCP_DOCTOR_TIMEOUT_SECS)) {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            // Doctor may exit non-zero when servers are unhealthy — still parse JSON.
-            let blob = if !stdout.is_empty() {
-                stdout
-            } else {
-                stderr.clone()
-            };
-            if blob.is_empty() {
-                return Err(if !stderr.is_empty() {
-                    stderr.chars().take(400).collect()
-                } else {
-                    "mcp doctor returned no output".into()
-                });
-            }
-            Ok(crate::extensions::parse_mcp_doctor_json(&blob))
-        }
-        Ok(Err(e)) => Err(format!("Failed to run grok mcp doctor: {e}")),
-        Err(_) => Err(format!(
-            "grok mcp doctor timed out after {MCP_DOCTOR_TIMEOUT_SECS}s"
-        )),
-    }
+///
+/// Plan 1 fail-closed: the agent runtime is unavailable, so `grok mcp doctor`
+/// cannot run. Returns `runtime_unavailable`. No `cli_probe` dependency remains.
+fn run_mcp_doctor(_name: Option<&str>) -> Result<crate::extensions::McpDoctorReport, String> {
+    Err("runtime_unavailable: Grok Build CLI is unavailable in this build".into())
 }
 
 // from PR #83

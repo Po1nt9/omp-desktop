@@ -31,7 +31,6 @@ use crate::acp_client::{
     runtime_unavailable_error, should_abort_provider_retry, AcpClient, AcpEvent, PermissionOutcome,
     StreamKind, HOST_PROVIDER_MAX_RETRIES,
 };
-use crate::cli_probe;
 use crate::error::{AgentError, AgentErrorCode};
 use crate::journal_throttle::{is_paragraph_break, JournalWriteThrottle};
 use crate::stream_emit::{
@@ -2627,24 +2626,9 @@ impl SessionManager {
             return Ok(snap);
         }
 
-        // Real ACP cold spawn (one process per App session — no cross-session rebind).
-        let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-        if !probe.found {
-            {
-                let mut guard = self.inner.lock();
-                if let Some(s) = guard.as_mut() {
-                    let _ = s.fsm.connect_failed(AgentError::new(
-                        AgentErrorCode::CliNotFound,
-                        "Grok Build CLI not found. Install Grok Build or set path in Settings.",
-                    ));
-                }
-            }
-            let snap = self.snapshot();
-            Self::emit_state(&app, &snap);
-            return Ok(snap);
-        }
-
-        let cli_path = std::path::PathBuf::from(probe.path.unwrap());
+        // Plan 1 fail-closed: the agent runtime is unavailable. AcpClient::spawn_with_options
+        // returns `runtime_unavailable` without touching a process. No CLI probe remains.
+        let cli_path = std::path::PathBuf::new();
         let spawn_opts = crate::acp_client::SpawnOptions {
             model_id: Some(agent_model.clone()),
             effort: Some(prefs.effort.clone()),
