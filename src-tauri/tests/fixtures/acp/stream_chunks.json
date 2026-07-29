@@ -61,14 +61,6 @@
     ],
     "joinedAssistantText": "Hello world."
   },
-  "promptComplete": {
-    "jsonrpc": "2.0",
-    "method": "_x.ai/session/prompt_complete",
-    "params": {
-      "sessionId": "agent-sess-1",
-      "stopReason": "end_turn"
-    }
-  },
   "sessionPromptResult": {
     "stopReason": "end_turn"
   }

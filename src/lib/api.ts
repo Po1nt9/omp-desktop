@@ -102,7 +102,8 @@ export async function sessionSend(
 
 /**
  * Inject guidance into the active turn without cancelling the running prompt.
- * Grok Build `_x.ai/interject`. Pass `sessionId` so multi-session routing stays correct.
+ * Plan 1 fail-closed: returns `runtime_unavailable` — the private `interject`
+ * binding has been removed.
  */
 export async function sessionInterject(
   text: string,
@@ -231,7 +232,7 @@ export async function sessionResolvePermission(args: {
   });
 }
 
-/** Approve / revise / abandon pending `_x.ai/exit_plan_mode`. */
+/** Approve / revise / abandon pending plan. Plan 1 fail-closed. */
 export async function sessionResolvePlan(args: {
   decision: "approved" | "cancelled" | "abandoned" | string;
   feedback?: string | null;
@@ -246,7 +247,7 @@ export async function sessionResolvePlan(args: {
   });
 }
 
-/** Answer or dismiss pending `_x.ai/ask_user_question`. */
+/** Answer or dismiss pending ask-user question. Plan 1 fail-closed. */
 export async function sessionResolveAskUser(args: {
   decision: "accepted" | "cancelled" | string;
   answers?: Record<string, string> | null;

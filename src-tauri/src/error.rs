@@ -24,6 +24,10 @@ pub enum AgentErrorCode {
     /// Without this code the failure surfaces as `AgentCrashed`, which points
     /// the user nowhere (NEW-03).
     CliTooOld,
+    /// OMP runtime is not yet connected (Plan 1 fail-closed shell).
+    /// Every Agent execution path returns this stable code until a later
+    /// plan wires up the runtime.
+    RuntimeUnavailable,
 }
 
 impl AgentErrorCode {
@@ -37,6 +41,7 @@ impl AgentErrorCode {
             Self::ConnectFailed => "CONNECT_FAILED",
             Self::ProcessLimit => "PROCESS_LIMIT",
             Self::CliTooOld => "CLI_TOO_OLD",
+            Self::RuntimeUnavailable => "RUNTIME_UNAVAILABLE",
         }
     }
 }
@@ -71,6 +76,7 @@ mod tests {
             AgentErrorCode::ConnectFailed,
             AgentErrorCode::ProcessLimit,
             AgentErrorCode::CliTooOld,
+            AgentErrorCode::RuntimeUnavailable,
         ];
         let expected = [
             "CLI_NOT_FOUND",
@@ -81,6 +87,7 @@ mod tests {
             "CONNECT_FAILED",
             "PROCESS_LIMIT",
             "CLI_TOO_OLD",
+            "RUNTIME_UNAVAILABLE",
         ];
         for (code, name) in codes.into_iter().zip(expected) {
             assert_eq!(code.as_str(), name);

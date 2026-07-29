@@ -137,7 +137,10 @@ pub async fn session_stop(
     mgr.stop(app, session_id).await
 }
 
-/// Approve / revise / abandon pending plan (`_x.ai/exit_plan_mode`).
+/// Approve / revise / abandon pending plan.
+///
+/// Plan 1 fail-closed: returns `runtime_unavailable` — the private
+/// `exit_plan_mode` reverse-request binding has been removed.
 #[tauri::command]
 pub async fn session_resolve_plan(
     app: tauri::AppHandle,
@@ -151,7 +154,10 @@ pub async fn session_resolve_plan(
         .await
 }
 
-/// Answer or dismiss pending `_x.ai/ask_user_question`.
+/// Answer or dismiss pending ask-user question.
+///
+/// Plan 1 fail-closed: returns `runtime_unavailable` — the private
+/// `ask_user_question` reverse-request binding has been removed.
 #[tauri::command]
 pub async fn session_resolve_ask_user(
     app: tauri::AppHandle,
@@ -1202,7 +1208,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     let backend_default = if crate::acp_client::AcpClient::use_mock() {
         "mock_acp"
     } else {
-        "grok_agent_stdio"
+        crate::acp_client::BACKEND_ID
     };
     let has_official_key = secrets.official_api_key.is_some();
     let has_relay = secrets.relay_base_url.is_some() && secrets.relay_api_key.is_some();
@@ -1348,7 +1354,7 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     let (backend_level, backend_detail) = if backend_default == "mock_acp" {
         (
             "warn",
-            "Using mock ACP backend (dev). Production uses grok_agent_stdio.".to_string(),
+            "Using mock ACP backend (dev). Production runtime is unavailable.".to_string(),
         )
     } else {
         (

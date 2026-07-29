@@ -1,8 +1,8 @@
-//! When to finish a turn after `_x.ai/session/prompt_complete` (issue #52).
+//! When to finish a turn after `session/prompt` completes (issue #52).
 //!
-//! Agents sometimes emit prompt_complete while tools are still running, or while
-//! the host is waiting on permission / ask_user / plan review. Ending the UI
-//! turn early makes long tasks look "interrupted" even though the agent is busy.
+//! Agents sometimes emit early completion while tools are still running, or while
+//! the host is waiting on permission / plan review. Ending the UI turn early
+//! makes long tasks look "interrupted" even though the agent is busy.
 
 /// Terminal tool statuses — not counted as in-flight.
 pub fn is_terminal_tool_status(status: &str) -> bool {

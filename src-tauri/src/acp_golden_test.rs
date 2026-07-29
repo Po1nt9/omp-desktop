@@ -10,10 +10,9 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use crate::acp_client::{
-    decode_permission_request, decode_session_update, parse_ask_user_question_params,
-    wire_ask_user_result, wire_exit_plan_mode_result, wire_initialize_params, wire_jsonrpc_result,
-    wire_permission_result, wire_session_cancel_params, wire_session_interject_params,
-    wire_session_prompt_params, AcpEvent, AskUserOutcome, PermissionOutcome, StreamKind,
+    decode_permission_request, decode_session_update, wire_initialize_params, wire_jsonrpc_result,
+    wire_permission_result, wire_session_cancel_params, wire_session_prompt_params, AcpEvent,
+    PermissionOutcome, StreamKind,
 };
 use crate::mock_acp::{chunk_text, mock_reply_for, spawn_fake_stream_channel};
 use crate::permission::pick_option_id;
@@ -75,13 +74,6 @@ fn session_prompt_and_cancel_wire_shapes() {
     assert_eq!(
         prompt["prompt"],
         json!([{ "type": "text", "text": "hello" }])
-    );
-    assert_eq!(
-        wire_session_interject_params("sess-a", "use the existing component"),
-        json!({
-            "sessionId": "sess-a",
-            "text": "use the existing component"
-        })
     );
 }
 
@@ -240,99 +232,15 @@ fn permission_request_decode_and_option_mapping() {
     }
 }
 
-// ── ask_user_question ───────────────────────────────────────────────────────
+// ── plan update (standard ACP session/update) ──────────────────────────────
 
 #[test]
-fn ask_user_question_parse_and_replies_match_fixture() {
-    let fx = load_fixture("ask_user_question.json");
-    let params = &fx["inbound"]["params"];
-    let parsed = parse_ask_user_question_params(params);
-
-    assert_eq!(
-        parsed.tool_call_id.as_deref(),
-        fx["expect"]["toolCallId"].as_str()
-    );
-    let expect_q = fx["expect"]["questions"].as_array().unwrap();
-    assert_eq!(parsed.questions.len(), expect_q.len());
-    assert_eq!(
-        parsed.questions[0].question,
-        expect_q[0]["question"].as_str().unwrap()
-    );
-    assert_eq!(
-        parsed.questions[0].multi_select,
-        expect_q[0]["multiSelect"].as_bool().unwrap()
-    );
-    let labels: Vec<&str> = parsed.questions[0]
-        .options
-        .iter()
-        .map(|o| o.label.as_str())
-        .collect();
-    let expect_labels: Vec<&str> = expect_q[0]["optionLabels"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert_eq!(labels, expect_labels);
-
-    let rpc_id = fx["inbound"]["id"].as_u64().unwrap();
-    let accepted = wire_jsonrpc_result(
-        rpc_id,
-        wire_ask_user_result(&AskUserOutcome::Accepted {
-            answers: json!({ "Which store?": "SQLite" }),
-        }),
-    );
-    assert_eq!(accepted, fx["hostReplyAccepted"]);
-
-    let cancelled =
-        wire_jsonrpc_result(rpc_id, wire_ask_user_result(&AskUserOutcome::Cancelled));
-    assert_eq!(cancelled, fx["hostReplyCancelled"]);
-}
-
-// ── exit_plan_mode / plan update ────────────────────────────────────────────
-
-#[test]
-fn exit_plan_mode_and_plan_update_match_fixture() {
+fn plan_update_decode_matches_fixture() {
     let fx = load_fixture("exit_plan_mode.json");
-    let params = &fx["inbound"]["params"];
-    let plan = params["planContent"].as_str().unwrap();
-    assert!(
-        plan.starts_with(fx["expect"]["planContentStartsWith"].as_str().unwrap()),
-        "planContent prefix"
-    );
-    assert_eq!(
-        params["toolCallId"].as_str(),
-        fx["expect"]["toolCallId"].as_str()
-    );
-
-    let rpc_id = fx["inbound"]["id"].as_u64().unwrap();
-    assert_eq!(
-        wire_jsonrpc_result(rpc_id, wire_exit_plan_mode_result("approved", None)),
-        fx["hostReplyApproved"]
-    );
-    assert_eq!(
-        wire_jsonrpc_result(
-            rpc_id,
-            wire_exit_plan_mode_result("cancelled", Some("Please add tests first".into()))
-        ),
-        fx["hostReplyCancelledWithFeedback"]
-    );
-    assert_eq!(
-        wire_jsonrpc_result(rpc_id, wire_exit_plan_mode_result("abandoned", None)),
-        fx["hostReplyAbandoned"]
-    );
-    // Aliases normalize
-    assert_eq!(
-        wire_exit_plan_mode_result("approve", None)["outcome"],
-        "approved"
-    );
-    assert_eq!(
-        wire_exit_plan_mode_result("quit", None)["outcome"],
-        "abandoned"
-    );
-
-    // session/update plan → Plan event
     let plan_params = &fx["sessionUpdatePlan"]["params"];
+    let plan = plan_params["update"]["planContent"]
+        .as_str()
+        .unwrap_or("");
     let events = decode_session_update(plan_params);
     assert_eq!(events.len(), 1);
     match &events[0] {

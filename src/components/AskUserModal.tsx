@@ -1,5 +1,5 @@
 /**
- * Agent questionnaire for `_x.ai/ask_user_question`.
+ * Agent questionnaire for ask-user reverse-requests.
  * GlassModal shell — no window.confirm / prompt / alert.
  */
 

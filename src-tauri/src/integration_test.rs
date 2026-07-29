@@ -153,7 +153,7 @@ mod integration {
         // Verify at any time with:
         //   sed -n '/invoke_handler(tauri::generate_handler!/,/^\s*])/p' \
         //     src-tauri/src/lib.rs | grep -cE '(commands|updater|tray|mirror|voice_host|remote_im)::'
-        const EXPECTED_REGISTERED_COMMAND_COUNT: usize = 172;
+        const EXPECTED_REGISTERED_COMMAND_COUNT: usize = 173;
         assert_eq!(
             commands.len(),
             EXPECTED_REGISTERED_COMMAND_COUNT,

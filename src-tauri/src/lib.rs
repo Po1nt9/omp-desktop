@@ -57,6 +57,7 @@ mod voice_host;
 mod voice_stt;
 mod voice_tools;
 mod remote_im;
+mod runtime_availability;
 
 use std::sync::Arc;
 
@@ -365,6 +366,7 @@ pub fn run() {
             remote_im::remote_im_save_instance,
             remote_im::remote_im_delete_instance,
             remote_im::remote_im_doctor,
+            runtime_availability::runtime_availability,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Grok App")
@@ -573,5 +575,6 @@ fn registered_command_names() -> &'static [&'static str] {
         "remote_im_save_instance",
         "remote_im_delete_instance",
         "remote_im_doctor",
+        "runtime_availability",
     ]
 }
