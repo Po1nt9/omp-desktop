@@ -1,10 +1,10 @@
-//! Discover selectable Grok Build agent definition names for Settings.
+//! Discover selectable runtime agent definition names for Settings.
 //!
 //! Sources mirror CLI `--agent <NAME>` resolution:
 //! - Built-ins: explore, plan, general-purpose
-//! - User: `~/.grok/agents/*.md`
+//! - User: `<runtime-home>/agents/*.md`
 //! - Project: `<cwd>/.grok/agents/*.md`
-//! - Bundled reference: `~/.grok/bundled/agents/*.md` (same names as built-ins)
+//! - Bundled reference: `<runtime-home>/bundled/agents/*.md` (same names as built-ins)
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -1,15 +1,13 @@
-//! Cross-session memory (Grok Build experimental) — spawn flags, env, config.
+//! Cross-session memory — spawn flags, env, config.
 //!
-//! CLI: `--experimental-memory` / `--no-memory`, `GROK_MEMORY`, `[memory] enabled`,
-//! `grok memory clear`.
+//! Plan 1 fail-closed shell: the `grok memory clear` CLI path is unavailable
+//! until an OMP Runtime integration supplies a live agent runtime. Pure
+//! helpers (spawn flag/env strings, TOML upsert, profile sync) remain as the
+//! stable contract for a later plan.
 
 use std::fs;
-use std::path::Path;
-use std::process::Command;
 
-use crate::cli_probe;
-use crate::paths::{agent_config_toml, ensure_app_dirs, resolve_agent_grok_home};
-use crate::process_util;
+use crate::paths::{agent_config_toml, ensure_app_dirs};
 
 /// Top-level CLI flag (before `agent`) for the experimental_memory setting.
 pub fn memory_spawn_flag(enabled: bool) -> &'static str {
@@ -80,13 +78,13 @@ fn set_table_bool(text: &str, table: &str, key: &str, value: bool) -> String {
     }
 }
 
-/// Write `[memory] enabled` into App agent-home (independent GROK_HOME only).
+/// Write `[memory] enabled` into App agent-home (independent mode only).
 pub fn sync_memory_to_agent_profile(
     session_data_mode: &str,
     experimental_memory: bool,
 ) -> Result<(), String> {
     if session_data_mode == "shared" {
-        // Never rewrite the user's personal ~/.grok/config.toml from the App.
+        // Never rewrite the user's personal runtime config from the App.
         return Ok(());
     }
     let _ = ensure_app_dirs();
@@ -123,61 +121,18 @@ pub struct MemoryClearResult {
     pub cwd: String,
 }
 
-/// Run `grok memory clear` scoped to `cwd` (project path when available).
+/// Run memory clear scoped to `cwd` (project path when available).
+///
+/// Plan 1 fail-closed: the agent runtime is unavailable, so the `memory clear`
+/// CLI path cannot run. Returns `runtime_unavailable` until an OMP Runtime
+/// integration supplies live memory management.
 pub fn clear_workspace_memory(
-    cwd: Option<&Path>,
-    session_data_mode: &str,
-    manual_cli_path: Option<&str>,
-    scope: &str,
+    _cwd: Option<&std::path::Path>,
+    _session_data_mode: &str,
+    _manual_cli_path: Option<&str>,
+    _scope: &str,
 ) -> Result<MemoryClearResult, String> {
-    let probe = cli_probe::probe_cli(manual_cli_path);
-    let cli_path = probe
-        .path
-        .filter(|_| probe.found)
-        .ok_or_else(|| "Grok Build CLI not found".to_string())?;
-
-    let work_dir = cwd
-        .map(Path::to_path_buf)
-        .filter(|p| p.is_dir())
-        .unwrap_or_else(process_util::user_home);
-
-    let grok_home = resolve_agent_grok_home(session_data_mode);
-    let args = memory_clear_cli_args(scope);
-
-    let mut cmd = Command::new(&cli_path);
-    cmd.args(&args)
-        .current_dir(&work_dir)
-        .env("GROK_HOME", &grok_home);
-    if let Some(path) = process_util::enriched_path_env() {
-        cmd.env("PATH", path);
-    }
-    process_util::apply_no_window_std(&mut cmd);
-
-    let output = cmd
-        .output()
-        .map_err(|e| format!("failed to run grok memory clear: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let ok = output.status.success();
-
-    if !ok {
-        let detail = if !stderr.is_empty() {
-            stderr.clone()
-        } else if !stdout.is_empty() {
-            stdout.clone()
-        } else {
-            format!("exit {}", output.status)
-        };
-        return Err(format!("grok memory clear failed: {detail}"));
-    }
-
-    Ok(MemoryClearResult {
-        ok: true,
-        stdout,
-        stderr,
-        cwd: work_dir.display().to_string(),
-    })
+    Err("runtime_unavailable: memory clear is unavailable in this build".into())
 }
 
 /// Apply spawn flag + env on a tokio Command (top-level, before `agent`).

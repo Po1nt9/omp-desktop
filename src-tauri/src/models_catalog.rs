@@ -1,4 +1,4 @@
-//! Live **model** catalog from Grok CLI cache only.
+//! Live **model** catalog from runtime cache only.
 //!
 //! Providers / relays are **channels** managed on the Providers settings page —
 //! they must never appear as selectable model chips.
@@ -9,7 +9,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::paths::resolve_agent_grok_home;
 use crate::store;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -52,8 +51,8 @@ struct ParsedCacheModel {
     reasoning_efforts: Vec<ReasoningEffort>,
 }
 
-fn user_grok_home() -> PathBuf {
-    crate::process_util::user_home().join(".grok")
+fn agent_home_cache() -> PathBuf {
+    crate::paths::app_data_root().join("agent-home").join("models_cache.json")
 }
 
 /// Parse `/info/reasoning_efforts` from a models_cache entry body.
@@ -158,88 +157,47 @@ fn read_models_cache(
 
 /// Models the user can select in the composer.
 ///
-/// **Only** official Grok Build catalog IDs from `models_cache.json`.
-/// Custom providers (`[model.*]` in config.toml) are channels — switch them under
-/// Settings → Account → Providers, not here.
+/// Returns an empty catalog until a runtime integration supplies live models.
+/// No fallback model is invented.
 pub fn list_available_models() -> AvailableModelsResult {
     let settings = store::load_settings();
-    let agent_home = resolve_agent_grok_home(&settings.session_data_mode);
 
     let mut by_id: BTreeMap<String, AvailableModel> = BTreeMap::new();
     let mut origin = None;
     let mut fetched_at = None;
 
-    // Prefer agent-home cache (GROK_HOME for independent mode), then ~/.grok.
-    // Do NOT merge agent config.toml [model.*] provider routes into this list.
-    for cache in [
-        agent_home.join("models_cache.json"),
-        user_grok_home().join("models_cache.json"),
-    ] {
-        if let Some((map, o, f)) = read_models_cache(&cache) {
-            if origin.is_none() {
-                origin = o;
-            }
-            if fetched_at.is_none() {
-                fetched_at = f;
-            }
-            for (id, parsed) in map {
-                by_id.entry(id.clone()).or_insert(AvailableModel {
-                    id,
-                    label: parsed.label,
-                    source: "official".into(),
-                    is_default: false,
-                    reasoning_efforts: parsed.reasoning_efforts,
-                });
-            }
-            if !by_id.is_empty() {
-                break;
-            }
+    // Read from the App-owned agent-home cache only.
+    let cache = agent_home_cache();
+    if let Some((map, o, f)) = read_models_cache(&cache) {
+        origin = o;
+        fetched_at = f;
+        for (id, parsed) in map {
+            by_id.entry(id.clone()).or_insert(AvailableModel {
+                id,
+                label: parsed.label,
+                source: "official".into(),
+                is_default: false,
+                reasoning_efforts: parsed.reasoning_efforts,
+            });
         }
     }
 
-    // Hard fallback — known-good official default when cache is empty / offline.
-    if by_id.is_empty() {
-        by_id.insert(
-            "grok-4.5".into(),
-            AvailableModel {
-                id: "grok-4.5".into(),
-                label: "Grok 4.5".into(),
-                source: "official".into(),
-                is_default: true,
-                reasoning_efforts: Vec::new(),
-            },
-        );
-    }
-
-    // Prefer catalog default over a stale settings.model_id that might be a
-    // provider route id (e.g. "yunyi") from an older build.
-    let preferred = by_id
-        .keys()
-        .find(|k| k.as_str() == "grok-4.5")
-        .cloned()
-        .or_else(|| {
-            settings
-                .model_id
-                .clone()
-                .filter(|s| by_id.contains_key(s))
-        })
-        .unwrap_or_else(|| {
-            by_id
-                .keys()
-                .next()
-                .cloned()
-                .unwrap_or_else(|| "grok-4.5".into())
-        });
+    // No fallback model — empty catalog is valid until runtime integration.
+    let preferred = settings
+        .model_id
+        .clone()
+        .filter(|s| by_id.contains_key(s))
+        .or_else(|| by_id.keys().next().cloned());
 
     let mut models: Vec<AvailableModel> = by_id.into_values().collect();
     models.sort_by(|a, b| a.id.cmp(&b.id));
     for m in &mut models {
-        m.is_default = m.id == preferred;
+        m.is_default = Some(&m.id.clone()) == preferred.as_ref();
     }
 
     AvailableModelsResult {
         models,
-        default_model_id: preferred,
+        default_model_id: preferred.unwrap_or_default(),
         origin,
         fetched_at,
     }
@@ -261,10 +219,10 @@ mod tests {
             &path,
             r#"{
               "fetched_at": "2026-07-23T00:00:00Z",
-              "origin": "https://cli-chat-proxy.grok.com/v1/models",
+              "origin": "https://example.invalid/v1/models",
               "models": {
-                "grok-4.5": {
-                  "info": { "id": "grok-4.5", "name": "Grok 4.5", "hidden": false }
+                "sample-model": {
+                  "info": { "id": "sample-model", "name": "Sample Model", "hidden": false }
                 }
               }
             }"#,
@@ -272,14 +230,14 @@ mod tests {
         .unwrap();
         let (map, origin, _) = read_models_cache(&path).expect("cache");
         assert_eq!(
-            map.get("grok-4.5").map(|m| m.label.as_str()),
-            Some("Grok 4.5")
+            map.get("sample-model").map(|m| m.label.as_str()),
+            Some("Sample Model")
         );
         assert!(map
-            .get("grok-4.5")
+            .get("sample-model")
             .map(|m| m.reasoning_efforts.is_empty())
             .unwrap_or(false));
-        assert!(origin.unwrap().contains("cli-chat-proxy"));
+        assert!(origin.unwrap().contains("example.invalid"));
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -358,12 +316,12 @@ mod tests {
             &path,
             r#"{
               "fetched_at": "2026-07-25T00:00:00Z",
-              "origin": "https://cli-chat-proxy.grok.com/v1/models",
+              "origin": "https://example.invalid/v1/models",
               "models": {
-                "grok-4.5": {
+                "sample-model": {
                   "info": {
-                    "id": "grok-4.5",
-                    "name": "Grok 4.5",
+                    "id": "sample-model",
+                    "name": "Sample Model",
                     "hidden": false,
                     "reasoning_efforts": [
                       {
@@ -381,7 +339,7 @@ mod tests {
         )
         .unwrap();
         let (map, _, _) = read_models_cache(&path).expect("cache");
-        let m = map.get("grok-4.5").expect("model");
+        let m = map.get("sample-model").expect("model");
         assert_eq!(m.reasoning_efforts.len(), 1);
         assert_eq!(m.reasoning_efforts[0].id, "high");
         assert!(m.reasoning_efforts[0].is_default);

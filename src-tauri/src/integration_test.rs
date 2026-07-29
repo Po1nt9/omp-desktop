@@ -1,9 +1,8 @@
 //! Integration-style tests on shipped Host helpers (no GUI).
-//! Covers probe + project store + independent data root — the path the UI uses.
+//! Covers project store + independent data root — the path the UI uses.
 
 #[cfg(test)]
 mod integration {
-    use crate::cli_probe::{cli_auth_json_present, probe_cli};
     use crate::paths::{app_data_root, ensure_app_dirs};
     use crate::store::{
         add_project, load_projects, load_settings, relocate_project, remove_project, save_settings,
@@ -26,28 +25,6 @@ mod integration {
         let dir = std::env::temp_dir().join(format!("grok-app-itest-{n}"));
         fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    #[test]
-    fn probe_cli_shape_and_local_install() {
-        let r = probe_cli(None);
-        assert!(
-            !r.candidates_tried.is_empty(),
-            "should try common paths"
-        );
-        // Auth flag always populated
-        let _ = r.cli_auth_present;
-        if std::path::Path::new(&format!(
-            "{}/.grok/bin/grok",
-            std::env::var("HOME").unwrap_or_default()
-        ))
-        .is_file()
-            || which::which("grok").is_ok()
-        {
-            assert!(r.found);
-            assert!(r.path.is_some());
-            assert!(r.version.is_some());
-        }
     }
 
     #[test]
@@ -135,12 +112,6 @@ mod integration {
     }
 
     #[test]
-    fn cli_auth_detection_is_boolean() {
-        // Just ensure helper runs; value depends on machine
-        let _ = cli_auth_json_present();
-    }
-
-    #[test]
     fn command_surface_has_no_grok_product_commands() {
         let commands = crate::registered_command_names();
 
@@ -153,7 +124,7 @@ mod integration {
         // Verify at any time with:
         //   sed -n '/invoke_handler(tauri::generate_handler!/,/^\s*])/p' \
         //     src-tauri/src/lib.rs | grep -cE '(commands|updater|tray|mirror|voice_host|remote_im)::'
-        const EXPECTED_REGISTERED_COMMAND_COUNT: usize = 173;
+        const EXPECTED_REGISTERED_COMMAND_COUNT: usize = 171;
         assert_eq!(
             commands.len(),
             EXPECTED_REGISTERED_COMMAND_COUNT,

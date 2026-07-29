@@ -8,7 +8,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -16,11 +15,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::paths::{
-    agent_config_toml, ensure_app_dirs, extensions_file, resolve_agent_grok_home,
+    agent_config_toml, app_data_root, ensure_app_dirs, extensions_file,
 };
 use crate::store;
 
-const MCP_LIST_TIMEOUT_SECS: u64 = 8;
 const MCP_CACHE_TTL: Duration = Duration::from_secs(30);
 
 /// App-side enable prefs for MCP servers and skills.
@@ -235,12 +233,13 @@ fn file_mtime_ms(path: &Path) -> u128 {
         .unwrap_or(0)
 }
 
-/// List configured MCP servers (CLI `grok mcp list --json` preferred).
+/// List configured MCP servers (runtime CLI `mcp list --json` preferred).
 /// `project_cwd` scopes project-level servers when present.
 pub fn list_mcp_server_defs(project_cwd: Option<&str>) -> Vec<McpServerDef> {
     let settings = store::load_settings();
-    let config_path = resolve_agent_grok_home(&settings.session_data_mode).join("config.toml");
-    // Also watch user ~/.grok/config.toml — list often sources from there.
+    let _ = ensure_app_dirs();
+    let config_path = app_data_root().join("agent-home").join("config.toml");
+    // Also watch user runtime config — list often sources from there.
     let user_config = crate::process_util::user_home().join(".grok").join("config.toml");
     let mtime = file_mtime_ms(&config_path).max(file_mtime_ms(&user_config));
 
@@ -278,7 +277,7 @@ pub fn list_mcp_server_defs(project_cwd: Option<&str>) -> Vec<McpServerDef> {
     defs
 }
 
-/// Read MCP server defs from agent-home + user `~/.grok/config.toml`.
+/// Read MCP server defs from agent-home + user runtime config.
 /// Later files do not override earlier names (agent-home wins over user when
 /// independent mode has mirrored sections; otherwise user config is the source).
 fn load_mcp_defs_from_configs(session_data_mode: &str) -> Vec<McpServerDef> {
@@ -292,7 +291,8 @@ fn load_mcp_defs_from_configs(session_data_mode: &str) -> Vec<McpServerDef> {
             by_name.insert(d.name.clone(), d);
         }
     }
-    let agent_cfg = resolve_agent_grok_home(session_data_mode).join("config.toml");
+    let _ = ensure_app_dirs();
+    let agent_cfg = app_data_root().join("agent-home").join("config.toml");
     if agent_cfg != user_cfg {
         if let Ok(raw) = fs::read_to_string(&agent_cfg) {
             for d in parse_mcp_servers_from_toml(&raw) {
@@ -515,39 +515,11 @@ pub fn invalidate_mcp_cache() {
     }
 }
 
-fn fetch_mcp_list_json(project_cwd: Option<&str>) -> Option<Vec<McpServerDef>> {
-    let settings = store::load_settings();
-    let probe = crate::cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let cli_path = probe.path.filter(|_| probe.found)?;
-
-    let cwd = project_cwd
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from);
-
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = Command::new(&cli_path);
-        cmd.arg("mcp").arg("list").arg("--json");
-        if let Some(dir) = cwd {
-            cmd.current_dir(dir);
-        }
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let _ = tx.send(cmd.output());
-    });
-
-    let output = rx
-        .recv_timeout(Duration::from_secs(MCP_LIST_TIMEOUT_SECS))
-        .ok()?
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_mcp_list_json(stdout.trim())
+fn fetch_mcp_list_json(_project_cwd: Option<&str>) -> Option<Vec<McpServerDef>> {
+    // Plan 1 fail-closed: `grok mcp list --json` requires the agent runtime,
+    // which is unavailable. Returns `None` so callers fall back to config-only
+    // discovery. No CLI probe or process spawn remains.
+    None
 }
 
 /// Parse `grok mcp list --json` payload into server defs.
@@ -641,94 +613,11 @@ fn parse_string_map(v: Option<&Value>) -> Option<HashMap<String, String>> {
     }
 }
 
-fn fetch_mcp_from_inspect(project_cwd: Option<&str>) -> Vec<McpServerDef> {
-    // Reuse inspect path via CLI without pulling private helpers — light spawn.
-    let settings = store::load_settings();
-    let probe = crate::cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let Some(cli_path) = probe.path.filter(|_| probe.found) else {
-        return Vec::new();
-    };
-    let cwd = project_cwd
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from);
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let mut cmd = Command::new(&cli_path);
-        cmd.arg("inspect").arg("--json");
-        if let Some(dir) = cwd {
-            cmd.current_dir(dir);
-        }
-        crate::process_util::apply_no_window_std(&mut cmd);
-        if let Some(path_env) = crate::process_util::enriched_path_env() {
-            cmd.env("PATH", path_env);
-        }
-        let _ = tx.send(cmd.output());
-    });
-    let Ok(Ok(output)) = rx.recv_timeout(Duration::from_secs(MCP_LIST_TIMEOUT_SECS)) else {
-        return Vec::new();
-    };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let Ok(v) = serde_json::from_str::<Value>(stdout.trim()) else {
-        return Vec::new();
-    };
-    let Some(arr) = v
-        .get("mcpServers")
-        .or_else(|| v.get("mcp"))
-        .and_then(|x| x.as_array())
-    else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for item in arr {
-        let name = item
-            .get("name")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if name.is_empty() {
-            continue;
-        }
-        let transport = item
-            .get("transport")
-            .and_then(|x| x.as_str())
-            .map(|s| s.to_ascii_lowercase());
-        let target = item
-            .get("target")
-            .and_then(|x| x.as_str())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
-        let mut command = None;
-        let mut url = None;
-        match transport.as_deref() {
-            Some("http") | Some("sse") => url = target.clone(),
-            _ => {
-                if let Some(ref t) = target {
-                    if t.starts_with("http://") || t.starts_with("https://") {
-                        url = Some(t.clone());
-                    } else {
-                        command = Some(t.clone());
-                    }
-                }
-            }
-        }
-        out.push(McpServerDef {
-            name,
-            command,
-            args: None,
-            env: None,
-            url,
-            headers: None,
-            transport,
-            enabled: None,
-            scope: None,
-        });
-    }
-    out
+fn fetch_mcp_from_inspect(_project_cwd: Option<&str>) -> Vec<McpServerDef> {
+    // Plan 1 fail-closed: `grok inspect --json` requires the agent runtime,
+    // which is unavailable. Returns an empty list. No CLI probe or process
+    // spawn remains.
+    Vec::new()
 }
 
 /// Build ACP mcpServers for the current prefs + discovered defs.
@@ -787,7 +676,7 @@ pub fn toml_quote(s: &str) -> String {
 /// Path of the config.toml the App manages for MCP (respects session_data_mode).
 pub fn mcp_agent_config_path(session_data_mode: &str) -> PathBuf {
     if session_data_mode == "shared" {
-        resolve_agent_grok_home(session_data_mode).join("config.toml")
+        app_data_root().join("agent-home").join("config.toml")
     } else {
         let _ = ensure_app_dirs();
         agent_config_toml()
@@ -910,7 +799,7 @@ pub fn upsert_mcp_stdio_in_toml(
     }
 }
 
-/// Persist a stdio MCP server into the agent GROK_HOME config (session_data_mode).
+/// Persist a stdio MCP server into the agent runtime config (session_data_mode).
 /// Enables the name in App prefs and invalidates the MCP list cache.
 pub fn add_mcp_stdio(
     name: &str,
@@ -973,8 +862,8 @@ fn strip_mcp_server_file(path: &Path, name: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Remove an MCP server section from agent GROK_HOME config (and user
-/// `~/.grok/config.toml` when distinct) plus App prefs.
+/// Remove an MCP server section from agent runtime config (and user
+/// runtime config when distinct) plus App prefs.
 pub fn remove_mcp_server(name: &str) -> Result<(), String> {
     let name = validate_mcp_server_name(name)?.to_string();
     let settings = store::load_settings();
@@ -992,7 +881,7 @@ pub fn remove_mcp_server(name: &str) -> Result<(), String> {
             agent_path.display()
         );
     }
-    // Independent mode may still list user-scoped servers from ~/.grok.
+    // Independent mode may still list user-scoped servers from the runtime config.
     if user_path != agent_path && strip_mcp_server_file(&user_path, &name)? {
         touched = true;
         tracing::info!(
@@ -1306,17 +1195,17 @@ fn trailing_nl(text: &str) -> &'static str {
     }
 }
 
-/// Write App enable prefs into the agent GROK_HOME config.toml `enabled` flags.
-/// Independent mode: agent-home. Shared mode: user `~/.grok/config.toml` (user-initiated).
+/// Write App enable prefs into the agent runtime config.toml `enabled` flags.
+/// Independent mode: agent-home. Shared mode: user runtime config (user-initiated).
 pub fn sync_mcp_enabled_to_agent_config(
     session_data_mode: &str,
     prefs: &ExtensionsPrefs,
 ) -> Result<(), String> {
-    let home = resolve_agent_grok_home(session_data_mode);
+    let _ = ensure_app_dirs();
+    let home = app_data_root().join("agent-home");
     let path = if session_data_mode == "shared" {
         home.join("config.toml")
     } else {
-        let _ = ensure_app_dirs();
         agent_config_toml()
     };
     if let Some(parent) = path.parent() {
@@ -1727,7 +1616,7 @@ enabled = true
     fn parse_mcp_doctor_json_shape() {
         let raw = r#"{
           "sources": [
-            {"path": "~/.grok/config.toml", "status": {"status": "found", "server_count": 2}}
+            {"path": "<runtime-home>/config.toml", "status": {"status": "found", "server_count": 2}}
           ],
           "servers": [
             {

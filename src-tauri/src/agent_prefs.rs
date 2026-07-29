@@ -1,13 +1,13 @@
 //! Sync App composer prefs into the agent process environment.
 //!
-//! Independent mode (`GROK_HOME` = app agent-home): write `[ui]` permission keys so
-//! Grok Build enforces dontAsk / acceptEdits / YOLO at the agent layer (not only Host).
-//! Shared mode leaves `~/.grok/config.toml` alone — Host policy + spawn flags only.
+//! Independent mode (runtime home = app agent-home): write `[ui]` permission keys so
+//! the runtime enforces dontAsk / acceptEdits / YOLO at the agent layer (not only Host).
+//! Shared mode leaves the runtime config alone — Host policy + spawn flags only.
 
 use std::fs;
 use std::path::PathBuf;
 
-use crate::paths::{agent_config_toml, agent_home_dir, ensure_app_dirs, resolve_agent_grok_home};
+use crate::paths::{agent_config_toml, app_data_root, ensure_app_dirs};
 use crate::permission::PermissionPolicy;
 
 /// Map App policy → `[ui] permission_mode` values used by Grok Build config.toml.
@@ -84,13 +84,13 @@ fn set_table_key(text: &str, table: &str, key: &str, value: &str, quoted: bool) 
     }
 }
 
-/// Write permission prefs into App agent-home (independent GROK_HOME only).
+/// Write permission prefs into App agent-home (independent mode only).
 pub fn sync_permission_to_agent_profile(
     session_data_mode: &str,
     permission_policy: &str,
 ) -> Result<(), String> {
     if session_data_mode == "shared" {
-        // Never rewrite the user's personal ~/.grok/config.toml from the App.
+        // Never rewrite the user's personal runtime config from the App.
         return Ok(());
     }
     let _ = ensure_app_dirs();
@@ -109,7 +109,7 @@ pub fn sync_permission_to_agent_profile(
     fs::write(&path, next).map_err(|e| e.to_string())?;
 
     // Belt-and-suspenders: Claude-compatible defaultMode (agent reads when present).
-    let claude_dir = agent_home_dir().join(".claude");
+    let claude_dir = app_data_root().join("agent-home").join(".claude");
     let _ = fs::create_dir_all(&claude_dir);
     let settings = serde_json::json!({
         "permissions": {
@@ -139,10 +139,11 @@ pub fn product_mode_candidates(mode: &str) -> Vec<&'static str> {
     }
 }
 
-/// GROK_HOME path for logging / tests.
+/// Runtime home path for logging / tests.
 #[allow(dead_code)]
-pub fn agent_grok_home(session_data_mode: &str) -> PathBuf {
-    resolve_agent_grok_home(session_data_mode)
+pub fn agent_grok_home(_session_data_mode: &str) -> PathBuf {
+    let _ = ensure_app_dirs();
+    app_data_root().join("agent-home")
 }
 
 #[cfg(test)]

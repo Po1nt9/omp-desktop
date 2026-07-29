@@ -1,7 +1,7 @@
-//! Grok Build hooks discovery under `~/.grok/hooks` and `<project>/.grok/hooks`.
+//! Runtime hooks discovery under `<runtime-home>/hooks` and `<project>/.grok/hooks`.
 //!
 //! Management is list / reveal / open-folder only — no visual JSON editor.
-//! Hook file format lives in the Grok Build user guide (`10-hooks.md`).
+//! Hook file format lives in the runtime user guide (`10-hooks.md`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,7 +19,7 @@ pub struct HookEntry {
     pub name: String,
     /// Absolute path.
     pub path: String,
-    /// `user` (global `~/.grok/hooks`) or `project` (`<cwd>/.grok/hooks`).
+    /// `user` (global `<runtime-home>/hooks`) or `project` (`<cwd>/.grok/hooks`).
     pub scope: String,
     /// `file` | `dir`.
     pub kind: String,
@@ -47,7 +47,7 @@ pub struct HooksListResult {
     pub docs_path: Option<String>,
 }
 
-/// `~/.grok/hooks` — always-trusted personal hooks.
+/// `<runtime-home>/hooks` — always-trusted personal hooks.
 pub fn user_hooks_dir() -> PathBuf {
     user_home().join(".grok").join("hooks")
 }

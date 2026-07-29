@@ -1,12 +1,14 @@
 //! Auto-title sessions from the first user message.
 //! Instant heuristic + optional low-effort CLI refine (background).
+//!
+//! Plan 1 fail-closed shell: the CLI refine path is unavailable until an OMP
+//! Runtime integration supplies a live agent runtime. The heuristic title and
+//! all pure helpers remain; `llm_title_via_cli` returns `None`.
 
-use std::process::Command;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
 
-use crate::cli_probe;
 use crate::store::{self, SessionMeta};
 use crate::tray_i18n::{self, Locale};
 
@@ -90,46 +92,12 @@ fn title_prompt(snippet: &str, locale: Locale) -> String {
     }
 }
 
-/// Call Grok CLI headless with low effort.
-fn llm_title_via_cli(message: &str) -> Option<String> {
-    // Same settings path as other CLI call sites (doctor, session spawn, etc.).
-    let settings = store::load_settings();
-    let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-    let path = probe.path?;
-    let snippet: String = message.chars().take(400).collect();
-    let prompt = title_prompt(&snippet, tray_i18n::app_locale());
-
-    let mut cmd = Command::new(&path);
-    cmd.arg("-p")
-        .arg(&prompt)
-        .arg("--effort")
-        .arg("low")
-        .arg("--max-turns")
-        .arg("1")
-        .arg("--always-approve")
-        .arg("--disallowed-tools")
-        .arg(
-            "run_terminal_cmd,run_terminal_command,web_search,web_fetch,search_replace,write,Agent,spawn_subagent,bash",
-        );
-    crate::process_util::apply_no_window_std(&mut cmd);
-    if let Some(path_env) = crate::process_util::enriched_path_env() {
-        cmd.env("PATH", path_env);
-    }
-
-    let output = std::thread::spawn(move || cmd.output())
-        .join()
-        .ok()?
-        .ok()?;
-
-    if !output.status.success() {
-        tracing::debug!(
-            "session title cli failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        return None;
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    clean_llm_title(&stdout)
+/// Call CLI headless with low effort.
+///
+/// Plan 1 fail-closed: the agent runtime is unavailable, so there is no CLI to
+/// call. Returns `None` so the caller keeps the heuristic title.
+fn llm_title_via_cli(_message: &str) -> Option<String> {
+    None
 }
 
 /// Immediate heuristic rename (if still placeholder). Spawns CLI refine in background.

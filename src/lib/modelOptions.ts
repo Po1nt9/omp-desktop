@@ -1,6 +1,8 @@
 /**
- * Catalogs aligned with Grok Build CLI (`grok models`, reasoning effort, permission).
- * Live selectable models come from `models_list_available` (CLI cache + custom providers).
+ * Neutral model / effort option types for the composer.
+ *
+ * The static catalog is intentionally empty until a runtime integration
+ * supplies live models. Consumers must handle an empty `availableModels`.
  * Update docs/llm-wiki/catalog.md when defaults change.
  */
 
@@ -23,7 +25,7 @@ export interface ModelOption {
   isDefault?: boolean;
   /** Catalog source; composer only shows official model IDs (not providers). */
   source?: string;
-  /** Per-model reasoning efforts from CLI cache; empty/undefined → static fallback. */
+  /** Per-model reasoning efforts from CLI cache; empty/undefined → no fallback. */
   reasoningEfforts?: EffortOption[];
 }
 
@@ -32,7 +34,7 @@ export interface SessionModeOption {
 }
 
 /**
- * Permission policies (composer + settings), aligned with Grok Build modes:
+ * Permission policies (composer + settings).
  * | Build mode           | App id            |
  * | default              | ask               |
  * | acceptEdits          | accept_edits      |
@@ -57,29 +59,15 @@ export const COMPOSER_PREFS_SCOPES: ComposerPrefsScope[] = [
 ];
 
 /**
- * Fallback catalog when Host has not returned live models yet.
- * Official OAuth currently exposes grok-4.5 only (2026-07 probe).
- * `grok-build` is NOT listed — CLI rejects it as unknown model id.
+ * Empty until a runtime integration supplies live models.
+ * Do NOT invent a fallback model here.
  */
-export const GROK_BUILD_MODELS: ModelOption[] = [
-  { id: "grok-4.5", label: "Grok 4.5", isDefault: true, source: "official" },
-];
+export const availableModels: readonly ModelOption[] = [];
 
-export const DEFAULT_MODEL_ID =
-  GROK_BUILD_MODELS.find((m) => m.isDefault)?.id ?? "grok-4.5";
+/** No default model until the runtime catalog is populated. */
+export const defaultModelId: string | null = null;
 
-/** Static fallback when the selected model has no `reasoning_efforts` in cache. */
-export const GROK_BUILD_EFFORTS: EffortOption[] = [
-  { id: "medium" },
-  { id: "low" },
-  { id: "high" },
-];
-
-/**
- * Default reasoning depth. `medium` balances speed vs quality for agentic use;
- * users can lower (faster) or raise (deeper) via the composer chip.
- * When a model lists a default effort, prefer `pickDefaultEffort(model)`.
- */
+/** Default reasoning depth when a model lists no explicit efforts. */
 export const DEFAULT_EFFORT = "medium";
 
 /** Product session modes (desktop shell). */
@@ -106,13 +94,13 @@ export const PERMISSION_POLICIES: {
 
 export function isValidModelId(
   id: string,
-  catalog: ModelOption[] = GROK_BUILD_MODELS,
+  catalog: readonly ModelOption[] = availableModels,
 ): boolean {
   return catalog.some((m) => m.id === id);
 }
 
 /**
- * Efforts list for a model: live catalog when non-empty, else static fallback.
+ * Efforts list for a model: live catalog when non-empty, else empty.
  */
 export function effortsForModel(
   model?: ModelOption | null,
@@ -124,12 +112,12 @@ export function effortsForModel(
     model?.reasoningEfforts && model.reasoningEfforts.length > 0
       ? model.reasoningEfforts
       : null;
-  return fromArg ?? fromModel ?? GROK_BUILD_EFFORTS;
+  return fromArg ?? fromModel ?? [];
 }
 
 /**
  * Validate an effort id against the selected model's efforts when known;
- * otherwise against the static GROK_BUILD_EFFORTS fallback.
+ * otherwise against an empty set (no static fallback).
  */
 export function isValidEffort(
   id: string,
@@ -179,9 +167,9 @@ export function effortDisplayLabel(
   },
 ): string {
   const id = typeof effort === "string" ? effort : effort.id;
-  if (id === "high" && i18nLabels?.high) return i18nLabels.high;
-  if (id === "medium" && i18nLabels?.medium) return i18nLabels.medium;
-  if (id === "low" && i18nLabels?.low) return i18nLabels.low;
+  if (id === "high") return i18nLabels?.high ?? "High";
+  if (id === "medium") return i18nLabels?.medium ?? "Medium";
+  if (id === "low") return i18nLabels?.low ?? "Low";
 
   if (typeof effort !== "string") {
     const raw = effort.label?.trim();
@@ -199,18 +187,19 @@ export function isValidPrefsScope(id: string): id is ComposerPrefsScope {
   return COMPOSER_PREFS_SCOPES.includes(id as ComposerPrefsScope);
 }
 
-export function pickDefaultModelId(catalog: ModelOption[]): string {
+/** Pick the default model id from a catalog (null when empty). */
+export function pickDefaultModelId(catalog: readonly ModelOption[]): string | null {
   return (
     catalog.find((m) => m.isDefault)?.id ??
     catalog[0]?.id ??
-    DEFAULT_MODEL_ID
+    defaultModelId
   );
 }
 
 /** Find a model in catalog by id. */
 export function findModel(
   id: string,
-  catalog: ModelOption[] = GROK_BUILD_MODELS,
+  catalog: readonly ModelOption[] = availableModels,
 ): ModelOption | undefined {
   return catalog.find((m) => m.id === id);
 }

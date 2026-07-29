@@ -286,12 +286,12 @@ pub fn write_session_bundle(
     }
 
     // ── host/cli_probe.json ────────────────────────────────────────────────
-    let probe = crate::cli_probe::probe_cli(settings.manual_cli_path.as_deref());
+    // Plan 1 fail-closed: the agent runtime is unavailable; no CLI probe runs.
     let probe_json = serde_json::json!({
-        "found": probe.found,
-        "path": probe.path,
-        "version": probe.version,
-        "source": probe.source,
+        "found": false,
+        "path": null,
+        "version": null,
+        "source": "runtime_unavailable",
     });
     write_zip_str(
         &mut zip,
@@ -599,7 +599,7 @@ fn collect_agent_files(
     Ok(())
 }
 
-/// Wipe App-owned data under the data root. Does not touch ~/.grok (CLI home).
+/// Wipe App-owned data under the data root. Does not touch the foreign CLI home.
 ///
 /// `keep_secrets`: when true, leave secrets.json, OS keychain app secrets, and accounts/ in place.
 pub fn reset_app_data(keep_secrets: bool) -> Result<serde_json::Value, String> {

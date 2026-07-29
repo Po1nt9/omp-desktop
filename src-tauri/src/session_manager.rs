@@ -31,7 +31,6 @@ use crate::acp_client::{
     runtime_unavailable_error, should_abort_provider_retry, AcpClient, AcpEvent, PermissionOutcome,
     StreamKind, HOST_PROVIDER_MAX_RETRIES,
 };
-use crate::cli_probe;
 use crate::error::{AgentError, AgentErrorCode};
 use crate::journal_throttle::{is_paragraph_break, JournalWriteThrottle};
 use crate::stream_emit::{
@@ -2521,7 +2520,7 @@ impl SessionManager {
             Self::emit_state(&app, &self.snapshot());
         }
 
-        // Independent GROK_HOME: push permission into agent config before spawn so
+        // Independent runtime home: push permission into agent config before spawn so
         // dontAsk / acceptEdits / YOLO apply agent-side (not only Host).
         if let Err(e) = crate::agent_prefs::sync_permission_to_agent_profile(
             &settings.session_data_mode,
@@ -2627,24 +2626,9 @@ impl SessionManager {
             return Ok(snap);
         }
 
-        // Real ACP cold spawn (one process per App session — no cross-session rebind).
-        let probe = cli_probe::probe_cli(settings.manual_cli_path.as_deref());
-        if !probe.found {
-            {
-                let mut guard = self.inner.lock();
-                if let Some(s) = guard.as_mut() {
-                    let _ = s.fsm.connect_failed(AgentError::new(
-                        AgentErrorCode::CliNotFound,
-                        "Grok Build CLI not found. Install Grok Build or set path in Settings.",
-                    ));
-                }
-            }
-            let snap = self.snapshot();
-            Self::emit_state(&app, &snap);
-            return Ok(snap);
-        }
-
-        let cli_path = std::path::PathBuf::from(probe.path.unwrap());
+        // Plan 1 fail-closed: the agent runtime is unavailable. AcpClient::spawn_with_options
+        // returns `runtime_unavailable` without touching a process. No CLI probe remains.
+        let cli_path = std::path::PathBuf::new();
         let spawn_opts = crate::acp_client::SpawnOptions {
             model_id: Some(agent_model.clone()),
             effort: Some(prefs.effort.clone()),
@@ -4960,7 +4944,7 @@ impl SessionManager {
     /// Drop every warm agent process (live + background + parked).
     ///
     /// Used when `session_data_mode` flips independent↔shared so no process keeps
-    /// the previous `GROK_HOME`. App session meta + journals stay; live shell is
+    /// the previous runtime home. App session meta + journals stay; live shell is
     /// soft-disconnected and its `agent_session_id` is cleared (old agent dirs are
     /// under a different data root — reconnect should `session/new` + bootstrap).
     /// Emits `session://agents_recycled` for UI toasts.
@@ -5025,7 +5009,7 @@ impl SessionManager {
                 }
                 s.fsm.soft_disconnect();
                 s.process_id = String::new();
-                // Old agent session lives under previous GROK_HOME — do not resume.
+                // Old agent session lives under previous runtime home — do not resume.
                 if s.meta.agent_session_id.take().is_some() {
                     let _ = store::update_session_meta(&s.meta);
                 }

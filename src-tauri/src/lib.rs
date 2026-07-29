@@ -9,7 +9,6 @@ mod updater;
 mod agent_subagents;
 mod extensions;
 mod hooks;
-mod cli_probe;
 mod commands;
 mod support_bundle;
 mod editors;
@@ -35,7 +34,6 @@ mod permission;
 mod project_rules;
 mod permission_rules;
 mod providers;
-mod cc_switch_import;
 mod secrets;
 mod session_import;
 mod session_content_search;
@@ -339,8 +337,6 @@ pub fn run() {
             commands::providers_activate,
             commands::providers_ping,
             commands::providers_list_models,
-            commands::providers_cc_switch_scan,
-            commands::providers_cc_switch_import,
             commands::editors_list,
             commands::open_in_editor,
             mirror::mirror_status,
@@ -548,8 +544,6 @@ fn registered_command_names() -> &'static [&'static str] {
         "providers_activate",
         "providers_ping",
         "providers_list_models",
-        "providers_cc_switch_scan",
-        "providers_cc_switch_import",
         "editors_list",
         "open_in_editor",
         "mirror_status",
