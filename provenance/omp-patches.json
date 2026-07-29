@@ -22,6 +22,13 @@
       "description": "Plan 4: wire v1 handlers to real OMP resources (MCP, diagnostics, credentials, skills, config) plus negotiate_capability in Rust host",
       "plan": "2026-07-29-plan-4-config-provider-mcp-skills-credentials",
       "commit": "db4dca7cd"
+    },
+    {
+      "id": "plan-5-todo-subagent-branch-rewind-attachments-diagnostics",
+      "branch": "desktop-v1-protocol",
+      "description": "Plan 5: add todo.list, subagents.status/setEnabled, sessions.fork/rewindPoints/rewind/resolveMedia, diagnostics.exportBundle v1 methods; replace queue/steer stubs with real backing",
+      "plan": "2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics",
+      "commit": "a2eb2070b"
     }
   ]
 }
