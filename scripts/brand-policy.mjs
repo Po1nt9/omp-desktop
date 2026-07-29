@@ -39,6 +39,8 @@ export const wholeFileAllowlist = new Set([
   "docs/superpowers/plans/2026-07-29-plan-3-supervisor-core-acp.md",
   "docs/superpowers/plans/2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics.md",
   "docs/superpowers/verification/2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics.md",
+  "docs/superpowers/plans/2026-07-29-plan-6-i18n.md",
+  "docs/superpowers/verification/2026-07-29-plan-6-i18n.md",
 ]);
 
 export const directoryExclusions = [
