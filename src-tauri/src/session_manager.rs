@@ -32,6 +32,7 @@ use crate::acp_client::{
     StreamKind, HOST_PROVIDER_MAX_RETRIES,
 };
 use crate::error::{AgentError, AgentErrorCode};
+use crate::event_journal::{EventJournal, EventKind};
 use crate::journal_throttle::{is_paragraph_break, JournalWriteThrottle};
 use crate::stream_emit::{
     should_flush_stream_emit, stream_emit_can_merge, DEFAULT_STREAM_EMIT_MAX_CHARS,
@@ -268,6 +269,11 @@ struct LiveSession {
     stream_emit_flush_gen: u64,
     /// Last `session://tool_heartbeat` emit (long open tools).
     last_tool_heartbeat_emit: Option<Instant>,
+    /// Plan 3 Task 5: durable event journal for the session. `None` until
+    /// the ACP transport is wired (mock sessions and pre-spawn shells have
+    /// no journal). Appended on turn boundaries (TurnStart / TurnEnd) so
+    /// crash recovery can replay the unfinished tail.
+    event_journal: Option<EventJournal>,
 }
 
 /// Ready agent process parked while another App session is focused (I01/I02).
@@ -1826,6 +1832,7 @@ impl SessionManager {
             pending_stream_emit: None,
             stream_emit_flush_gen: 0,
             last_tool_heartbeat_emit: None,
+            event_journal: None,
         })
     }
 
@@ -2575,6 +2582,7 @@ impl SessionManager {
             pending_stream_emit: None,
             stream_emit_flush_gen: 0,
             last_tool_heartbeat_emit: None,
+            event_journal: None,
             });
         }
         Self::emit_state(&app, &self.snapshot());
@@ -2626,15 +2634,28 @@ impl SessionManager {
             return Ok(snap);
         }
 
-        // Plan 1 fail-closed: the agent runtime is unavailable. AcpClient::spawn_with_options
-        // returns `runtime_unavailable` without touching a process. No CLI probe remains.
+        // Plan 3 Task 5: discover the OMP Runtime binary. Prefer the user's
+        // manually-picked path (Settings → manual_cli_path); fall back to
+        // `None` to preserve the Plan 1 fail-closed behavior for environments
+        // without the runtime. The agent_dir is the independent runtime home
+        // (PI_CODING_AGENT_DIR) so the sidecar shares the host's auth/profile.
+        let binary_path = settings
+            .manual_cli_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.exists());
+        let agent_dir = Some(crate::agent_prefs::agent_grok_home(
+            &settings.session_data_mode,
+        ));
         let cli_path = std::path::PathBuf::new();
         let spawn_opts = crate::acp_client::SpawnOptions {
             model_id: Some(agent_model.clone()),
             effort: Some(prefs.effort.clone()),
             permission_policy: Some(prefs.permission_policy.clone()),
-            binary_path: None,
-            agent_dir: None,
+            binary_path,
+            agent_dir,
         };
 
         let (client, mut events) = match AcpClient::spawn_with_options(cli_path, cwd, spawn_opts)
@@ -2646,6 +2667,10 @@ impl SessionManager {
                     process = %process_id,
                     "connect spawn_ok"
                 );
+                // Plan 3 Task 5: spawn succeeded → mark the runtime available
+                // so the v1 protocol's `runtime/availability` reflects live
+                // state. Stays `available` until a crash flips it back.
+                crate::runtime_availability::set_runtime_available(true, "omp_runtime");
                 v
             }
             Err(e) => {
@@ -2740,6 +2765,9 @@ impl SessionManager {
                         s.product_mode = Some(prefs.mode.clone());
                         s.backend = crate::acp_client::BACKEND_ID.into();
                         s.needs_history_bootstrap = need_bootstrap;
+                        // Plan 3 Task 5: attach a fresh event journal for this
+                        // session so turn boundaries are durable for replay.
+                        s.event_journal = Some(EventJournal::new(s.app_session_id.clone()));
                         Self::touch_activity_locked(s);
                         meta = s.meta.clone();
                     }
@@ -2876,6 +2904,7 @@ impl SessionManager {
             pending_stream_emit: None,
             stream_emit_flush_gen: 0,
             last_tool_heartbeat_emit: None,
+            event_journal: None,
         };
         let sid = live.app_session_id.clone();
         self.background.lock().insert(sid.clone(), live);
@@ -3074,6 +3103,16 @@ impl SessionManager {
                         // every chunk, so clearing here cannot truncate output.
                         if authoritative {
                             s.prompt_in_flight = false;
+                            // Plan 3 Task 5: authoritative turn end → record
+                            // TurnEnd and snapshot a commit point so the
+                            // journal tail is replayable from this boundary.
+                            if let Some(journal) = s.event_journal.as_mut() {
+                                journal.append(
+                                    EventKind::TurnEnd,
+                                    serde_json::json!({ "stopReason": stop_reason }),
+                                );
+                                let _ = journal.commit();
+                            }
                         }
                         s.deferred_prompt_complete = Some(stop_reason.clone());
                         // #52: do not Ready the UI while tools / permission / ask_user / plan
@@ -3467,6 +3506,14 @@ impl SessionManager {
                 Self::emit_state(app, &self.snapshot());
             }
             AcpEvent::ProcessExited { .. } => {
+                // Plan 3 Task 5: sidecar crashed → flip the dynamic runtime
+                // availability back to unavailable so the v1 protocol surfaces
+                // the failure to the frontend instead of pretending the
+                // runtime is still alive.
+                crate::runtime_availability::set_runtime_available(
+                    false,
+                    "runtime_crashed",
+                );
                 {
                     let mut guard = self.inner.lock();
                     if let Some(s) = guard.as_mut() {
@@ -3523,6 +3570,10 @@ impl SessionManager {
                         s.active_turn_id = None;
                         s.stream_message_id_locked = false;
                         s.prompt_in_flight = false;
+                        // Plan 3 Task 5: the event journal persists for replay
+                        // — leave it attached so crash recovery can read the
+                        // tail. The next connect will replace it with a fresh
+                        // journal once the sidecar is back up.
                     }
                 }
                 // Also drop any parked entry with this process id (defensive).
@@ -4496,6 +4547,12 @@ impl SessionManager {
             s.provider_retry_attempt = 0;
             s.provider_retry_aborted = false;
             s.tools_this_turn = 0;
+            // Plan 3 Task 5: record TurnStart in the event journal so the
+            // boundary is durable for crash-replay. Best-effort — a missing
+            // journal (mock / pre-spawn shell) just skips the append.
+            if let Some(journal) = s.event_journal.as_mut() {
+                journal.append(EventKind::TurnStart, serde_json::json!({}));
+            }
 
             let mut agent_prompt = text.clone();
             if s.needs_history_bootstrap {
@@ -5484,6 +5541,7 @@ mod session_routing_tests {
             pending_stream_emit: None,
             stream_emit_flush_gen: 0,
             last_tool_heartbeat_emit: None,
+            event_journal: None,
         }
     }
 
@@ -5642,6 +5700,7 @@ mod session_routing_tests {
             pending_stream_emit: None,
             stream_emit_flush_gen: 0,
             last_tool_heartbeat_emit: None,
+            event_journal: None,
         };
 
         SessionManager::begin_post_interjection_stream(&mut session);
@@ -5737,6 +5796,7 @@ mod session_routing_tests {
             pending_stream_emit: None,
             stream_emit_flush_gen: 0,
             last_tool_heartbeat_emit: None,
+            event_journal: None,
         });
         // Same validation `interject_message` runs first, without AppHandle.
         // `tauri::test::mock_app()` needs the `test` feature and crashes the
