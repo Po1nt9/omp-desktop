@@ -42,12 +42,12 @@
 
 | Entity | Format | Example |
 |---|---|---|
-| Session | `sess_<26char base32>` | `sess_abc123def456ghi789jkl012mno` |
-| Turn | `turn_<26char base32>` | `turn_xyz789abc012def345ghi678jkl` |
-| Event | `evt_<26char base32>` | `evt_qrs456tuv789wxy012abc345def` |
-| Permission request | `perm_<26char base32>` | `perm_mno012pqr345stu678vwx901yza` |
-| Queue receipt | `rcpt_<26char base32>` | `rcpt_bcd123efg456hij789klm012nop` |
-| Credential | `cred_<26char base32>` | `cred_pqr456stu789vwx012abc345def` |
+| Session | `sess_<26char base32>` | `sess_abcdefghijklmnopqrstuvwx23` |
+| Turn | `turn_<26char base32>` | `turn_xyzastruvwxypqrsdefghijklm` |
+| Event | `evt_<26char base32>` | `evt_qrstuvwxyzabcdefgijklmno23` |
+| Permission request | `perm_<26char base32>` | `perm_mnopqrstuvwxyzabcdefgijk23` |
+| Queue receipt | `rcpt_<26char base32>` | `rcpt_bcdefghijklmnopqrstuvwxy23` |
+| Credential | `cred_<26char base32>` | `cred_pqrstuvwxyzabcdefghijklmno` |
 | Project | `proj_<sha1 of cwd>` | `proj_a1b2c3d4e5f6789012345678901234567890abcd` |
 | Model | `<providerId>/<modelId>` | `xai/grok-4.5` |
 | MCP source | `mcp_<sha1 of sourceId>` | `mcp_f1e2d3c4b5a697887766554433221100ffeeddcc` |
