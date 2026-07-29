@@ -1,4 +1,4 @@
-//! OMP Desktop Host — real ACP default (`grok agent stdio`).
+//! OMP Desktop Host — Tauri application entrypoint.
 
 mod acp_client;
 mod agent_memory;
@@ -19,6 +19,7 @@ mod path_scope;
 mod mirror;
 mod mock_acp;
 mod models_catalog;
+mod omp_desktop_v1;
 mod paths;
 mod process_util;
 mod process_limits;
