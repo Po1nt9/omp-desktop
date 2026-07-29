@@ -30,6 +30,12 @@ export const wholeFileAllowlist = new Set([
   "docs/superpowers/plans/2026-07-29-omp-desktop-extension-protocol.md",
   "docs/superpowers/specs/2026-07-28-omp-desktop-design.md",
   "docs/superpowers/verification/2026-07-28-plan-1-baseline.md",
+  "docs/superpowers/plans/2026-07-29-plan-2-extension-protocol.md",
+  "docs/superpowers/plans/2026-07-29-plans-4-10-roadmap.md",
+  "docs/superpowers/plans/2026-07-29-plan-4-config-provider-mcp-skills-credentials.md",
+  "docs/superpowers/verification/2026-07-29-plan-2-extension-protocol.md",
+  "docs/superpowers/verification/2026-07-29-plan-3-supervisor-core-acp.md",
+  "docs/superpowers/plans/2026-07-29-plan-3-supervisor-core-acp.md",
 ]);
 
 export const directoryExclusions = [
