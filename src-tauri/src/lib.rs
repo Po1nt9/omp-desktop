@@ -61,6 +61,7 @@ mod runtime_availability;
 use std::sync::Arc;
 
 use mirror::MirrorHost;
+use omp_desktop_v1::OmpExtension;
 use session_manager::SessionManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -74,6 +75,7 @@ pub fn run() {
 
     let session_mgr = Arc::new(SessionManager::new());
     let mirror_host = Arc::new(MirrorHost::from_env());
+    let omp_extension = Arc::new(OmpExtension::new());
     let voice_host = Arc::new(voice_host::VoiceHost::new());
     let remote_im_state = Arc::new(remote_im::RemoteImState {
         inner: tokio::sync::Mutex::new(remote_im::BridgeRuntime::default()),
@@ -110,6 +112,7 @@ pub fn run() {
     builder
         .manage(session_mgr)
         .manage(mirror_host)
+        .manage(omp_extension)
         .manage(voice_host)
         .manage(remote_im_state)
         // Range-capable media streaming (video/audio/pdf) — never loads multi‑GB into RAM.
@@ -272,6 +275,7 @@ pub fn run() {
             commands::agents_list,
             commands::inspect_mcp,
             commands::project_inspect,
+            commands::omp_desktop_v1_capability,
             commands::extensions_get,
             commands::extensions_set_mcp,
             commands::extensions_set_skill,
@@ -479,6 +483,7 @@ fn registered_command_names() -> &'static [&'static str] {
         "agents_list",
         "inspect_mcp",
         "project_inspect",
+        "omp_desktop_v1_capability",
         "extensions_get",
         "extensions_set_mcp",
         "extensions_set_skill",

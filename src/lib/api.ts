@@ -2227,3 +2227,66 @@ export async function projectRulesEnsureTemplate(projectPath: string) {
     projectPath,
   });
 }
+
+// ── OMP Desktop v1 Extension Protocol ──────────────────────────────────────
+
+import type { DesktopV1Capability, ExtensionInfo } from "./ompDesktopV1";
+import { OmpDesktopV1Client } from "./ompDesktopV1";
+
+export type {
+  DesktopV1Capability,
+  DesktopV1Error,
+  MethodMap,
+  MethodName,
+  ExtensionInfo,
+  McpSourceInfo,
+} from "./ompDesktopV1";
+export {
+  OmpDesktopV1Client,
+  isDesktopV1Error,
+  RUNTIME_UNAVAILABLE,
+  UNKNOWN_METHOD,
+} from "./ompDesktopV1";
+
+/**
+ * Probe the negotiated `_omp/desktop/v1/*` capability from the Rust
+ * `OmpExtension` client. Returns `null` when the OMP Runtime has not
+ * advertised the v1 capability (Plan 2 fail-closed).
+ */
+export async function ompDesktopV1Capability(): Promise<DesktopV1Capability | null> {
+  return invoke<DesktopV1Capability | null>("omp_desktop_v1_capability");
+}
+
+/**
+ * Typed wrapper for `_omp/desktop/v1/extensions.list`.
+ * Returns the extension list when the v1 capability is negotiated, or throws
+ * the v1 error envelope (typically `runtime_unavailable` in Plan 2).
+ */
+export async function extensionsListV1(
+  cwd?: string | null,
+): Promise<ExtensionInfo[]> {
+  const client = getOmpDesktopV1Client();
+  const result = await client.call("extensions.list", { cwd: cwd ?? undefined });
+  if (!result.ok) throw new Error(result.error.messageKey);
+  return result.value.extensions;
+}
+
+// Module-level singleton — set once at app startup via `setOmpDesktopV1Capability`.
+let _ompDesktopV1Client: OmpDesktopV1Client | null = null;
+
+/**
+ * Returns the process-wide `OmpDesktopV1Client`. Lazily constructed on first
+ * call so callers that never touch v1 features pay no allocation cost.
+ */
+export function getOmpDesktopV1Client(): OmpDesktopV1Client {
+  if (!_ompDesktopV1Client) _ompDesktopV1Client = new OmpDesktopV1Client();
+  return _ompDesktopV1Client;
+}
+
+/**
+ * Apply the negotiated capability descriptor to the process-wide v1 client.
+ * Call once at app startup after probing `ompDesktopV1Capability()`.
+ */
+export function setOmpDesktopV1Capability(cap: DesktopV1Capability | null): void {
+  getOmpDesktopV1Client().setCapability(cap);
+}

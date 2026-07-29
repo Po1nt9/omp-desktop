@@ -5,6 +5,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::omp_desktop_v1::{generated::DesktopV1Capability, OmpExtension};
 use crate::session_manager::{SessionManager, SessionSnapshot};
 use crate::store::{self, AppSettings, Project, SessionMeta};
 
@@ -1677,6 +1678,30 @@ fn run_grok_inspect(_project_path: Option<&str>) -> (Option<serde_json::Value>, 
     )
 }
 
+/// Route a Desktop command through the `OmpExtension` v1 client.
+///
+/// Plan 2 behavior:
+/// - Capability present → dispatch via `OmpExtension::request` (returns
+///   `runtime_unavailable` until Plan 3 wires the real transport).
+/// - Capability absent → `runtime_unavailable` error string.
+///
+/// Shared by `skills_list`, `inspect_mcp`, `project_inspect`, `agents_list`,
+/// and `plugins_list`.
+async fn route_through_extension(
+    extension: &OmpExtension,
+    method: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    if extension.has_capability().await {
+        match extension.request(method, params).await {
+            Ok(v) => Ok(v),
+            Err(e) => Err(e.to_string()),
+        }
+    } else {
+        Err("runtime_unavailable: OMP Runtime is not connected".to_string())
+    }
+}
+
 fn normalize_skill_source(source: &serde_json::Value) -> (String, Option<String>) {
     if let Some(s) = source.as_str() {
         return (s.to_string(), None);
@@ -1789,59 +1814,48 @@ fn parse_mcp_servers(v: &serde_json::Value) -> Vec<McpDto> {
     out
 }
 
-/// List invocable skills from `grok inspect --json`.
-/// Always returns Ok; on CLI missing / timeout, `skills` is empty and `error` is set.
-/// Each skill includes `enabled` from App Extensions prefs (default true).
+/// Negotiated `_omp/desktop/v1/*` capability descriptor, if any.
+///
+/// Returns `None` when the OMP Runtime has not advertised the v1 capability
+/// (Plan 2 fail-closed). The frontend uses this to decide whether to route
+/// Desktop commands through the v1 client or fall back to legacy behavior.
 #[tauri::command]
-pub async fn skills_list(project_path: Option<String>) -> Result<serde_json::Value, String> {
-    let path = project_path.clone();
-    let (parsed, error) = tauri::async_runtime::spawn_blocking(move || {
-        run_grok_inspect(path.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let skills = parsed.as_ref().map(parse_skills).unwrap_or_default();
-    let skills = attach_skill_enabled(skills);
-    let mut out = serde_json::json!({ "skills": skills });
-    if let Some(err) = error {
-        out["error"] = serde_json::Value::String(err);
-    }
-    Ok(out)
+pub async fn omp_desktop_v1_capability(
+    state: State<'_, Arc<OmpExtension>>,
+) -> Result<Option<DesktopV1Capability>, String> {
+    Ok(state.capability().await)
 }
 
-/// List MCP servers from `grok inspect --json`.
-/// Always returns Ok; on CLI missing / timeout, `servers` is empty and `error` is set.
-/// Each server includes `enabled` from App Extensions prefs (default true).
+/// List invocable skills from the OMP Runtime via `_omp/desktop/v1/extensions.list`.
+///
+/// Plan 2: routes through `OmpExtension` when capability is present, falling
+/// back to `runtime_unavailable` when absent. Plan 3 wires the real transport.
 #[tauri::command]
-pub async fn inspect_mcp(project_path: Option<String>) -> Result<serde_json::Value, String> {
-    let path = project_path.clone();
-    let (parsed, error) = tauri::async_runtime::spawn_blocking(move || {
-        run_grok_inspect(path.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+pub async fn skills_list(
+    project_path: Option<String>,
+    state: State<'_, Arc<OmpExtension>>,
+) -> Result<serde_json::Value, String> {
+    let params = match project_path.as_deref() {
+        Some(cwd) if !cwd.trim().is_empty() => serde_json::json!({ "cwd": cwd }),
+        _ => serde_json::json!({}),
+    };
+    route_through_extension(&state, "extensions.list", params).await
+}
 
-    let mut servers = parsed.as_ref().map(parse_mcp_servers).unwrap_or_default();
-    let prefs = crate::extensions::load_prefs();
-    // Enrich with enable state for UI toggles.
-    let mut server_json = Vec::with_capacity(servers.len());
-    for s in servers.drain(..) {
-        let enabled = crate::extensions::is_enabled(&prefs.mcp, &s.name);
-        server_json.push(serde_json::json!({
-            "name": s.name,
-            "transport": s.transport,
-            "target": s.target,
-            "vendor": s.vendor,
-            "compatibilityStatus": s.compatibility_status,
-            "enabled": enabled,
-        }));
-    }
-    let mut out = serde_json::json!({ "servers": server_json });
-    if let Some(err) = error {
-        out["error"] = serde_json::Value::String(err);
-    }
-    Ok(out)
+/// List MCP servers from the OMP Runtime via `_omp/desktop/v1/mcp.list`.
+///
+/// Plan 2: routes through `OmpExtension` when capability is present, falling
+/// back to `runtime_unavailable` when absent. Plan 3 wires the real transport.
+#[tauri::command]
+pub async fn inspect_mcp(
+    project_path: Option<String>,
+    state: State<'_, Arc<OmpExtension>>,
+) -> Result<serde_json::Value, String> {
+    let params = match project_path.as_deref() {
+        Some(cwd) if !cwd.trim().is_empty() => serde_json::json!({ "cwd": cwd }),
+        _ => serde_json::json!({}),
+    };
+    route_through_extension(&state, "mcp.list", params).await
 }
 
 // ── Project inspect summary (Settings → Runtime) ─────────────────────────────
@@ -2156,39 +2170,20 @@ fn build_project_inspect_summary(
     out
 }
 
-/// Full project inspect summary for Settings → Runtime.
-/// Runs `grok inspect --json` with optional project cwd; returns a sanitized DTO
-/// (plugins / skills counts / MCP / rules paths / model hints). Never includes secrets.
+/// Full project inspect summary for Settings → Runtime via
+/// `_omp/desktop/v1/diagnostics.selfCheck`.
+///
+/// Plan 2: routes through `OmpExtension` when capability is present, falling
+/// back to `runtime_unavailable` when absent. Plan 3 wires the real transport.
 #[tauri::command]
-pub async fn project_inspect(project_path: Option<String>) -> Result<serde_json::Value, String> {
-    let path = project_path.clone();
-    let (parsed, error) = tauri::async_runtime::spawn_blocking(move || {
-        run_grok_inspect(path.as_deref())
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    // Model ids from local cache (hints only — not secrets).
-    let models_hints: Vec<String> = {
-        let catalog = crate::models_catalog::list_available_models();
-        let mut hints = Vec::new();
-        if !catalog.default_model_id.trim().is_empty() {
-            hints.push(catalog.default_model_id.clone());
-        }
-        for m in catalog.models.iter().take(8) {
-            if !hints.iter().any(|h| h == &m.id) {
-                hints.push(m.id.clone());
-            }
-        }
-        hints
-    };
-
-    Ok(build_project_inspect_summary(
-        parsed.as_ref(),
-        project_path.as_deref(),
-        error,
-        models_hints,
-    ))
+pub async fn project_inspect(
+    project_path: Option<String>,
+    state: State<'_, Arc<OmpExtension>>,
+) -> Result<serde_json::Value, String> {
+    // `diagnostics.selfCheck` takes no params; project_path is accepted for
+    // API compatibility and ignored by the v1 handler (forward-compat rule).
+    let _ = project_path;
+    route_through_extension(&state, "diagnostics.selfCheck", serde_json::json!({})).await
 }
 
 /// List skills from `grok inspect --json`, each with App `enabled` (default true).
@@ -2683,21 +2678,16 @@ fn collect_plugins_list() -> Result<Vec<PluginDto>, String> {
     parse_plugin_list_json(&stdout, &disabled, &inspect_extra)
 }
 
-/// List installed plugins (OMP Runtime inventory + enable state + inspect extras).
-/// Always returns Ok; on CLI missing / failure, `plugins` is empty and `error` is set.
+/// List installed plugins from the OMP Runtime via
+/// `_omp/desktop/v1/extensions.list`.
+///
+/// Plan 2: routes through `OmpExtension` when capability is present, falling
+/// back to `runtime_unavailable` when absent. Plan 3 wires the real transport.
 #[tauri::command]
-pub async fn plugins_list() -> Result<serde_json::Value, String> {
-    let result = tauri::async_runtime::spawn_blocking(collect_plugins_list)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    match result {
-        Ok(plugins) => Ok(serde_json::json!({ "plugins": plugins })),
-        Err(e) => Ok(serde_json::json!({
-            "plugins": [],
-            "error": e,
-        })),
-    }
+pub async fn plugins_list(
+    state: State<'_, Arc<OmpExtension>>,
+) -> Result<serde_json::Value, String> {
+    route_through_extension(&state, "extensions.list", serde_json::json!({})).await
 }
 
 /// Enable a plugin by name (`grok plugin enable <name>`). Soft-respawns agent.
@@ -4948,67 +4938,21 @@ pub struct PersonaDefDto {
 
 // from PR #77
 
-/// List agent + persona definition files from user / project / bundled scopes.
-/// Does not require the CLI binary (pure filesystem discovery under the runtime home
-/// and optional `{project}/.grok`). Always returns Ok.
+/// List agent + persona definitions from the OMP Runtime via
+/// `_omp/desktop/v1/extensions.list`.
+///
+/// Plan 2: routes through `OmpExtension` when capability is present, falling
+/// back to `runtime_unavailable` when absent. Plan 3 wires the real transport.
 #[tauri::command]
-pub async fn agents_list(project_path: Option<String>) -> Result<serde_json::Value, String> {
-    let project = project_path
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string());
-
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let home = crate::process_util::user_home();
-        let grok = home.join(".grok");
-        let user_agents = grok.join("agents");
-        let bundled_agents = grok.join("bundled").join("agents");
-        let user_personas = grok.join("personas");
-        let bundled_personas = grok.join("bundled").join("personas");
-
-        let project_agents = project.as_ref().map(|p| {
-            std::path::PathBuf::from(p).join(".grok").join("agents")
-        });
-        let project_personas = project.as_ref().map(|p| {
-            std::path::PathBuf::from(p).join(".grok").join("personas")
-        });
-
-        let mut agents = Vec::new();
-        if let Some(ref dir) = project_agents {
-            agents.extend(scan_agent_dir(dir, "project"));
-        }
-        agents.extend(scan_agent_dir(&user_agents, "user"));
-        agents.extend(scan_agent_dir(&bundled_agents, "bundled"));
-        let agents = sort_agent_defs(agents);
-
-        let mut personas = Vec::new();
-        if let Some(ref dir) = project_personas {
-            personas.extend(scan_persona_dir(dir, "project"));
-        }
-        personas.extend(scan_persona_dir(&user_personas, "user"));
-        personas.extend(scan_persona_dir(&bundled_personas, "bundled"));
-        let personas = sort_persona_defs(personas);
-
-        serde_json::json!({
-            "agents": agents,
-            "personas": personas,
-            "userAgentsDir": user_agents.to_string_lossy(),
-            "projectAgentsDir": project_agents
-                .as_ref()
-                .map(|p| p.to_string_lossy().to_string()),
-            "bundledAgentsDir": bundled_agents.to_string_lossy(),
-            "userPersonasDir": user_personas.to_string_lossy(),
-            "projectPersonasDir": project_personas
-                .as_ref()
-                .map(|p| p.to_string_lossy().to_string()),
-            "bundledPersonasDir": bundled_personas.to_string_lossy(),
-        })
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    Ok(result)
+pub async fn agents_list(
+    project_path: Option<String>,
+    state: State<'_, Arc<OmpExtension>>,
+) -> Result<serde_json::Value, String> {
+    let params = match project_path.as_deref() {
+        Some(cwd) if !cwd.trim().is_empty() => serde_json::json!({ "cwd": cwd }),
+        _ => serde_json::json!({}),
+    };
+    route_through_extension(&state, "extensions.list", params).await
 }
 
 // from PR #83
