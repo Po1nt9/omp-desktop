@@ -127,6 +127,55 @@ test("rejects an incorrect patch ledger base commit", async (t) => {
   assert.throws(() => validatePatchLedger(directory), /omp-patches\.baseCommit/);
 });
 
+test("accepts a valid patch entry in the ledger", async (t) => {
+  const directory = await makeTempDirectory(t);
+  await writeFile(
+    path.join(directory, "omp-patches.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      baseCommit: ompCommit,
+      patches: [
+        {
+          id: "desktop-v1-protocol",
+          branch: "desktop-v1-protocol",
+          description: "test patch",
+          plan: "test-plan",
+          commit: "1333fd28c4f283c9960f0a8030ac1fcad13f3802",
+        },
+      ],
+    }),
+  );
+  const data = validatePatchLedger(directory);
+  assert.equal(data.patches.length, 1);
+  assert.equal(data.patches[0].commit, "1333fd28c4f283c9960f0a8030ac1fcad13f3802");
+});
+
+test("rejects a patch entry with a malformed commit SHA", async (t) => {
+  const directory = await makeTempDirectory(t);
+  await writeFile(
+    path.join(directory, "omp-patches.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      baseCommit: ompCommit,
+      patches: [{ id: "bad", branch: "bad", description: "bad", plan: "bad", commit: "not-a-sha" }],
+    }),
+  );
+  assert.throws(() => validatePatchLedger(directory), /patches\[0\]\.commit/);
+});
+
+test("rejects a patch entry missing required string fields", async (t) => {
+  const directory = await makeTempDirectory(t);
+  await writeFile(
+    path.join(directory, "omp-patches.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      baseCommit: ompCommit,
+      patches: [{ id: "", branch: "b", description: "d", plan: "p", commit: "1333fd28c4f283c9960f0a8030ac1fcad13f3802" }],
+    }),
+  );
+  assert.throws(() => validatePatchLedger(directory), /patches\[0\]\.id/);
+});
+
 test("accepts both planned and published publication records", async (t) => {
   const publishedDirectory = await writeUpstreams(t, (data) => {
     data.desktop.publicationState = "published";

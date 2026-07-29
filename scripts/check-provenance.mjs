@@ -61,12 +61,27 @@ export function validatePatchLedger(directory) {
   requireValue(data.schemaVersion, 1, "omp-patches.schemaVersion");
   requireValue(data.baseCommit, OMP_BASE, "omp-patches.baseCommit");
   if (!Array.isArray(data.patches)) throw new Error("omp-patches.patches must be an array");
+  const shaPattern = /^[0-9a-f]{40}$/;
+  for (const [index, patch] of data.patches.entries()) {
+    const at = `omp-patches.patches[${index}]`;
+    if (typeof patch.id !== "string" || patch.id.length === 0) throw new Error(`${at}.id must be a non-empty string`);
+    if (typeof patch.branch !== "string" || patch.branch.length === 0) throw new Error(`${at}.branch must be a non-empty string`);
+    if (typeof patch.description !== "string" || patch.description.length === 0) throw new Error(`${at}.description must be a non-empty string`);
+    if (typeof patch.plan !== "string" || patch.plan.length === 0) throw new Error(`${at}.plan must be a non-empty string`);
+    if (typeof patch.commit !== "string" || !shaPattern.test(patch.commit)) throw new Error(`${at}.commit must be a 40-character lowercase hex SHA`);
+  }
+  return data;
 }
 
 export function checkRepository(root) {
   const provenanceDirectory = path.join(root, "provenance");
   const data = validateUpstreams(provenanceDirectory);
-  validatePatchLedger(provenanceDirectory);
+  const patchData = validatePatchLedger(provenanceDirectory);
+
+  const expectedCommit =
+    patchData.patches.length > 0
+      ? patchData.patches[patchData.patches.length - 1].commit
+      : data.omp.pinnedCommit;
 
   const superprojectOrigin = optionalRemote(root, "origin");
   if (data.desktop.publicationState === "published") {
@@ -84,10 +99,20 @@ export function checkRepository(root) {
   const gitlink = git(root, ["ls-tree", "HEAD", "--", data.omp.submodulePath]);
   const match = gitlink.match(/^160000 commit ([0-9a-f]{40})\t/);
   if (!match) throw new Error(`${data.omp.submodulePath} must be a committed gitlink`);
-  requireValue(match[1], data.omp.pinnedCommit, "submodule gitlink");
+  requireValue(match[1], expectedCommit, "submodule gitlink");
 
   const submodule = path.join(root, data.omp.submodulePath);
-  requireValue(git(submodule, ["rev-parse", "HEAD"]), data.omp.pinnedCommit, "submodule HEAD");
+  const submoduleHead = git(submodule, ["rev-parse", "HEAD"]);
+  requireValue(submoduleHead, match[1], "submodule HEAD");
+  if (patchData.patches.length > 0) {
+    try {
+      execFileSync("git", ["-C", submodule, "merge-base", "--is-ancestor", patchData.baseCommit, submoduleHead], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch {
+      throw new Error("submodule HEAD must be a descendant of the patch base commit");
+    }
+  }
   requireValue(git(submodule, ["remote", "get-url", "origin"]), data.omp.forkRemote, "submodule origin");
   requireValue(git(submodule, ["remote", "get-url", "upstream"]), data.omp.officialRemote, "submodule upstream");
   requireValue(
