@@ -12,6 +12,7 @@
 pub mod tests;
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// Kind of journal entry. Mirrors the v1 protocol event taxonomy plus an
 /// internal `JournalCommit` marker for commit points.
@@ -59,6 +60,36 @@ pub struct EventJournal {
     events: Vec<JournalEvent>,
     commit_points: Vec<CommitPoint>,
     sequence: u64,
+}
+impl serde::Serialize for EventJournal {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut st = s.serialize_struct("EventJournal", 4)?;
+        st.serialize_field("sessionId", &self.session_id)?;
+        st.serialize_field("events", &self.events)?;
+        st.serialize_field("commitPoints", &self.commit_points)?;
+        st.serialize_field("sequence", &self.sequence)?;
+        st.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for EventJournal {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Raw {
+            session_id: String,
+            events: Vec<JournalEvent>,
+            commit_points: Vec<CommitPoint>,
+            sequence: u64,
+        }
+        let r = Raw::deserialize(d)?;
+        Ok(EventJournal {
+            session_id: r.session_id,
+            events: r.events,
+            commit_points: r.commit_points,
+            sequence: r.sequence,
+        })
+    }
 }
 
 impl EventJournal {
@@ -120,6 +151,27 @@ impl EventJournal {
     pub fn events(&self) -> &[JournalEvent] {
         &self.events
     }
+
+    /// Standard on-disk path: `<session_dir>/event_journal.json`.
+    pub fn standard_path(session_id: &str) -> PathBuf {
+        crate::paths::session_dir(session_id).join("event_journal.json")
+    }
+
+    /// Serialize to a file (pretty JSON). Creates parent dirs as needed.
+    pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let bytes = serde_json::to_vec_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        std::fs::write(path, bytes)
+    }
+
+    /// Deserialize from a file.
+    pub fn load_from(path: &Path) -> Result<Self, String> {
+        let raw = std::fs::read(path).map_err(|e| e.to_string())?;
+        serde_json::from_slice(&raw).map_err(|e| e.to_string())
+    }
 }
 
 /// Generate a stable event ID: `evt_` followed by 26 chars drawn from
@@ -147,4 +199,61 @@ fn generate_commit_token() -> String {
     use rand::Rng;
     let bytes: [u8; 16] = rand::thread_rng().gen();
     format!("cp_{}", hex::encode(&bytes))
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+
+    #[test]
+    fn test_save_load_roundtrip() {
+        let dir = std::env::temp_dir().join(format!(
+            "omp-journal-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path = dir.join("event_journal.json");
+        let mut journal = EventJournal::new("sess-rt".into());
+        let _ = journal.append(EventKind::TurnStart, serde_json::json!({}));
+        let _ = journal.commit();
+        journal.save_to(&path).expect("save");
+
+        let loaded = EventJournal::load_from(&path).expect("load");
+        assert_eq!(loaded.events().len(), 1);
+        assert_eq!(loaded.events()[0].id, journal.events()[0].id);
+        assert_eq!(loaded.events()[0].kind, EventKind::TurnStart);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_load_missing_file_returns_err() {
+        let path = Path::new("/nonexistent/omp-test-journal-xyz.json");
+        assert!(EventJournal::load_from(path).is_err());
+    }
+
+    #[test]
+    fn test_save_creates_parent_dir() {
+        let base = std::env::temp_dir().join(format!(
+            "omp-journal-parent-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path = base.join("nested/deep/event_journal.json");
+        let journal = EventJournal::new("sess-pd".into());
+        journal.save_to(&path).expect("save creates parents");
+        assert!(path.is_file());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_standard_path_format() {
+        let p = EventJournal::standard_path("abc-123");
+        assert!(p
+            .to_string_lossy()
+            .ends_with("sessions/abc-123/event_journal.json"));
+    }
 }
