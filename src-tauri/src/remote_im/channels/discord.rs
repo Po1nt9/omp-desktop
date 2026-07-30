@@ -148,7 +148,29 @@ fn parse_message(inst: &ChannelInstance, d: &Value) -> Option<IncomingMessage> {
         return None;
     }
     let content = d.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
-    if content.is_empty() {
+    // Extract image attachments (Discord CDN urls are public, no auth needed).
+    let mut attachments: Vec<super::super::types::Attachment> = Vec::new();
+    if let Some(arr) = d.get("attachments").and_then(|a| a.as_array()) {
+        for att in arr {
+            let is_image = att
+                .get("content_type")
+                .and_then(|ct| ct.as_str())
+                .map(|ct| ct.starts_with("image/"))
+                .unwrap_or(false);
+            if is_image {
+                if let Some(url) = att.get("url").and_then(|u| u.as_str()) {
+                    attachments.push(super::super::types::Attachment {
+                        kind: super::super::types::AttachmentKind::Image,
+                        source: super::super::types::AttachmentSource::Discord {
+                            url: url.to_string(),
+                        },
+                    });
+                }
+            }
+        }
+    }
+    // Drop only if there's no text AND no image attachments.
+    if content.is_empty() && attachments.is_empty() {
         return None;
     }
     let chat_id = d.get("channel_id").and_then(|x| x.as_str()).unwrap_or("").to_string();
@@ -176,7 +198,7 @@ fn parse_message(inst: &ChannelInstance, d: &Value) -> Option<IncomingMessage> {
         sender_id,
         content,
         mentioned_bot,
-        attachments: vec![],
+        attachments,
     })
 }
 

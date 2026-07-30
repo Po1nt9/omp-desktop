@@ -72,7 +72,22 @@ pub async fn run(
                 .and_then(|x| x.as_str())
                 .unwrap_or("")
                 .to_string();
-            if text.is_empty() {
+            // Extract the highest-resolution photo file_id (if any).
+            let mut attachments: Vec<super::super::types::Attachment> = Vec::new();
+            if let Some(photos) = msg.get("photo").and_then(|p| p.as_array()) {
+                if let Some(largest) = photos.last() {
+                    if let Some(file_id) = largest.get("file_id").and_then(|f| f.as_str()) {
+                        attachments.push(super::super::types::Attachment {
+                            kind: super::super::types::AttachmentKind::Image,
+                            source: super::super::types::AttachmentSource::Telegram {
+                                file_id: file_id.to_string(),
+                            },
+                        });
+                    }
+                }
+            }
+            // Drop only if there's no text AND no attachments.
+            if text.is_empty() && attachments.is_empty() {
                 continue;
             }
             let chat_id = msg
@@ -133,7 +148,7 @@ pub async fn run(
                     sender_id,
                     content: text,
                     mentioned_bot,
-                    attachments: vec![],
+                    attachments,
                 })
                 .await;
         }

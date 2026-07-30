@@ -320,18 +320,40 @@ fn parse_im_event(inst: &ChannelInstance, root: &Value) -> Option<IncomingMessag
             text = title.to_string();
         }
     }
-    // Text-adjacent media: surface image/file keys into the prompt (download optional).
-    if text.is_empty() || msg_type == "image" || msg_type == "file" || msg_type == "audio" {
+    // message_id is needed both for the attachment source and the message struct.
+    let message_id = message
+        .get("message_id")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string();
+    // Collect media attachments (image/file) for download by the engine.
+    let mut attachments: Vec<super::super::types::Attachment> = Vec::new();
+    if msg_type == "image" || msg_type == "file" {
         if let Some(key) = content_json
             .get("image_key")
             .or_else(|| content_json.get("file_key"))
             .and_then(|x| x.as_str())
         {
-            let tag = format!("[{msg_type}:{key}]");
-            if text.is_empty() {
-                text = format!("请查看附件 {tag}");
+            let resource_type = if msg_type == "image" { "image" } else { "file" };
+            let kind = if msg_type == "image" {
+                super::super::types::AttachmentKind::Image
             } else {
-                text = format!("{text}\n{tag}");
+                super::super::types::AttachmentKind::File
+            };
+            attachments.push(super::super::types::Attachment {
+                kind,
+                source: super::super::types::AttachmentSource::Feishu {
+                    message_id: message_id.clone(),
+                    file_key: key.to_string(),
+                    resource_type: resource_type.to_string(),
+                },
+            });
+        }
+    } else if msg_type == "audio" {
+        // Audio not supported in P2; surface a placeholder so the user knows.
+        if let Some(key) = content_json.get("file_key").and_then(|x| x.as_str()) {
+            if text.is_empty() {
+                text = format!("[audio:{key}]");
             }
         }
     }
@@ -340,11 +362,6 @@ fn parse_im_event(inst: &ChannelInstance, root: &Value) -> Option<IncomingMessag
 
     let chat_id = message
         .get("chat_id")
-        .and_then(|x| x.as_str())
-        .unwrap_or("")
-        .to_string();
-    let message_id = message
-        .get("message_id")
         .and_then(|x| x.as_str())
         .unwrap_or("")
         .to_string();
@@ -383,7 +400,7 @@ fn parse_im_event(inst: &ChannelInstance, root: &Value) -> Option<IncomingMessag
         })
         .unwrap_or(chat_type == "p2p");
 
-    if re_clean.trim().is_empty() {
+    if re_clean.trim().is_empty() && attachments.is_empty() {
         return None;
     }
 
@@ -396,7 +413,7 @@ fn parse_im_event(inst: &ChannelInstance, root: &Value) -> Option<IncomingMessag
         sender_id,
         content: re_clean,
         mentioned_bot: mentioned_bot || chat_type == "p2p",
-        attachments: vec![],
+        attachments,
     })
 }
 
