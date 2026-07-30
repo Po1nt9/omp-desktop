@@ -5,6 +5,7 @@ use super::config;
 use super::engine::Engine;
 use super::outbound::OutboundRouter;
 use super::types::{ChannelInstance, ConnectedChannel, IncomingMessage};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
@@ -36,6 +37,8 @@ impl RuntimeHandle {
 
 pub async fn start_runtime(
     allow_remote_yolo: bool,
+    binary_path: Option<PathBuf>,
+    agent_dir: Option<PathBuf>,
 ) -> Result<(RuntimeHandle, Vec<ConnectedChannel>), String> {
     let list = config::list_instances();
     let mut active = Vec::new();
@@ -72,7 +75,12 @@ pub async fn start_runtime(
     }
 
     let outbound = OutboundRouter::new();
-    let engine = Arc::new(Engine::new(outbound.clone(), allow_remote_yolo, None, None));
+    let engine = Arc::new(Engine::new(
+        outbound.clone(),
+        allow_remote_yolo,
+        binary_path,
+        agent_dir,
+    ));
     for inst in &instances {
         // Must inject _instance_id so weixin context_token / dingtalk webhooks resolve.
         let mut secrets = inst.secrets.clone();

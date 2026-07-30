@@ -4,6 +4,7 @@ use super::config;
 use super::runtime::{self, RuntimeHandle};
 use super::{BridgeStatusDto, ConnectedChannelDto};
 use parking_lot::Mutex;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -135,7 +136,18 @@ impl BridgeRuntime {
         self.persist_config();
         let _ = self.stop_async_inner(false).await;
 
-        match runtime::start_runtime(self.allow_remote_yolo).await {
+        // Resolve binary path and agent dir from Settings (same source as SessionManager).
+        let settings = crate::store::load_settings();
+        let binary_path = settings
+            .manual_cli_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .filter(|p| p.exists());
+        let agent_dir = Some(crate::agent_prefs::agent_grok_home(&settings.session_data_mode));
+
+        match runtime::start_runtime(self.allow_remote_yolo, binary_path, agent_dir).await {
             Ok((handle, connected)) => {
                 let dtos: Vec<ConnectedChannelDto> = connected
                     .into_iter()
