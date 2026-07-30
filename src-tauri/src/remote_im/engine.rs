@@ -15,7 +15,8 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::acp_client::{AcpClient, AcpEvent, SpawnOptions, StreamKind};
+use crate::acp_client::{AcpClient, AcpEvent, PromptBlock, SpawnOptions, StreamKind};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 
 #[derive(Clone)]
 struct PendingPick {
@@ -966,8 +967,46 @@ impl Engine {
             }
         };
 
+        // Construct prompt blocks: text first, then any image attachments.
+        let mut blocks = vec![PromptBlock::Text {
+            text: prompt.to_string(),
+        }];
+        if !msg.attachments.is_empty() {
+            // Bind the clone first so the (non-Send) MutexGuard drops before any await.
+            let inst_opt = self.instances.lock().get(&msg.instance_id).cloned();
+            if let Some(inst) = inst_opt {
+                for att in msg
+                    .attachments
+                    .iter()
+                    .filter(|a| a.kind == super::types::AttachmentKind::Image)
+                {
+                    match super::media::fetch_attachment(
+                        &msg.channel,
+                        &inst.secrets,
+                        &inst.options,
+                        att,
+                    )
+                    .await
+                    {
+                        Ok(media) => {
+                            let b64 = B64.encode(&media.data);
+                            blocks.push(PromptBlock::Image {
+                                data: b64,
+                                mime_type: media.mime_type,
+                            });
+                        }
+                        Err(e) => tracing::warn!(
+                            target: "remote_im::media",
+                            channel = %msg.channel,
+                            "image download failed: {e}"
+                        ),
+                    }
+                }
+            }
+        }
+
         // Run the prompt (blocks until the turn completes).
-        if let Err(e) = runtime.acp.prompt(prompt).await {
+        if let Err(e) = runtime.acp.prompt_with_blocks(&blocks).await {
             return AgentTurnResult {
                 text: String::new(),
                 session_id: Some(opened_sid),
