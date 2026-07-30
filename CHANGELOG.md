@@ -5,6 +5,22 @@ All notable changes to OMP Desktop will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1-nightly] - 2026-07-31
+
+### Changed / 变更
+
+- **In-app auto-update enabled:** builds are now signed with a minisign
+  updater key, so Settings → About "check for update" runs the silent
+  download → install → relaunch path (was: open GitHub release page).
+  The rolling `omp-desktop-latest` release now ships `latest.json` +
+  per-platform `.sig` archives. 应用内自动更新已启用（minisign 签名）。
+
+### Known Limitations / 已知限制
+
+- Builds remain **not code-signed** by Apple / Windows (Plan 9, paid certs).
+  The updater verifies archive integrity, but macOS Gatekeeper / Windows
+  SmartScreen still warn on the updated binary. 更新包已签名校验，但 OS 代码签名仍未启用。
+
 ## [0.3.0-nightly] - 2026-07-30
 
 First end-to-end release of OMP Desktop with the OMP Runtime bridge wired, all
