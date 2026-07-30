@@ -38,6 +38,7 @@ impl DedupStore {
         }
     }
 
+    #[allow(dead_code)] // used via Engine::new_ephemeral (test path)
     pub fn ephemeral() -> Self {
         let conn = Connection::open_in_memory().expect("open in-memory db");
         Self::init(&conn);
@@ -78,7 +79,7 @@ impl DedupStore {
         let is_new = changed == 1;
         if is_new {
             let n = self.insert_count.fetch_add(1, Ordering::Relaxed) + 1;
-            if n % DEDUP_CLEANUP_INTERVAL == 0 {
+            if n.is_multiple_of(DEDUP_CLEANUP_INTERVAL) {
                 self.cleanup_locked(now);
             }
         }
