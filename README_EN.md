@@ -7,8 +7,8 @@
 <p align="center"><strong>Open-source Tauri/React desktop shell adapted to the OMP Runtime</strong></p>
 
 <p align="center">
-  <a href="./README.md">English</a> ·
-  <a href="./README_ZH.md">中文</a>
+  <a href="./README.md">中文</a> ·
+  <a href="./README_EN.md">English</a>
 </p>
 
 <p align="center">
@@ -33,10 +33,11 @@
 2. [Status](#status)
 3. [Development](#development)
 4. [Platforms](#platforms)
-5. [Provenance](#provenance)
-6. [Documentation](#documentation)
-7. [Contributing](#contributing)
-8. [License](#license)
+5. [Install & First Run / 安装与首次运行](#install--first-run--安装与首次运行)
+6. [Provenance](#provenance)
+7. [Documentation](#documentation)
+8. [Contributing](#contributing)
+9. [License](#license)
 
 ---
 
@@ -88,6 +89,74 @@ OMP Desktop targets three operating systems:
 | macOS | Apple Silicon + Intel |
 | Windows | x64 |
 | Linux | x64 (AppImage / deb / rpm) |
+
+## Install & First Run / 安装与首次运行
+
+### macOS (Homebrew — recommended)
+
+```bash
+brew install Po1nt9/tap/omp-desktop
+```
+
+Homebrew clears the Gatekeeper quarantine flag automatically — no security
+dialog on first launch.
+
+<details>
+<summary>Manual install (DMG)</summary>
+
+1. Download the `.dmg` from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases)
+   and drag **OMP Desktop** to Applications.
+2. First launch is blocked by Gatekeeper ("unidentified developer"). Bypass:
+   - Right-click the app → **Open** → **Open** in the dialog; **or**
+   - Terminal: `xattr -cr "/Applications/OMP Desktop.app"`
+3. The bypass is one-time — subsequent launches open normally.
+
+</details>
+
+### Linux (one-line script)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Po1nt9/omp-desktop/main/scripts/install.sh | bash
+```
+
+The script downloads the latest AppImage to `~/.local/bin/omp-desktop` and
+makes it executable.
+
+<details>
+<summary>Manual install (AppImage / deb / rpm)</summary>
+
+Download from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases):
+
+- **AppImage**: `chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
+- **deb**: `sudo apt install ./OMP-Desktop_*.deb` (depends on `libwebkit2gtk-4.1-0`, `libgtk-3-0`)
+- **rpm**: `sudo dnf install OMP-Desktop_*.rpm` (or `rpm -i`)
+
+</details>
+
+### Windows
+
+1. Run the `OMP-Desktop_*_x64-setup.exe` installer (NSIS), or use the portable
+   zip (green/绿色版): extract anywhere and run `OMP-Desktop.exe`.
+2. SmartScreen may warn "Windows protected your PC" → **More info** → **Run anyway**.
+3. WebView2 Runtime is required (usually preinstalled on Win10/11; the installer
+   downloads it if missing).
+
+> [!NOTE]
+> Builds are **not yet OS-code-signed** (Apple Developer ID / Windows
+> Authenticode). The in-app **updater** is signed (minisign) and works
+> silently. OS trust warnings are cosmetic — see
+> [signing requirements](./docs/release/signing-requirements.md) for the
+> remaining Plan 9 work and free alternatives (SignPath, Homebrew).
+
+### First run: point at the OMP Runtime
+
+OMP Desktop ships **without** a bundled Runtime — you provide the OMP CLI
+yourself so it can be upgraded independently. On first launch:
+
+1. Install the [OMP Runtime](https://github.com/can1357/oh-my-pi) CLI.
+2. Open **Settings** in OMP Desktop.
+3. Set the **Manual CLI path** to the `omp` (or `omp.exe`) binary location.
+4. Agent sessions now spawn the Runtime you pointed at.
 
 ## Provenance
 

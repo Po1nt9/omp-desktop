@@ -4,11 +4,11 @@
 
 <h1 align="center">OMP Desktop</h1>
 
-<p align="center"><strong>Open-source Tauri/React desktop shell adapted to the OMP Runtime</strong></p>
+<p align="center"><strong>适配 OMP Runtime 的开源 Tauri/React 桌面外壳</strong></p>
 
 <p align="center">
-  <a href="./README.md">English</a> ·
-  <a href="./README_ZH.md">中文</a>
+  <a href="./README.md">中文</a> ·
+  <a href="./README_EN.md">English</a>
 </p>
 
 <p align="center">
@@ -21,57 +21,56 @@
 ---
 
 > [!NOTE]
-> OMP Desktop is an open-source Tauri/React desktop shell being adapted to the OMP Runtime.
-> The Plan 1 baseline is intentionally fail-closed: Agent execution, Provider authentication,
-> and runtime-owned configuration are unavailable until the versioned OMP integration lands.
+> OMP Desktop 是一个开源的 Tauri/React 桌面外壳，正在适配 OMP Runtime。
+> Plan 1 基线有意采用 fail-closed 策略：在版本化的 OMP 集成落地之前，Agent 执行、Provider 认证
+> 以及运行时拥有的配置均不可用。
 
 ---
 
-## Contents
+## 目录
 
-1. [Overview](#overview)
-2. [Status](#status)
-3. [Development](#development)
-4. [Platforms](#platforms)
-5. [Install & First Run / 安装与首次运行](#install--first-run--安装与首次运行)
-6. [Provenance](#provenance)
-7. [Documentation](#documentation)
-8. [Contributing](#contributing)
-9. [License](#license)
+1. [简介](#简介)
+2. [状态](#状态)
+3. [开发](#开发)
+4. [平台](#平台)
+5. [安装与首次运行](#安装与首次运行)
+6. [来源](#来源)
+7. [文档](#文档)
+8. [贡献](#贡献)
+9. [许可证](#许可证)
 
 ---
 
-## Overview
+## 简介
 
-OMP Desktop is a Tauri 2 + React + TypeScript desktop shell. It is being adapted from
-the upstream `RongleCat/grok-app` project (MIT) into a host for the OMP Runtime.
+OMP Desktop 是一个基于 Tauri 2 + React + TypeScript 的桌面外壳。它由上游
+`RongleCat/grok-app` 项目（MIT）适配而来，作为 OMP Runtime 的宿主。
 
-**Stack:** Tauri 2 + Rust · React + TypeScript + Vite · Tailwind CSS
+**技术栈：** Tauri 2 + Rust · React + TypeScript + Vite · Tailwind CSS
 
-The OMP Runtime source is pinned as a git submodule at `runtime/oh-my-pi`.
+OMP Runtime 源码以 git submodule 形式固定在 `runtime/oh-my-pi`。
 
-## Status
+## 状态
 
-The Plan 1 baseline is intentionally fail-closed. The following surfaces return
-`runtime_unavailable` and are not yet wired to a live runtime:
+Plan 1 基线有意采用 fail-closed 策略。以下能力返回 `runtime_unavailable`，尚未接入实时运行时：
 
-- Agent execution (no prompts run)
-- Provider authentication (no sign-in)
-- Runtime-owned configuration (no model catalog, no fallback model)
+- Agent 执行（不运行任何 prompt）
+- Provider 认证（不提供登录）
+- 运行时拥有的配置（无模型目录，无回退模型）
 
-Do not advertise or document these as working capabilities yet. The frozen master
-design lives at
-[`docs/superpowers/specs/2026-07-28-omp-desktop-design.md`](./docs/superpowers/specs/2026-07-28-omp-desktop-design.md).
+在版本化的 OMP 集成落地之前，请勿将以上能力作为可用功能对外宣传或写入文档。
+冻结的总体设计文档位于
+[`docs/superpowers/specs/2026-07-28-omp-desktop-design.md`](./docs/superpowers/specs/2026-07-28-omp-desktop-design.md)。
 
-## Development
+## 开发
 
-Requirements: Node 22+, pnpm 9, Rust stable, Xcode CLT (macOS).
+环境要求：Node 22+、pnpm 9、Rust stable、Xcode CLT（macOS）。
 
 ```bash
 pnpm install
 
-pnpm dev          # full app (Tauri + Vite)
-pnpm dev:ui       # frontend only
+pnpm dev          # 完整应用（Tauri + Vite）
+pnpm dev:ui       # 仅前端
 
 pnpm typecheck
 pnpm test
@@ -80,112 +79,106 @@ cd src-tauri && cargo test
 pnpm build
 ```
 
-## Platforms
+## 平台
 
-OMP Desktop targets three operating systems:
+OMP Desktop 面向三个操作系统：
 
-| Platform | Target |
-|----------|--------|
+| 平台 | 目标 |
+|------|------|
 | macOS | Apple Silicon + Intel |
 | Windows | x64 |
-| Linux | x64 (AppImage / deb / rpm) |
+| Linux | x64（AppImage / deb / rpm） |
 
-## Install & First Run / 安装与首次运行
+## 安装与首次运行
 
-### macOS (Homebrew — recommended)
+### macOS（Homebrew — 推荐）
 
 ```bash
 brew install Po1nt9/tap/omp-desktop
 ```
 
-Homebrew clears the Gatekeeper quarantine flag automatically — no security
-dialog on first launch.
+Homebrew 会自动清除 macOS 隔离标记——首次启动无安全弹窗。
 
 <details>
-<summary>Manual install (DMG)</summary>
+<summary>手动安装（DMG）</summary>
 
-1. Download the `.dmg` from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases)
-   and drag **OMP Desktop** to Applications.
-2. First launch is blocked by Gatekeeper ("unidentified developer"). Bypass:
-   - Right-click the app → **Open** → **Open** in the dialog; **or**
-   - Terminal: `xattr -cr "/Applications/OMP Desktop.app"`
-3. The bypass is one-time — subsequent launches open normally.
+1. 从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载 `.dmg`，
+   将 **OMP Desktop** 拖入「应用程序」。
+2. 首次启动会被 Gatekeeper 拦截（「来自身份不明的开发者」）。绕过方式：
+   - 右键点击 App → **打开** → 对话框中再次点 **打开**；**或**
+   - 终端执行：`xattr -cr "/Applications/OMP Desktop.app"`
+3. 绕过仅首次需要——之后启动恢复正常。
 
 </details>
 
-### Linux (one-line script)
+### Linux（一键脚本）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Po1nt9/omp-desktop/main/scripts/install.sh | bash
 ```
 
-The script downloads the latest AppImage to `~/.local/bin/omp-desktop` and
-makes it executable.
+脚本自动下载最新 AppImage 到 `~/.local/bin/omp-desktop` 并赋予执行权限。
 
 <details>
-<summary>Manual install (AppImage / deb / rpm)</summary>
+<summary>手动安装（AppImage / deb / rpm）</summary>
 
-Download from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases):
+从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载：
 
-- **AppImage**: `chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
-- **deb**: `sudo apt install ./OMP-Desktop_*.deb` (depends on `libwebkit2gtk-4.1-0`, `libgtk-3-0`)
-- **rpm**: `sudo dnf install OMP-Desktop_*.rpm` (or `rpm -i`)
+- **AppImage**：`chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
+- **deb**：`sudo apt install ./OMP-Desktop_*.deb`（依赖 `libwebkit2gtk-4.1-0`、`libgtk-3-0`）
+- **rpm**：`sudo dnf install OMP-Desktop_*.rpm`（或 `rpm -i`）
 
 </details>
 
 ### Windows
 
-1. Run the `OMP-Desktop_*_x64-setup.exe` installer (NSIS), or use the portable
-   zip (green/绿色版): extract anywhere and run `OMP-Desktop.exe`.
-2. SmartScreen may warn "Windows protected your PC" → **More info** → **Run anyway**.
-3. WebView2 Runtime is required (usually preinstalled on Win10/11; the installer
-   downloads it if missing).
+1. 运行 `OMP-Desktop_*_x64-setup.exe` 安装程序（NSIS），或用绿色便携版 zip：解压后运行 `OMP-Desktop.exe`。
+2. SmartScreen 可能提示「Windows 已保护你的电脑」→ **更多信息** → **仍要运行**。
+3. 需要 WebView2 Runtime（Win10/11 通常已预装；缺失时安装程序会自动下载）。
 
 > [!NOTE]
-> Builds are **not yet OS-code-signed** (Apple Developer ID / Windows
-> Authenticode). The in-app **updater** is signed (minisign) and works
-> silently. OS trust warnings are cosmetic — see
-> [signing requirements](./docs/release/signing-requirements.md) for the
-> remaining Plan 9 work and free alternatives (SignPath, Homebrew).
+> 当前构建**尚未进行 OS 级代码签名**（Apple Developer ID / Windows Authenticode）。
+> 应用内**自动更新**已签名（minisign），静默升级正常工作。
+> OS 信任警告仅为外观问题——详见
+> [签名要求](./docs/release/signing-requirements.md) 了解 Plan 9 剩余工作及免费替代方案（SignPath、Homebrew）。
 
-### First run: point at the OMP Runtime
+### 首次运行：指定 OMP Runtime
 
-OMP Desktop ships **without** a bundled Runtime — you provide the OMP CLI
-yourself so it can be upgraded independently. On first launch:
+OMP Desktop **不内置** Runtime——由你自行提供 OMP CLI，以便独立升级 Runtime。首次启动：
 
-1. Install the [OMP Runtime](https://github.com/can1357/oh-my-pi) CLI.
-2. Open **Settings** in OMP Desktop.
-3. Set the **Manual CLI path** to the `omp` (or `omp.exe`) binary location.
-4. Agent sessions now spawn the Runtime you pointed at.
+1. 安装 [OMP Runtime](https://github.com/can1357/oh-my-pi) CLI。
+2. 在 OMP Desktop 中打开 **设置**。
+3. 将 **手动 CLI 路径（Manual CLI path）** 指向 `omp`（或 `omp.exe`）二进制位置。
+4. 此后 Agent 会话会启动你指定的 Runtime。
 
-## Provenance
+## 来源
 
-OMP Desktop is adapted from upstream sources under MIT license:
+OMP Desktop 基于 MIT 许可证的上游源码适配：
 
-- **Desktop shell baseline:** `RongleCat/grok-app` at commit `d2a2563f19bba46cb67496d3b4ac821a31bceaed`
-- **OMP Runtime submodule:** `runtime/oh-my-pi` at commit `667111575ebba136dadfd6989379e7f67e0d40d9`
+- **桌面外壳基线：** `RongleCat/grok-app`，提交 `d2a2563f19bba46cb67496d3b4ac821a31bceaed`
+- **OMP Runtime submodule：** `runtime/oh-my-pi`，提交 `667111575ebba136dadfd6989379e7f67e0d40d9`
 
-Historical upstream material (plans, wikis, acceptance docs) is preserved under
-[`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) for provenance.
-Those files do not describe the current OMP Desktop product.
+历史上游资料（计划、wiki、验收文档）保存在
+[`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) 作为来源凭证。
+这些文件不代表当前 OMP Desktop 产品。
 
-## Documentation
+## 文档
 
-| Audience | Link |
-|----------|------|
-| Frozen master design | [`docs/superpowers/specs/2026-07-28-omp-desktop-design.md`](./docs/superpowers/specs/2026-07-28-omp-desktop-design.md) |
-| Brand baseline plan | [`docs/superpowers/plans/2026-07-28-repository-brand-baseline.md`](./docs/superpowers/plans/2026-07-28-repository-brand-baseline.md) |
-| Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
-| Contributing | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
-| Code of conduct | [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) |
-| Security | [`SECURITY.md`](./SECURITY.md) |
-| Upstream history | [`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) |
+| 对象 | 入口 |
+|------|------|
+| 冻结总体设计 | [`docs/superpowers/specs/2026-07-28-omp-desktop-design.md`](./docs/superpowers/specs/2026-07-28-omp-desktop-design.md) |
+| 品牌基线计划 | [`docs/superpowers/plans/2026-07-28-repository-brand-baseline.md`](./docs/superpowers/plans/2026-07-28-repository-brand-baseline.md) |
+| 更新日志 | [`CHANGELOG.md`](./CHANGELOG.md) |
+| 贡献指南 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
+| 行为准则 | [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) |
+| 安全披露 | [`SECURITY.md`](./SECURITY.md) |
+| 上游历史 | [`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) |
 
-## Contributing
+## 贡献
 
-Issues and PRs are welcome at <https://github.com/Po1nt9/omp-desktop>. See
-[`CONTRIBUTING.md`](./CONTRIBUTING.md) for the development workflow.
+欢迎在 <https://github.com/Po1nt9/omp-desktop> 提交 Issue 与 PR。开发流程见
+[`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 
-## License
+## 许可证
 
-[MIT](./LICENSE) · Adapted from `RongleCat/grok-app` (MIT).
+[MIT](./LICENSE) · 适配自 `RongleCat/grok-app`（MIT）。
