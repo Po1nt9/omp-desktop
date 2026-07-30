@@ -26,6 +26,35 @@ pub struct IncomingMessage {
     pub sender_id: String,
     pub content: String,
     pub mentioned_bot: bool,
+    pub attachments: Vec<Attachment>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Attachment {
+    pub kind: AttachmentKind,
+    pub source: AttachmentSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttachmentKind {
+    Image,
+    File,
+}
+
+/// Platform-specific download credentials. The channel set is finite and known,
+/// so an enum (not a trait object) is the idiomatic choice with zero dyn-dispatch.
+#[derive(Debug, Clone)]
+pub enum AttachmentSource {
+    /// Feishu: download_message_resource(message_id, file_key, resource_type)
+    Feishu {
+        message_id: String,
+        file_key: String,
+        resource_type: String,
+    },
+    /// Telegram: file_id → getFile API → file_path → download
+    Telegram { file_id: String },
+    /// Discord: CDN url, fetched directly (public)
+    Discord { url: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

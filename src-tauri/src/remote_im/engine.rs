@@ -1186,6 +1186,7 @@ mod tests {
             sender_id: "peer@im.wechat".into(),
             content: "/p".into(),
             mentioned_bot: true,
+            attachments: vec![],
         };
         // Pre-fix: nested pending.lock() in or_else deadlocked forever here.
         tokio::time::timeout(Duration::from_secs(3), engine.handle(msg))
@@ -1208,6 +1209,7 @@ mod tests {
             sender_id: "peer@im.wechat".into(),
             content: "inspect this repository".into(),
             mentioned_bot: true,
+            attachments: vec![],
         };
         // Non-empty work_dir so run_agent_turn does not early-return for
         // "no project bound".
@@ -1256,6 +1258,7 @@ mod tests {
             sender_id: "u1".into(),
             content: "hello".into(),
             mentioned_bot: true,
+            attachments: vec![],
         };
         // First call: passes dedup, proceeds into downstream logic (will warn
         // about unknown instance but must not panic).
@@ -1281,6 +1284,7 @@ mod tests {
             sender_id: "u1".into(),
             content: "hi".into(),
             mentioned_bot: true,
+            attachments: vec![],
         };
         // Two distinct message_ids: dedup won't fire, and both are well under
         // the per-channel/per-scope rate limits (60/min, 10/min).

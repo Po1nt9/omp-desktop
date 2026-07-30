@@ -133,6 +133,7 @@ pub async fn run(
                     sender_id,
                     content: text,
                     mentioned_bot,
+                    attachments: vec![],
                 })
                 .await;
         }

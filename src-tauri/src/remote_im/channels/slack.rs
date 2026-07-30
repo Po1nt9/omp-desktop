@@ -171,6 +171,7 @@ fn parse_event(inst: &ChannelInstance, payload: &Value) -> Option<IncomingMessag
         chat_type: chat_type.into(),
         sender_id,
         mentioned_bot: chat_type == "p2p" || text.contains("<@"),
+        attachments: vec![],
         content: text,
     })
 }

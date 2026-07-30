@@ -87,6 +87,7 @@ pub async fn run(
                                     sender_id: sender,
                                     content: body.into(),
                                     mentioned_bot: true,
+                                    attachments: vec![],
                                 })
                                 .await;
                         }

@@ -149,6 +149,7 @@ fn parse_ws_msg(inst: &ChannelInstance, v: &Value) -> Option<IncomingMessage> {
         sender_id: sender,
         content: text,
         mentioned_bot: true,
+        attachments: vec![],
     })
 }
 
@@ -256,6 +257,7 @@ async fn run_webhook(
                                 sender_id: user.into(),
                                 content: text.into(),
                                 mentioned_bot: true,
+                                attachments: vec![],
                             }).await;
                         }
                     }
