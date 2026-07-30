@@ -274,8 +274,23 @@ mod persistence_tests {
     #[test]
     fn test_standard_path_format() {
         let p = EventJournal::standard_path("abc-123");
-        assert!(p
-            .to_string_lossy()
-            .ends_with("sessions/abc-123/event_journal.json"));
+        // Compare path components (not string ends_with) so the assertion is
+        // correct on Windows too, where the separator is '\' not '/'.
+        let tail: Vec<_> = p
+            .components()
+            .rev()
+            .take(3)
+            .map(|c| c.as_os_str())
+            .collect();
+        assert_eq!(
+            tail,
+            vec![
+                std::ffi::OsStr::new("event_journal.json"),
+                std::ffi::OsStr::new("abc-123"),
+                std::ffi::OsStr::new("sessions"),
+            ],
+            "got path: {}",
+            p.display()
+        );
     }
 }
