@@ -85,6 +85,10 @@ pub struct Engine {
     /// Runtime process (TOCTOU fix). Used with double-checked locking in
     /// `get_or_spawn_runtime`.
     spawn_locks: Arc<Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>>,
+    /// Cross-restart message deduplication (SQLite).
+    dedup: super::dedup_store::DedupStore,
+    /// Per-channel + per-scope request rate limiting (in-memory).
+    rate_limiter: super::rate_limiter::RateLimiter,
 }
 
 impl Engine {
@@ -107,6 +111,8 @@ impl Engine {
             runtimes: Arc::new(Mutex::new(HashMap::new())),
             in_flight: Arc::new(Mutex::new(HashMap::new())),
             spawn_locks: Arc::new(Mutex::new(HashMap::new())),
+            dedup: super::dedup_store::DedupStore::open_default(),
+            rate_limiter: super::rate_limiter::RateLimiter::new_default(),
         }
     }
 
@@ -125,6 +131,8 @@ impl Engine {
             runtimes: Arc::new(Mutex::new(HashMap::new())),
             in_flight: Arc::new(Mutex::new(HashMap::new())),
             spawn_locks: Arc::new(Mutex::new(HashMap::new())),
+            dedup: super::dedup_store::DedupStore::ephemeral(),
+            rate_limiter: super::rate_limiter::RateLimiter::new_default(),
         }
     }
 
