@@ -70,6 +70,38 @@ matching signing step is skipped (see `release.yml`).
 Recommendation for an open-source project: start with **OV** and accept the
 reputation warm-up period, unless corporate distribution demands EV.
 
+#### Free alternative: SignPath Foundation (open-source projects)
+
+[SignPath.io](https://about.signpath.io/express/open-source) offers **free
+Authenticode code signing** for non-commercial open-source projects, backed by
+the CA [Certum](https://certum.eu). No hardware token, fully cloud-based, and
+integrates with GitHub Actions via
+[`signpath/github-action-submit-signing-request`](https://github.com/SignPath/github-action-submit-signing-request).
+
+**How to enable:**
+1. Apply at <https://about.signpath.io/express/open-source> with the GitHub repo URL.
+2. After approval, add `SIGNPATH_API_TOKEN`, `SIGNPATH_ORG_ID`, and
+   `SIGNPATH_PROJECT_SLUG` as repo secrets.
+3. Add a post-build step in `release.yml`:
+   ```yaml
+   - name: Sign Windows installer with SignPath
+     if: matrix.platform == 'windows-latest' && env.SIGNPATH_API_TOKEN != ''
+     uses: signpath/github-action-submit-signing-request@v1
+     with:
+       api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+       organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+       project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+       signing-policy-slug: release-signing
+       artifact-configuration-slug: nsis-installer
+       github-artifact-id: ${{ steps.build.outputs.artifact-id }}
+       wait-for-completion: true
+       output-artifact-directory: signed/
+   ```
+
+**Cost:** Free for qualifying open-source projects.
+**Effect:** Eliminates Windows SmartScreen warnings immediately (Certum OV cert
+with SignPath trust).
+
 ### Updater (minisign keypair — cross-platform)
 
 | Secret | Purpose | Source |
@@ -99,3 +131,18 @@ macOS users would still hit Gatekeeper on the (correctly updated) binary.
 | updater only | unsigned | unsigned | `.tar.gz` + `.sig` + `latest.json` |
 | updater + Apple | signed + notarized | unsigned | signed updater archives |
 | updater + Apple + Windows | signed + notarized | Authenticode signed | full chain |
+
+## Community distribution channels (no certificate required)
+
+Package managers bypass or mitigate OS trust warnings without paid certificates:
+
+| Channel | Platform | Effect |
+|---------|----------|--------|
+| [Homebrew Cask](https://github.com/Po1nt9/homebrew-tap) | macOS | Clears quarantine flag automatically — no Gatekeeper dialog |
+| [install.sh](../../scripts/install.sh) (`curl \| bash`) | macOS / Linux | Downloads + `xattr -cr` (macOS) or `chmod +x` (Linux) |
+| Winget (`winget install`) | Windows | Microsoft-verified source reduces SmartScreen friction (submit after stable release) |
+| Scoop bucket | Windows | Green/portable install, no admin required |
+
+These are **complementary** to code signing, not a replacement. Code signing
+removes the warning at the OS trust layer; package managers remove it at the
+delivery layer. Both can coexist.

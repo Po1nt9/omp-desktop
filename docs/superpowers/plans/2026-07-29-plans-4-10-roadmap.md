@@ -8,7 +8,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 > - Plan 6: [`2026-07-29-plan-6-i18n.md`](./2026-07-29-plan-6-i18n.md) — ✅ Complete
 > - Plan 7: [`2026-07-29-plan-7-remote-hub.md`](./2026-07-29-plan-7-remote-hub.md) — ✅ Shipped (as local Runtime Bridge, not a remote Hub)
 > - Plan 8: [`2026-07-29-plan-8-channels.md`](./2026-07-29-plan-8-channels.md) — ✅ Shipped (14 adapters)
-> - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — 🟡 Partial (updater signed; OS codesign blocked)
+> - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — 🟡 Partial (updater signed; Homebrew/install.sh live; OS codesign pending)
 > - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — 🚫 Blocked (Plan 9 codesign + test infra)
 
 ## Plan 4: Config, Provider, MCP, Skills, and Secure Credentials
@@ -191,9 +191,12 @@ connections with zero server infrastructure.
 
 **Status:** 🟡 Partial. Packaging pipeline builds all four targets and publishes
 installers + SHA256SUMS. **Updater signing is enabled** (minisign keypair,
-`v0.3.1-nightly`) so in-app silent update works. **OS code-signing remains
-blocked**: macOS Developer ID notarization and Windows Authenticode require
-purchasing certificates (Apple $99/yr; Windows OV/EV $100-700/yr).
+`v0.3.1-nightly`) so in-app silent update works. **Community distribution
+channels are live**: Homebrew Cask (macOS), one-line `curl | bash` installer
+(macOS/Linux). **OS code-signing remains blocked**: macOS Developer ID
+notarization and Windows Authenticode require purchasing certificates
+(Apple $99/yr; Windows OV/EV $100-700/yr) — free alternatives documented
+(SignPath Foundation for Windows; Homebrew/xattr for macOS).
 **Depends on:** Plans 3-8 (for complete feature set)
 **Spec:** Master design §3 item 9, §20
 
@@ -222,8 +225,11 @@ purchasing certificates (Apple $99/yr; Windows OV/EV $100-700/yr).
 - ✅ Installer formats (DMG, NSIS + portable zip, AppImage, .deb, .rpm) + SHA256SUMS.
 - ✅ Updater artifacts + `latest.json` (signed, `v0.3.1-nightly`).
 - ✅ Graceful degradation when signing secrets are absent.
+- ✅ Homebrew Cask tap ([Po1nt9/homebrew-tap](https://github.com/Po1nt9/homebrew-tap)) — macOS install without Gatekeeper dialog.
+- ✅ One-line installer script (`scripts/install.sh`) — macOS `xattr -cr` + Linux AppImage.
 - 🚫 macOS notarization (needs Apple Developer ID cert — `APPLE_*` secrets).
-- 🚫 Windows Authenticode (needs OV/EV cert — `signtool` step not yet wired).
+- 🚫 Windows Authenticode (needs OV/EV cert or free SignPath Foundation — `signtool` step not yet wired).
+- 🚫 Winget / Scoop submission (deferred to first stable release).
 
 ---
 
@@ -266,9 +272,11 @@ purchasing certificates (Apple $99/yr; Windows OV/EV $100-700/yr).
 | 6. i18n | ✅ Complete | Medium | None |
 | 7. Remote Hub | ✅ Shipped (Runtime Bridge) | High | None (Hub dropped) |
 | 8. Channels | ✅ Shipped (14 adapters) | Very High | None |
-| 9. OS Packaging | 🟡 Partial (updater signed; codesign pending) | Very High | Signing certs (codesign only) |
+| 9. OS Packaging | 🟡 Partial (updater signed; Homebrew/install.sh live; OS codesign pending) | Very High | Signing certs (codesign only) |
 | 10. 1.0 Acceptance | 🚫 Blocked | Medium | Plan 9 codesign + test infra |
 
-Plans 1-8 are complete. Plan 9's remaining work is OS code-signing certificates
-(Apple/Windows). Plan 10 (1.0 acceptance) is blocked on Plan 9's code-signing
-plus cross-platform testing infrastructure.
+Plans 1-8 are complete. Plan 9's updater signing and community distribution
+channels (Homebrew Cask, install.sh) are live; remaining work is OS code-signing
+certificates (Apple/Windows — free alternatives documented: SignPath Foundation,
+Homebrew quarantine bypass). Plan 10 (1.0 acceptance) is blocked on Plan 9's
+code-signing plus cross-platform testing infrastructure.

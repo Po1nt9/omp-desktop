@@ -91,20 +91,44 @@ OMP Desktop 面向三个操作系统：
 
 ## 安装与首次运行
 
-从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载最新安装包。
+### macOS（Homebrew — 推荐）
 
-> [!IMPORTANT]
-> 当前构建**尚未代码签名**。macOS 和 Windows 首次启动会有安全警告——下方步骤说明如何绕过。
-> 签名证书是 Plan 9 剩余阻塞项，详见
-> [签名要求](./docs/release/signing-requirements.md)。
+```bash
+brew install Po1nt9/tap/omp-desktop
+```
 
-### macOS
+Homebrew 会自动清除 macOS 隔离标记——首次启动无安全弹窗。
 
-1. 打开 `.dmg`，将 **OMP Desktop** 拖入「应用程序」。
+<details>
+<summary>手动安装（DMG）</summary>
+
+1. 从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载 `.dmg`，
+   将 **OMP Desktop** 拖入「应用程序」。
 2. 首次启动会被 Gatekeeper 拦截（「来自身份不明的开发者」）。绕过方式：
    - 右键点击 App → **打开** → 对话框中再次点 **打开**；**或**
-   - 终端执行：`xattr -dr com.apple.quarantine "/Applications/OMP Desktop.app"`
+   - 终端执行：`xattr -cr "/Applications/OMP Desktop.app"`
 3. 绕过仅首次需要——之后启动恢复正常。
+
+</details>
+
+### Linux（一键脚本）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Po1nt9/omp-desktop/main/scripts/install.sh | bash
+```
+
+脚本自动下载最新 AppImage 到 `~/.local/bin/omp-desktop` 并赋予执行权限。
+
+<details>
+<summary>手动安装（AppImage / deb / rpm）</summary>
+
+从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载：
+
+- **AppImage**：`chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
+- **deb**：`sudo apt install ./OMP-Desktop_*.deb`（依赖 `libwebkit2gtk-4.1-0`、`libgtk-3-0`）
+- **rpm**：`sudo dnf install OMP-Desktop_*.rpm`（或 `rpm -i`）
+
+</details>
 
 ### Windows
 
@@ -112,11 +136,11 @@ OMP Desktop 面向三个操作系统：
 2. SmartScreen 可能提示「Windows 已保护你的电脑」→ **更多信息** → **仍要运行**。
 3. 需要 WebView2 Runtime（Win10/11 通常已预装；缺失时安装程序会自动下载）。
 
-### Linux
-
-- **AppImage**：`chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
-- **deb**：`sudo apt install ./OMP-Desktop_*.deb`（依赖 `libwebkit2gtk-4.1-0`、`libgtk-3-0`）
-- **rpm**：`sudo dnf install OMP-Desktop_*.rpm`（或 `rpm -i`）
+> [!NOTE]
+> 当前构建**尚未进行 OS 级代码签名**（Apple Developer ID / Windows Authenticode）。
+> 应用内**自动更新**已签名（minisign），静默升级正常工作。
+> OS 信任警告仅为外观问题——详见
+> [签名要求](./docs/release/signing-requirements.md) 了解 Plan 9 剩余工作及免费替代方案（SignPath、Homebrew）。
 
 ### 首次运行：指定 OMP Runtime
 

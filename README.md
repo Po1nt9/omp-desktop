@@ -92,23 +92,46 @@ OMP Desktop targets three operating systems:
 
 ## Install & First Run / 安装与首次运行
 
-Download the latest installer from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases).
+### macOS (Homebrew — recommended)
 
-从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载最新安装包。
+```bash
+brew install Po1nt9/tap/omp-desktop
+```
 
-> [!IMPORTANT]
-> Builds are **not yet code-signed**. macOS and Windows will show a security
-> warning on first launch — the steps below show how to bypass it. Signing
-> certificates are the remaining Plan 9 blocker; see
-> [signing requirements](./docs/release/signing-requirements.md).
+Homebrew clears the Gatekeeper quarantine flag automatically — no security
+dialog on first launch.
 
-### macOS
+<details>
+<summary>Manual install (DMG)</summary>
 
-1. Open the `.dmg` and drag **OMP Desktop** to Applications.
-2. First launch will be blocked by Gatekeeper ("unidentified developer"). Bypass:
+1. Download the `.dmg` from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases)
+   and drag **OMP Desktop** to Applications.
+2. First launch is blocked by Gatekeeper ("unidentified developer"). Bypass:
    - Right-click the app → **Open** → **Open** in the dialog; **or**
-   - Terminal: `xattr -dr com.apple.quarantine "/Applications/OMP Desktop.app"`
+   - Terminal: `xattr -cr "/Applications/OMP Desktop.app"`
 3. The bypass is one-time — subsequent launches open normally.
+
+</details>
+
+### Linux (one-line script)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Po1nt9/omp-desktop/main/scripts/install.sh | bash
+```
+
+The script downloads the latest AppImage to `~/.local/bin/omp-desktop` and
+makes it executable.
+
+<details>
+<summary>Manual install (AppImage / deb / rpm)</summary>
+
+Download from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases):
+
+- **AppImage**: `chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
+- **deb**: `sudo apt install ./OMP-Desktop_*.deb` (depends on `libwebkit2gtk-4.1-0`, `libgtk-3-0`)
+- **rpm**: `sudo dnf install OMP-Desktop_*.rpm` (or `rpm -i`)
+
+</details>
 
 ### Windows
 
@@ -118,11 +141,12 @@ Download the latest installer from the [Releases page](https://github.com/Po1nt9
 3. WebView2 Runtime is required (usually preinstalled on Win10/11; the installer
    downloads it if missing).
 
-### Linux
-
-- **AppImage**: `chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
-- **deb**: `sudo apt install ./OMP-Desktop_*.deb` (depends on `libwebkit2gtk-4.1-0`, `libgtk-3-0`)
-- **rpm**: `sudo dnf install OMP-Desktop_*.rpm` (or `rpm -i`)
+> [!NOTE]
+> Builds are **not yet OS-code-signed** (Apple Developer ID / Windows
+> Authenticode). The in-app **updater** is signed (minisign) and works
+> silently. OS trust warnings are cosmetic — see
+> [signing requirements](./docs/release/signing-requirements.md) for the
+> remaining Plan 9 work and free alternatives (SignPath, Homebrew).
 
 ### First run: point at the OMP Runtime
 
