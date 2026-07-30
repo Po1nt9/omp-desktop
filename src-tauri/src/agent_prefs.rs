@@ -140,7 +140,6 @@ pub fn product_mode_candidates(mode: &str) -> Vec<&'static str> {
 }
 
 /// Runtime home path for logging / tests.
-#[allow(dead_code)]
 pub fn agent_grok_home(_session_data_mode: &str) -> PathBuf {
     let _ = ensure_app_dirs();
     app_data_root().join("agent-home")
