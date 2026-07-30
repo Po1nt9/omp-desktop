@@ -16,6 +16,7 @@ mod error;
 mod fs_browser;
 mod media_protocol;
 mod path_scope;
+mod portability;
 mod mirror;
 mod mock_acp;
 mod models_catalog;

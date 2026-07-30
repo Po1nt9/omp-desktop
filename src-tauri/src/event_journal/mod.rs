@@ -61,6 +61,28 @@ pub struct EventJournal {
     commit_points: Vec<CommitPoint>,
     sequence: u64,
 }
+
+impl std::fmt::Debug for EventJournal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EventJournal")
+            .field("session_id", &self.session_id)
+            .field("events", &self.events.len())
+            .field("commit_points", &self.commit_points.len())
+            .field("sequence", &self.sequence)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Clone for EventJournal {
+    fn clone(&self) -> Self {
+        Self {
+            session_id: self.session_id.clone(),
+            events: self.events.clone(),
+            commit_points: self.commit_points.clone(),
+            sequence: self.sequence,
+        }
+    }
+}
 impl serde::Serialize for EventJournal {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
