@@ -17,6 +17,10 @@ ROLLING_TAG="${ROLLING_TAG:-omp-desktop-latest}"
 WORK="${WORK:-/tmp/omp-desktop-updater-assets}"
 PLATFORM_HINTS="${PLATFORM_HINTS:-}"
 
+# Resolve the script dir to an absolute path BEFORE any `cd` (we cd into $WORK
+# below; a relative BASH_SOURCE would then fail to resolve sibling scripts).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 if [[ -z "$TAG" || -z "$REPO" ]]; then
   echo "Usage: TAG=vX.Y.Z REPO=owner/name $0" >&2
   exit 1
@@ -179,7 +183,6 @@ for t in "${TRIPLES[@]}"; do
   echo "  $t"
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "$SCRIPT_DIR/generate-latest-json.sh" "$VERSION" "${TRIPLES[@]}" > latest.json
 echo "==> latest.json"
 cat latest.json
