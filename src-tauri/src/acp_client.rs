@@ -1,8 +1,9 @@
 //! ACP client — JSON-RPC framing and transport for the OMP Runtime.
 //!
-//! Plan 1: fail-closed shell. All spawn paths return `runtime_unavailable`.
-//! Plan 2: `OmpExtension` client added for versioned `_omp/desktop/v1/*` protocol.
-//! No private extension bindings (private rewind namespace) remain.
+//! When a binary path is configured, `spawn_with_options` launches a real OMP
+//! Runtime process over stdio JSON-RPC. Without a binary, spawn degrades
+//! fail-closed (`runtime_unavailable`). The `_omp/desktop/v1/*` extension
+//! protocol is handled by the `OmpExtension` client.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -202,7 +203,9 @@ pub struct SpawnOptions {
     pub agent_dir: Option<PathBuf>,
 }
 
-/// Stable backend identifier for the fail-closed shell.
+/// Backend identifier surfaced to the UI. Currently a placeholder carried over
+/// from the fail-closed baseline — see TODO: should reflect the live runtime
+/// once `BACKEND_ID` is wired to the actual negotiated backend name.
 pub const BACKEND_ID: &str = "runtime_unavailable";
 
 /// Stable runtime-unavailable error for every execution / spawn path.

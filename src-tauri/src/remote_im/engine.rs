@@ -1,4 +1,6 @@
-//! Message engine: ACL, slash commands, Agent turns (fail-closed), project/session bind.
+//! Message engine: ACL, slash commands, Agent turns, project/session bind.
+//! Turns spawn/reuse a pooled OMP Runtime process; without a configured binary
+//! the engine degrades fail-closed (`runtime_unavailable`).
 
 use super::app_sessions;
 use super::control_plane::{
@@ -31,8 +33,10 @@ enum PickKind {
     Session,
 }
 
-/// Result of a remote Agent turn in the fail-closed shell. Until an OMP
-/// Runtime is connected, every turn surfaces `runtime_unavailable`.
+/// Result of a remote Agent turn. When an OMP Runtime is configured, the turn
+/// spawns/reuses a pooled process, runs the prompt, and returns the streamed
+/// assistant text. The `error` field surfaces `runtime_unavailable` only when
+/// no binary is configured or the spawn/session-open fails.
 pub(crate) struct AgentTurnResult {
     pub text: String,
     pub session_id: Option<String>,
@@ -61,6 +65,46 @@ impl std::fmt::Debug for RuntimeEntry {
         f.debug_struct("RuntimeEntry")
             .field("text_len", &self.text_buf.lock().len())
             .finish_non_exhaustive()
+    }
+}
+
+/// RAII guard that removes a per-scope `aborts` entry when the turn ends,
+/// so the `aborts` map does not grow without bound across distinct scopes.
+/// (The `aborts` flag is currently write-only — `/stop` sets it, the turn
+/// resets it — but the entry must still be reclaimed.)
+struct AbortGuard<'a> {
+    aborts: &'a Arc<Mutex<HashMap<String, bool>>>,
+    scope: &'a str,
+}
+
+impl Drop for AbortGuard<'_> {
+    fn drop(&mut self) {
+        self.aborts.lock().remove(self.scope);
+    }
+}
+
+/// RAII guard that reclaims a pooled concurrency-lock entry (`in_flight` or
+/// `spawn_locks`) when no other task still holds a clone of the `Arc`.
+///
+/// These lock pools use `entry().or_insert_with(Arc::new(...)).clone()` so the
+/// map holds one `Arc` clone and the caller holds another while the turn runs.
+/// When the turn's local clone drops, `strong_count` falls back to 1 — meaning
+/// no concurrent waiter — and the map entry is safe to remove. If another turn
+/// is waiting (it cloned the same Arc before we finished), the count stays >1
+/// and we leave the entry in place for the waiter to reclaim on its own exit.
+///
+/// The reclaim closure runs on drop; declare this guard *before* the local
+/// `Arc` clone so it drops *after* it (Rust drops locals in reverse order),
+/// ensuring the count has already been decremented before the check.
+struct ReclaimOnDrop<F: FnOnce()> {
+    reclaim: Option<F>,
+}
+
+impl<F: FnOnce()> Drop for ReclaimOnDrop<F> {
+    fn drop(&mut self) {
+        if let Some(f) = self.reclaim.take() {
+            f();
+        }
     }
 }
 
@@ -135,6 +179,18 @@ impl Engine {
             dedup: super::dedup_store::DedupStore::ephemeral(),
             rate_limiter: super::rate_limiter::RateLimiter::new_default(),
         }
+    }
+
+    /// Test helper: ephemeral store with a configured binary path, so spawn
+    /// paths are reachable in tests (used for dead-entry eviction coverage).
+    #[cfg(test)]
+    pub(crate) fn new_ephemeral_with_binary(
+        outbound: OutboundRouter,
+        binary_path: PathBuf,
+    ) -> Self {
+        let mut e = Self::new_ephemeral(outbound, false);
+        e.binary_path = Some(binary_path);
+        e
     }
 
     pub fn upsert_instance(&self, inst: ChannelInstance) {
@@ -800,6 +856,21 @@ impl Engine {
         // same work_dir* cannot both miss the cache and double-spawn
         // (TOCTOU fix). Per-scope locking alone doesn't prevent this
         // because different scopes use different locks.
+        // Declare the reclaim guard *before* spawn_guard so Rust drops it
+        // *after* spawn_guard (reverse declaration order). By the time the
+        // closure runs, spawn_guard's Arc clone has already been released, so
+        // strong_count == 1 correctly means no other turn holds the lock.
+        let wd_key = work_dir.to_path_buf();
+        let _spawn_reclaim = ReclaimOnDrop {
+            reclaim: Some(move || {
+                let mut g = self.spawn_locks.lock();
+                if let Some(arc) = g.get(&wd_key) {
+                    if Arc::strong_count(arc) <= 1 {
+                        g.remove(&wd_key);
+                    }
+                }
+            }),
+        };
         let spawn_guard = {
             let mut g = self.spawn_locks.lock();
             g.entry(work_dir.to_path_buf())
@@ -912,6 +983,12 @@ impl Engine {
         }
 
         self.aborts.lock().insert(scope.to_string(), false);
+        // Reclaim the aborts entry on every return path from this turn so the
+        // map does not leak one bool per distinct scope ever seen.
+        let _abort_guard = AbortGuard {
+            aborts: &self.aborts,
+            scope,
+        };
 
         let thinking = if self.lang == "en" {
             "Working…"
@@ -932,6 +1009,21 @@ impl Engine {
         // Acquire per-scope lock so two concurrent messages from the same
         // chat serialize (prevents interleaved turns on the same Runtime).
         // Bind the Arc before locking so it outlives the guard.
+        //
+        // The reclaim guard is declared first so it drops last: by then
+        // scope_mutex's Arc clone is gone, and strong_count == 1 means no
+        // concurrent turn holds the same scope lock → safe to evict.
+        let scope_key_owned = scope.to_string();
+        let _scope_reclaim = ReclaimOnDrop {
+            reclaim: Some(move || {
+                let mut g = self.in_flight.lock();
+                if let Some(arc) = g.get(&scope_key_owned) {
+                    if Arc::strong_count(arc) <= 1 {
+                        g.remove(&scope_key_owned);
+                    }
+                }
+            }),
+        };
         let scope_mutex = self.scope_lock(scope);
         let _scope_guard = scope_mutex.lock().await;
 
@@ -1330,5 +1422,97 @@ mod tests {
         engine.handle(mk("r1")).await;
         engine.handle(mk("r2")).await;
         // No panic → gates executed without error.
+    }
+
+    /// `scope_lock()` hands out the same `Arc` for the same scope (so turns
+    /// serialize) and distinct Arcs for distinct scopes.
+    #[test]
+    fn scope_lock_returns_same_arc_for_same_scope() {
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let a1 = engine.scope_lock("scope-a");
+        let a2 = engine.scope_lock("scope-a");
+        let b = engine.scope_lock("scope-b");
+        assert!(
+            Arc::ptr_eq(&a1, &a2),
+            "same scope must share one lock Arc"
+        );
+        assert!(
+            !Arc::ptr_eq(&a1, &b),
+            "distinct scopes must get distinct lock Arcs"
+        );
+    }
+
+    /// Map eviction: after a fail-closed turn completes (no binary → returns
+    /// early from `get_or_spawn_runtime`), neither the `in_flight` scope lock
+    /// nor the `aborts` entry may remain — otherwise these maps grow without
+    /// bound across distinct scopes. The reclaim guards drop the local Arc
+    /// clones, leaving strong_count == 1, so the entries are removed.
+    #[tokio::test]
+    async fn turn_reclaims_scope_lock_and_aborts_on_exit() {
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let msg = IncomingMessage {
+            channel: "telegram".into(),
+            instance_id: "tg-1".into(),
+            message_id: "evict-1".into(),
+            chat_id: "c1".into(),
+            chat_type: "p2p".into(),
+            sender_id: "u1".into(),
+            content: "hello".into(),
+            mentioned_bot: true,
+            attachments: vec![],
+        };
+        // A turn with a non-empty work_dir proceeds past the "no project
+        // bound" guard into the spawn path, which fails closed (no binary).
+        let _ = engine
+            .run_agent_turn(&msg, "evict-scope", "/tmp/omp-evict-test", "hi")
+            .await;
+        // The in_flight entry must have been reclaimed: no concurrent waiter
+        // held the Arc, so strong_count dropped to 1 and the guard removed it.
+        assert!(
+            engine.in_flight.lock().is_empty(),
+            "in_flight map must be empty after a turn with no concurrent waiter, got: {} entries",
+            engine.in_flight.lock().len()
+        );
+        // Same for the aborts flag.
+        assert!(
+            engine.aborts.lock().is_empty(),
+            "aborts map must be empty after a turn, got: {} entries",
+            engine.aborts.lock().len()
+        );
+    }
+
+    /// spawn_locks eviction: when `get_or_spawn_runtime` fails (binary path
+    /// points at a non-executable / missing file → spawn error), the
+    /// `spawn_locks` entry acquired for that work_dir must still be reclaimed
+    /// — otherwise every failed spawn leaks one lock entry per work_dir.
+    ///
+    /// This covers the `ReclaimOnDrop` guard on the spawn-failure path
+    /// (deterministic, no process-timing dependency). A true prompt→reply
+    /// happy path and dead-process eviction need an integration test with a
+    /// real OMP Runtime; the AcpClient constructor binds a real
+    /// `tokio::process::Child` so cannot be faked in a unit test.
+    #[tokio::test]
+    async fn spawn_lock_reclaimed_after_failed_spawn() {
+        let outbound = OutboundRouter::new();
+        // A path that exists() fails on → spawn_with_options returns
+        // runtime_unavailable before reaching the process layer.
+        let engine = Engine::new_ephemeral_with_binary(
+            outbound,
+            PathBuf::from("/nonexistent/omp-binary-does-not-exist"),
+        );
+        let wd = Path::new("/tmp/omp-spawn-fail-test");
+
+        let result = engine.get_or_spawn_runtime(wd).await;
+        assert!(result.is_err(), "spawn must fail for a missing binary");
+
+        // The spawn_locks entry must have been reclaimed by the guard despite
+        // the spawn failing — strong_count fell to 1 (no concurrent waiter).
+        assert!(
+            engine.spawn_locks.lock().is_empty(),
+            "spawn_locks must be empty after a failed spawn with no waiter, got: {} entries",
+            engine.spawn_locks.lock().len()
+        );
     }
 }
