@@ -4,11 +4,15 @@ OMP Desktop uses the **Tauri 2 updater**: signed release artifacts, a rolling
 `latest.json` endpoint, in-app check/download/install, and a hard stop of
 managed agent / Remote IM processes before the binary swap.
 
-> **Current status:** the updater **plumbing is wired but not yet signed**.
-> Builds produced without the `OMP_DESKTOP_UPDATER_*` signing secrets fall back
-> to the GitHub "open release page" path — no in-app auto-update. See
-> [Signing requirements](./release/signing-requirements.md) for the certificate
-> blocker.
+> **Current status:** the updater is **signed and live** as of `v0.3.1-nightly`.
+> Settings → About "check for update" runs the silent download → install →
+> relaunch path, and the rolling `omp-desktop-latest` release ships `latest.json`
+> + per-platform `.sig` archives for all four targets. macOS Gatekeeper / Windows
+> SmartScreen still warn because OS code-signing (Apple Developer ID /
+> Authenticode) is not yet configured — see
+> [Signing requirements](./release/signing-requirements.md) for that remaining
+> Plan 9 work. The minisign keypair verifies *archive integrity*, independent of
+> OS trust.
 
 ## Architecture
 
@@ -120,10 +124,11 @@ TAG=v0.3.0 REPO=Po1nt9/omp-desktop bash scripts/assemble-updater-manifest.sh
 
 Platform keys: `darwin-aarch64`, `darwin-x86_64`, `linux-x86_64`, `windows-x86_64`.
 
-## Unsigned builds (current state)
+## Unsigned / community builds (fallback)
 
-When updater secrets are **absent**, `release.yml` detects this via the
-`Detect updater secrets` step and:
+The official repo ships signed (see status above). For community forks or
+builds where the updater secrets are **absent**, `release.yml` detects this via
+the `Detect updater secrets` step and:
 
 - Does **not** write `tauri.release.conf.json`.
 - Passes no `--config` to `tauri-action` → no `createUpdaterArtifacts`.
@@ -131,7 +136,7 @@ When updater secrets are **absent**, `release.yml` detects this via the
 
 The build still produces all platform installers and attaches them to the
 `vX.Y.Z` release. In-app update stays on the "open GitHub release page" path.
-This is the **current shipping behavior** until signing secrets are configured.
+This graceful degradation keeps unsigned community builds working.
 
 ## Linux note
 
