@@ -46,6 +46,16 @@ struct RuntimeEntry {
     text_buf: Arc<Mutex<String>>,
 }
 
+// `AcpClient` does not derive Debug, so RuntimeEntry can't either; provide a
+// manual impl so `Result<Arc<RuntimeEntry>, _>` is debug-printable in tests.
+impl std::fmt::Debug for RuntimeEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeEntry")
+            .field("text_len", &self.text_buf.lock().len())
+            .finish_non_exhaustive()
+    }
+}
+
 pub struct Engine {
     store: SessionStore,
     outbound: OutboundRouter,
@@ -697,6 +707,72 @@ impl Engine {
             .clone()
     }
 
+    /// Sync lookup: returns a cached `RuntimeEntry` if one exists for
+    /// `work_dir`, or an error if no entry exists AND no binary is
+    /// configured. Does NOT spawn (spawning is async). Used by tests and as
+    /// a fast-path cache-hit check.
+    fn try_get_runtime(&self, work_dir: &Path) -> Result<Arc<RuntimeEntry>, String> {
+        if let Some(entry) = self.runtimes.lock().get(work_dir) {
+            return Ok(entry.clone());
+        }
+        if self.binary_path.is_none() {
+            return Err("runtime_unavailable: OMP Runtime binary not configured".into());
+        }
+        // Binary exists but no cached entry — caller must use get_or_spawn_runtime.
+        Err("runtime_unavailable: no pooled runtime for this work_dir".into())
+    }
+
+    /// Async: resolve `work_dir` to a pooled `RuntimeEntry`, spawning a new
+    /// `AcpClient` + background event-collector task on a cache miss.
+    async fn get_or_spawn_runtime(
+        &self,
+        work_dir: &Path,
+    ) -> Result<Arc<RuntimeEntry>, String> {
+        // Fast path: cache hit.
+        if let Some(entry) = self.runtimes.lock().get(work_dir) {
+            return Ok(entry.clone());
+        }
+        // Slow path: spawn.
+        let binary_path = self.binary_path.clone().ok_or_else(|| {
+            "runtime_unavailable: OMP Runtime binary not configured".to_string()
+        })?;
+        let agent_dir = self.agent_dir.clone();
+        let cwd = work_dir.to_path_buf();
+        let spawn_opts = SpawnOptions {
+            model_id: None,
+            effort: None,
+            permission_policy: None,
+            binary_path: Some(binary_path.clone()),
+            agent_dir,
+        };
+        // cli_path is empty; SpawnOptions::binary_path takes precedence
+        // inside spawn_with_options.
+        let cli_path = PathBuf::new();
+        let (acp, mut events) = AcpClient::spawn_with_options(cli_path, cwd.clone(), spawn_opts)
+            .map_err(|e| format!("runtime_unavailable: spawn failed: {}", e.message))?;
+
+        // Start the event collector task: accumulate only assistant text.
+        let text_buf = Arc::new(Mutex::new(String::new()));
+        let buf_clone = text_buf.clone();
+        tokio::spawn(async move {
+            while let Some(ev) = events.recv().await {
+                if let AcpEvent::Stream {
+                    kind: StreamKind::Assistant,
+                    text,
+                    ..
+                } = ev
+                {
+                    buf_clone.lock().push_str(&text);
+                }
+            }
+            tracing::info!("remote_im: runtime event collector exited");
+        });
+
+        let entry = Arc::new(RuntimeEntry { acp, text_buf });
+        self.runtimes.lock().insert(cwd, entry.clone());
+        Ok(entry)
+    }
+
     pub(crate) async fn run_agent_turn(
         &self,
         msg: &IncomingMessage,
@@ -971,6 +1047,21 @@ mod tests {
                 .contains("runtime_unavailable"),
             "remote agent turn must surface runtime_unavailable, got: {:?}",
             result.error
+        );
+    }
+
+    /// Pool lookup must surface `runtime_unavailable` when no binary is
+    /// configured (fail-closed). A cache miss with no binary is an error,
+    /// not a silent success.
+    #[test]
+    fn runtime_pool_returns_unavailable_without_binary() {
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let r = engine.try_get_runtime(Path::new("/tmp/omp-test-wd"));
+        assert!(r.is_err());
+        assert!(
+            r.unwrap_err().contains("runtime_unavailable"),
+            "must surface runtime_unavailable"
         );
     }
 }
