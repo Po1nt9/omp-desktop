@@ -1,6 +1,6 @@
 [package]
 name = "omp-desktop"
-version = "0.1.9"
+version = "0.3.0-nightly"
 description = "Open-source desktop Agent application powered by OMP"
 authors = ["Po1nt9", "RongleCat"]
 edition = "2021"

@@ -1,7 +1,7 @@
 {
   "name": "omp-desktop",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.3.0-nightly",
   "description": "Open-source desktop Agent application powered by OMP",
   "author": "RongleCat",
   "license": "MIT",
