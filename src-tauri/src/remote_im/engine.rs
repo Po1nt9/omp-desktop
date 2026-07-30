@@ -742,9 +742,20 @@ impl Engine {
         &self,
         work_dir: &Path,
     ) -> Result<Arc<RuntimeEntry>, String> {
-        // Fast path: cache hit.
+        // Fast path: cache hit — but only while the pooled process is still
+        // alive. If the underlying agent process died (crash / exit), the
+        // stale RuntimeEntry would otherwise be returned forever, causing
+        // every subsequent turn for this work_dir to skip re-spawn and fail
+        // inside `initialize_and_open_session`. Evict and re-spawn instead.
         if let Some(entry) = self.runtimes.lock().get(work_dir) {
-            return Ok(entry.clone());
+            if entry.acp.is_alive() {
+                return Ok(entry.clone());
+            }
+            tracing::warn!(
+                work_dir = ?work_dir,
+                "remote_im: evicting dead RuntimeEntry, will re-spawn"
+            );
+            self.runtimes.lock().remove(work_dir);
         }
         // Slow path: spawn. Acquire the per-work_dir spawn guard BEFORE
         // spawning so two concurrent turns for *different scopes but the
@@ -760,9 +771,17 @@ impl Engine {
         let _spawn_lock = spawn_guard.lock().await;
 
         // Double-checked locking: another task may have spawned and inserted
-        // while we waited for the spawn guard.
+        // while we waited for the spawn guard. Re-verify liveness here too:
+        // the entry may have died since the fast-path check.
         if let Some(entry) = self.runtimes.lock().get(work_dir) {
-            return Ok(entry.clone());
+            if entry.acp.is_alive() {
+                return Ok(entry.clone());
+            }
+            tracing::warn!(
+                work_dir = ?work_dir,
+                "remote_im: evicting dead RuntimeEntry on double-check, will re-spawn"
+            );
+            self.runtimes.lock().remove(work_dir);
         }
 
         let binary_path = self.binary_path.clone().ok_or_else(|| {
