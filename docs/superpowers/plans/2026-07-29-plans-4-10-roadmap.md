@@ -6,10 +6,10 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 > - Plan 4: [`2026-07-29-plan-4-config-provider-mcp-skills-credentials.md`](./2026-07-29-plan-4-config-provider-mcp-skills-credentials.md) — ✅ Complete
 > - Plan 5: [`2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics.md`](./2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics.md) — ✅ Complete
 > - Plan 6: [`2026-07-29-plan-6-i18n.md`](./2026-07-29-plan-6-i18n.md) — ✅ Complete
-> - Plan 7: [`2026-07-29-plan-7-remote-hub.md`](./2026-07-29-plan-7-remote-hub.md) — 🚫 Blocked (external deps)
-> - Plan 8: [`2026-07-29-plan-8-channels.md`](./2026-07-29-plan-8-channels.md) — 🚫 Blocked (external deps)
-> - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — 🚫 Blocked (external deps)
-> - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — 🚫 Blocked (Plans 7-9 + testing infra)
+> - Plan 7: [`2026-07-29-plan-7-remote-hub.md`](./2026-07-29-plan-7-remote-hub.md) — ✅ Shipped (as local Runtime Bridge, not a remote Hub)
+> - Plan 8: [`2026-07-29-plan-8-channels.md`](./2026-07-29-plan-8-channels.md) — ✅ Shipped (14 adapters)
+> - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — 🟡 Partial (updater signed; OS codesign blocked)
+> - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — 🚫 Blocked (Plan 9 codesign + test infra)
 
 ## Plan 4: Config, Provider, MCP, Skills, and Secure Credentials
 
@@ -95,7 +95,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 
 ## Plan 7: Remote Hub
 
-**Status:** 🚫 Blocked (external deps)
+**Status:** ✅ Shipped as the **Remote IM Runtime Bridge** (`v0.3.0-nightly`).
 **Depends on:** Plan 3 (for runtime and session model)
 **Spec:** Master design §3 item 7, §16
 
@@ -113,14 +113,35 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 5. Add security disclosure UI
 
 ### Estimated Complexity: High
-### External Dependencies: Remote Hub server infrastructure (not available in 1.0 scope)
+### External Dependencies: None — the Hub was dropped (see below).
+
+### How it actually shipped (deviation from original design)
+
+The Remote Hub server was **not built**. A pre-implementation review concluded the
+Hub bundled three concerns, two of which (network reachability, multi-channel
+orchestration) do not need a central server — the 14 channel adapters use
+outbound long connections (WebSocket / long-poll / Socket Mode), proven by
+[cc-connect](https://github.com/chenhg5/cc-connect) and
+[hermes-agent](https://github.com/NousResearch/hermes-agent). The third concern,
+cross-device session sync, is not a 1.0 requirement and was deferred.
+
+What shipped instead (the `remote_im` engine's fail-closed gates replaced with
+real OMP Runtime calls):
+- **Per-`work_dir` AcpClient pool** — one runtime client per agent working dir.
+- **Drain barrier** — in-flight turns complete before shutdown.
+- **3-layer concurrency locks** — per-channel, per-session, per-runtime.
+- Inbound IM messages drive real agent turns (end-to-end in `v0.3.0-nightly`).
+
+See `CHANGELOG.md` `[0.3.0-nightly]` → "Remote IM Runtime Bridge (Plan 7)".
+The originally-scoped **cross-device session sync** remains a possible future
+plan (a lightweight journal relay over Plan 3's event journal), not blocking 1.0.
 
 ---
 
 ## Plan 8: Channels (11 Platforms)
 
-**Status:** 🚫 Blocked (external deps)
-**Depends on:** Plan 7 (for Remote Hub)
+**Status:** ✅ Shipped as **14 channel adapters** (`v0.3.0-nightly`).
+**Depends on:** Plan 7 (shipped — the Runtime Bridge, not the Hub)
 **Spec:** Master design §3 item 8, §17
 
 ### Scope
@@ -150,13 +171,29 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 5. Implement security disclosure for WeChat
 
 ### Estimated Complexity: Very High
-### External Dependencies: Platform API credentials, test accounts
+### External Dependencies: None (outbound connections; no server infra).
+
+### How it actually shipped (deviation from original design)
+
+14 adapters shipped in `v0.3.0-nightly`: feishu, telegram, discord, slack,
+dingtalk, wecom, weixin, qq, qqbot, matrix, line, weibo, wpc_xiezuo, generic.
+
+The original plan listed 11 platforms; the delta comes from regional splits
+(e.g. Feishu vs Lark share an implementation but were enumerated separately)
+and the addition of a generic adapter. WeChat Personal and Email/Webhook were
+**not** in the shipped set; they remain possible future additions. Because the
+Hub was dropped (see Plan 7), these adapters connect via outbound long
+connections with zero server infrastructure.
 
 ---
 
 ## Plan 9: OS Packaging and Updates
 
-**Status:** 🚫 Blocked (external deps)
+**Status:** 🟡 Partial. Packaging pipeline builds all four targets and publishes
+installers + SHA256SUMS. **Updater signing is enabled** (minisign keypair,
+`v0.3.1-nightly`) so in-app silent update works. **OS code-signing remains
+blocked**: macOS Developer ID notarization and Windows Authenticode require
+purchasing certificates (Apple $99/yr; Windows OV/EV $100-700/yr).
 **Depends on:** Plans 3-8 (for complete feature set)
 **Spec:** Master design §3 item 9, §20
 
@@ -177,14 +214,23 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 6. Create installer packages for each platform
 
 ### Estimated Complexity: Very High
-### External Dependencies: Code signing certificates, CI/CD infrastructure, notarization service
+### External Dependencies: Code signing certificates (Apple/Windows) + notarization service — updater signing needs none.
+
+### What's done vs. what's left
+
+- ✅ Cross-platform build pipeline (macOS ARM/x64, Windows x64, Linux x64).
+- ✅ Installer formats (DMG, NSIS + portable zip, AppImage, .deb, .rpm) + SHA256SUMS.
+- ✅ Updater artifacts + `latest.json` (signed, `v0.3.1-nightly`).
+- ✅ Graceful degradation when signing secrets are absent.
+- 🚫 macOS notarization (needs Apple Developer ID cert — `APPLE_*` secrets).
+- 🚫 Windows Authenticode (needs OV/EV cert — `signtool` step not yet wired).
 
 ---
 
 ## Plan 10: 1.0 Acceptance Matrix
 
-**Status:** 🚫 Blocked (Plans 7-9 + testing infra)
-**Depends on:** Plans 1-9 (all complete)
+**Status:** 🚫 Blocked (Plan 9 OS code-signing + testing infra)
+**Depends on:** Plans 1-9 (Plan 9 is partial: updater signed, OS codesign pending)
 **Spec:** Master design §3 item 10, §5
 
 ### Scope
@@ -218,9 +264,11 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 | 4. Config, Provider, MCP, Skills, Credentials | ✅ Complete | Medium-High | None |
 | 5. Todo, Subagent, Branch, Rewind, Attachments | ✅ Complete | Medium | None |
 | 6. i18n | ✅ Complete | Medium | None |
-| 7. Remote Hub | 🚫 Blocked | High | Server infra |
-| 8. Channels | 🚫 Blocked | Very High | Platform APIs |
-| 9. OS Packaging | 🚫 Blocked | Very High | Signing certs |
-| 10. 1.0 Acceptance | 🚫 Blocked | Medium | All platforms |
+| 7. Remote Hub | ✅ Shipped (Runtime Bridge) | High | None (Hub dropped) |
+| 8. Channels | ✅ Shipped (14 adapters) | Very High | None |
+| 9. OS Packaging | 🟡 Partial (updater signed; codesign pending) | Very High | Signing certs (codesign only) |
+| 10. 1.0 Acceptance | 🚫 Blocked | Medium | Plan 9 codesign + test infra |
 
-Plans 4-6 can be executed immediately with no external dependencies. Plans 7-10 require external infrastructure and should be prioritized based on available resources.
+Plans 1-8 are complete. Plan 9's remaining work is OS code-signing certificates
+(Apple/Windows). Plan 10 (1.0 acceptance) is blocked on Plan 9's code-signing
+plus cross-platform testing infrastructure.
