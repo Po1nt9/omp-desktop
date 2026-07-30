@@ -13,7 +13,9 @@ use super::slash::{self, BuiltinCommand};
 use super::types::{ChannelInstance, IncomingMessage};
 use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use crate::acp_client::{AcpClient, AcpEvent, SpawnOptions, StreamKind};
 
 #[derive(Clone)]
 struct PendingPick {
@@ -36,6 +38,14 @@ pub(crate) struct AgentTurnResult {
     pub error: Option<String>,
 }
 
+/// A pooled Runtime process keyed by work_dir.
+struct RuntimeEntry {
+    acp: Arc<AcpClient>,
+    /// Accumulated assistant text from the event stream; cleared at the
+    /// start of each turn, read after `prompt()` returns.
+    text_buf: Arc<Mutex<String>>,
+}
+
 pub struct Engine {
     store: SessionStore,
     outbound: OutboundRouter,
@@ -44,10 +54,24 @@ pub struct Engine {
     aborts: Arc<Mutex<HashMap<String, bool>>>,
     lang: String,
     allow_remote_yolo: bool,
+    /// Absolute path to the OMP binary; `None` → fail-closed degradation.
+    binary_path: Option<PathBuf>,
+    /// Agent home dir (PI_CODING_AGENT_DIR) for spawned runtimes.
+    agent_dir: Option<PathBuf>,
+    /// Per-work_dir Runtime process pool.
+    runtimes: Arc<Mutex<HashMap<PathBuf, Arc<RuntimeEntry>>>>,
+    /// Per-scope concurrency guard: a scope_key present here means a turn
+    /// is in flight; concurrent turns for the same scope are rejected.
+    in_flight: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
 impl Engine {
-    pub fn new(outbound: OutboundRouter, allow_remote_yolo: bool) -> Self {
+    pub fn new(
+        outbound: OutboundRouter,
+        allow_remote_yolo: bool,
+        binary_path: Option<PathBuf>,
+        agent_dir: Option<PathBuf>,
+    ) -> Self {
         Self {
             store: SessionStore::open_default(),
             outbound,
@@ -56,6 +80,10 @@ impl Engine {
             aborts: Arc::new(Mutex::new(HashMap::new())),
             lang: "zh".into(),
             allow_remote_yolo,
+            binary_path,
+            agent_dir,
+            runtimes: Arc::new(Mutex::new(HashMap::new())),
+            in_flight: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -69,6 +97,10 @@ impl Engine {
             aborts: Arc::new(Mutex::new(HashMap::new())),
             lang: "zh".into(),
             allow_remote_yolo,
+            binary_path: None,
+            agent_dir: None,
+            runtimes: Arc::new(Mutex::new(HashMap::new())),
+            in_flight: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -654,6 +686,15 @@ impl Engine {
             );
             let _ = self.reply_msg(msg, &text).await;
         }
+    }
+
+    /// Returns the per-scope lock handle. The caller MUST `lock().await` it
+    /// and hold the guard for the duration of the turn.
+    fn scope_lock(&self, scope: &str) -> Arc<tokio::sync::Mutex<()>> {
+        let mut g = self.in_flight.lock();
+        g.entry(scope.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone()
     }
 
     pub(crate) async fn run_agent_turn(

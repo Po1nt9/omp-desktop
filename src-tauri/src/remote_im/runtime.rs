@@ -72,7 +72,7 @@ pub async fn start_runtime(
     }
 
     let outbound = OutboundRouter::new();
-    let engine = Arc::new(Engine::new(outbound.clone(), allow_remote_yolo));
+    let engine = Arc::new(Engine::new(outbound.clone(), allow_remote_yolo, None, None));
     for inst in &instances {
         // Must inject _instance_id so weixin context_token / dingtalk webhooks resolve.
         let mut secrets = inst.secrets.clone();
