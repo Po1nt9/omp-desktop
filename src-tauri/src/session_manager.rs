@@ -3150,6 +3150,13 @@ impl SessionManager {
                                 );
                                 let _ = journal.commit();
                             }
+                            // Persist the journal so it survives restarts (Plan 3
+                            // deferred gap) and can be exported for portability.
+                            if let Some(journal) = s.event_journal.as_ref() {
+                                let _ = journal.save_to(
+                                    &EventJournal::standard_path(&s.app_session_id),
+                                );
+                            }
                         }
                         s.deferred_prompt_complete = Some(stop_reason.clone());
                         // #52: do not Ready the UI while tools / permission / ask_user / plan

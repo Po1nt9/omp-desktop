@@ -4581,6 +4581,24 @@ pub fn session_import_transcript(
     crate::session_import::import_transcript_as_session(&text, title, project_id)
 }
 
+/// Export a session (meta + messages + journal) as a portable bundle for
+/// cross-device migration.
+#[tauri::command]
+pub fn session_export_portable(
+    session_id: String,
+) -> Result<crate::portability::PortableSession, String> {
+    crate::portability::export_session(&session_id)
+}
+
+/// Import a portable session bundle. Idempotent: skips if the session id
+/// already exists locally.
+#[tauri::command]
+pub fn session_import_portable(
+    data: crate::portability::PortableSession,
+) -> Result<crate::portability::ImportResult, String> {
+    crate::portability::import_session(&data)
+}
+
 /// Native file picker → read text transcript → import as session.
 #[tauri::command]
 pub async fn session_import_transcript_file(

@@ -339,6 +339,8 @@ pub fn run() {
             commands::automation_delete,
             commands::session_import_transcript,
             commands::session_import_transcript_file,
+            commands::session_export_portable,
+            commands::session_import_portable,
             commands::providers_list,
             commands::providers_upsert,
             commands::providers_remove,
