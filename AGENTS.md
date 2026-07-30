@@ -6,7 +6,7 @@
    - [2026-07-28-omp-desktop-design.md](docs/superpowers/specs/2026-07-28-omp-desktop-design.md) — frozen master design
    - [2026-07-28-repository-brand-baseline.md](docs/superpowers/plans/2026-07-28-repository-brand-baseline.md) — repository brand baseline plan
 2. **Plan 1 baseline is fail-closed.** Agent execution, Provider authentication, and runtime-owned configuration return `runtime_unavailable`. Do not advertise these as working capabilities.
-3. The OMP Runtime source is pinned as a submodule at `runtime/oh-my-pi` (commit `667111575ebba136dadfd6989379e7f67e0d40d9`).
+3. The OMP Runtime source is pinned as a submodule at `runtime/oh-my-pi` (commit `a2eb2070baaa984256b4a4d2f4c6513d08515f71`).
 4. Historical upstream material lives under `docs/upstream-history/grok-app/` and does **not** describe the current product.
 
 ## Development
@@ -24,6 +24,8 @@ pnpm build
 ## Conventions
 
 - Product name: **OMP Desktop**.
+- README.md is **Chinese** (primary); README_EN.md is English. Keep both in sync when editing install/docs sections.
+- Distribution: Homebrew Cask ([Po1nt9/homebrew-tap](https://github.com/Po1nt9/homebrew-tap)), one-line `scripts/install.sh` (macOS/Linux), manual download (Windows). See `docs/release/signing-requirements.md` § Community distribution channels.
 - Do not hardcode user-facing English/Chinese. Use `createT(locale)` / `t()` via `src/i18n/`.
 - Never use `window.confirm` / `window.prompt` / `window.alert` in Tauri UI. Use App `setAppDialog`, `GlassModal`, or in-app portals.
 - Assistant messages render markdown (`MarkdownBody`); user messages use a gray bubble with no role labels.
