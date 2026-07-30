@@ -1288,6 +1288,37 @@ impl AcpClient {
         Ok(())
     }
 
+    /// Like `prompt`, but supports mixed content blocks (text + images).
+    pub async fn prompt_with_blocks(&self, blocks: &[PromptBlock]) -> Result<(), AgentError> {
+        let sid = self
+            .agent_session_id
+            .lock()
+            .clone()
+            .ok_or_else(|| AgentError::new(AgentErrorCode::AgentCrashed, "no session"))?;
+        self.stopped.store(false, Ordering::SeqCst);
+        let this_params = wire_session_prompt_params_blocks(&sid, blocks);
+        let result = self
+            .request_prompt(this_params)
+            .await
+            .map_err(|e| classify_rpc_error(&e))?;
+        let stop = result
+            .get("stopReason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("end_turn")
+            .to_string();
+        let _ = self.event_tx.send(AcpEvent::Stream {
+            kind: StreamKind::Assistant,
+            text: String::new(),
+            message_id: None,
+            done: true,
+        });
+        let _ = self.event_tx.send(AcpEvent::PromptComplete {
+            stop_reason: stop,
+            authoritative: true,
+        });
+        Ok(())
+    }
+
     /// Cancel in-flight prompt (ACP notification — no id).
     pub async fn cancel(&self) -> Result<(), String> {
         let sid = self
@@ -1359,6 +1390,60 @@ pub fn wire_session_prompt_params(session_id: &str, text: &str) -> Value {
         "sessionId": session_id,
         "prompt": [{ "type": "text", "text": text }]
     })
+}
+
+/// A content block for the ACP `session/prompt` `prompt` array.
+#[derive(Debug, Clone)]
+pub enum PromptBlock {
+    Text { text: String },
+    /// `data` is base64-encoded image bytes; `mime_type` e.g. "image/png".
+    Image { data: String, mime_type: String },
+}
+
+/// Host → agent `session/prompt` params with mixed content blocks.
+pub fn wire_session_prompt_params_blocks(session_id: &str, blocks: &[PromptBlock]) -> Value {
+    let prompt: Vec<Value> = blocks
+        .iter()
+        .map(|b| match b {
+            PromptBlock::Text { text } => json!({ "type": "text", "text": text }),
+            PromptBlock::Image { data, mime_type } => {
+                json!({ "type": "image", "data": data, "mimeType": mime_type })
+            }
+        })
+        .collect();
+    json!({ "sessionId": session_id, "prompt": prompt })
+}
+
+#[cfg(test)]
+mod prompt_block_tests {
+    use super::*;
+
+    #[test]
+    fn test_wire_blocks_text_only() {
+        let v = wire_session_prompt_params_blocks("s1", &[PromptBlock::Text { text: "hi".into() }]);
+        assert_eq!(v["prompt"][0]["type"], "text");
+        assert_eq!(v["prompt"][0]["text"], "hi");
+    }
+
+    #[test]
+    fn test_wire_blocks_with_image() {
+        let v = wire_session_prompt_params_blocks(
+            "s1",
+            &[
+                PromptBlock::Text {
+                    text: "describe this".into(),
+                },
+                PromptBlock::Image {
+                    data: "BASE64".into(),
+                    mime_type: "image/png".into(),
+                },
+            ],
+        );
+        assert_eq!(v["prompt"].as_array().unwrap().len(), 2);
+        assert_eq!(v["prompt"][1]["type"], "image");
+        assert_eq!(v["prompt"][1]["data"], "BASE64");
+        assert_eq!(v["prompt"][1]["mimeType"], "image/png");
+    }
 }
 
 /// Host → agent `session/cancel` notification params.
