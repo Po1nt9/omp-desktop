@@ -8,6 +8,7 @@ mod control_plane;
 mod dedup_store;
 mod engine;
 mod feishu_reg;
+mod media;
 #[cfg(test)]
 mod fixture_http;
 mod outbound;
