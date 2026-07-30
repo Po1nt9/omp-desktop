@@ -73,6 +73,11 @@ pub struct Engine {
     /// Per-scope concurrency guard: a scope_key present here means a turn
     /// is in flight; concurrent turns for the same scope are rejected.
     in_flight: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+    /// Per-work_dir spawn guard: prevents two concurrent turns for
+    /// *different scopes but the same work_dir* from double-spawning a
+    /// Runtime process (TOCTOU fix). Used with double-checked locking in
+    /// `get_or_spawn_runtime`.
+    spawn_locks: Arc<Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
 impl Engine {
@@ -94,6 +99,7 @@ impl Engine {
             agent_dir,
             runtimes: Arc::new(Mutex::new(HashMap::new())),
             in_flight: Arc::new(Mutex::new(HashMap::new())),
+            spawn_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -111,6 +117,7 @@ impl Engine {
             agent_dir: None,
             runtimes: Arc::new(Mutex::new(HashMap::new())),
             in_flight: Arc::new(Mutex::new(HashMap::new())),
+            spawn_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -732,7 +739,25 @@ impl Engine {
         if let Some(entry) = self.runtimes.lock().get(work_dir) {
             return Ok(entry.clone());
         }
-        // Slow path: spawn.
+        // Slow path: spawn. Acquire the per-work_dir spawn guard BEFORE
+        // spawning so two concurrent turns for *different scopes but the
+        // same work_dir* cannot both miss the cache and double-spawn
+        // (TOCTOU fix). Per-scope locking alone doesn't prevent this
+        // because different scopes use different locks.
+        let spawn_guard = {
+            let mut g = self.spawn_locks.lock();
+            g.entry(work_dir.to_path_buf())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone()
+        };
+        let _spawn_lock = spawn_guard.lock().await;
+
+        // Double-checked locking: another task may have spawned and inserted
+        // while we waited for the spawn guard.
+        if let Some(entry) = self.runtimes.lock().get(work_dir) {
+            return Ok(entry.clone());
+        }
+
         let binary_path = self.binary_path.clone().ok_or_else(|| {
             "runtime_unavailable: OMP Runtime binary not configured".to_string()
         })?;
@@ -805,7 +830,7 @@ impl Engine {
         let _ = self.reply_msg(msg, thinking).await;
 
         let intent = resolve_turn_intent(&binding);
-        let (_wd, resume_id) = match &intent {
+        let (work_dir, resume_id) = match &intent {
             TurnIntent::NewSession { work_dir } => (work_dir.clone(), None),
             TurnIntent::ResumeSession {
                 work_dir,
@@ -813,15 +838,61 @@ impl Engine {
             } => (work_dir.clone(), Some(agent_session_id.clone())),
         };
 
-        // Plan 1 fail-closed: OMP Runtime is not connected in this build.
-        // Every remote Agent turn surfaces `runtime_unavailable` — never
-        // spawns a process or silently succeeds.
+        // Acquire per-scope lock so two concurrent messages from the same
+        // chat serialize (prevents interleaved turns on the same Runtime).
+        // Bind the Arc before locking so it outlives the guard.
+        let scope_mutex = self.scope_lock(scope);
+        let _scope_guard = scope_mutex.lock().await;
+
+        // Resolve (or spawn) the Runtime process for this work_dir.
+        let runtime = match self.get_or_spawn_runtime(Path::new(&work_dir)).await {
+            Ok(rt) => rt,
+            Err(e) => {
+                // Includes the runtime_unavailable case when no binary is set.
+                return AgentTurnResult {
+                    text: String::new(),
+                    session_id: None,
+                    error: Some(e),
+                };
+            }
+        };
+
+        // Clear the event buffer for this turn.
+        runtime.text_buf.lock().clear();
+
+        // Open or resume the agent session.
+        let (opened_sid, _resumed) = match runtime
+            .acp
+            .initialize_and_open_session(resume_id.as_deref())
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return AgentTurnResult {
+                    text: String::new(),
+                    session_id: None,
+                    error: Some(format!("runtime_unavailable: session open failed: {}", e.message)),
+                };
+            }
+        };
+
+        // Run the prompt (blocks until the turn completes).
+        if let Err(e) = runtime.acp.prompt(prompt).await {
+            return AgentTurnResult {
+                text: String::new(),
+                session_id: Some(opened_sid),
+                error: Some(format!("agent turn failed: {}", e.message)),
+            };
+        }
+
+        // Collect the streamed assistant text.
+        let reply_text = runtime.text_buf.lock().clone();
+        let returned_session_id = runtime.acp.agent_session_id().or(Some(opened_sid));
+
         let result = AgentTurnResult {
-            text: String::new(),
-            session_id: None,
-            error: Some(
-                "runtime_unavailable: OMP Runtime is not connected in this build.".into(),
-            ),
+            text: reply_text,
+            session_id: returned_session_id,
+            error: None,
         };
 
         let mut next = binding_after_agent_turn(
