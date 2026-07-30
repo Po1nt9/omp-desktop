@@ -5,6 +5,7 @@ mod bridge;
 mod channels;
 mod config;
 mod control_plane;
+mod dedup_store;
 mod engine;
 mod feishu_reg;
 #[cfg(test)]
@@ -12,6 +13,7 @@ mod fixture_http;
 mod outbound;
 mod pb_frame;
 mod projects;
+mod rate_limiter;
 #[cfg(test)]
 mod catalog_ac4_tests;
 #[cfg(test)]
