@@ -226,3 +226,79 @@ pub async fn send_text(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::remote_im::types::{AttachmentKind, AttachmentSource};
+
+    fn test_inst() -> ChannelInstance {
+        ChannelInstance {
+            id: "discord-1".into(),
+            channel: "discord".into(),
+            name: "d".into(),
+            enabled: true,
+            secrets: Default::default(),
+            options: json!({}),
+            acl: json!({}),
+            project_scope: json!({}),
+        }
+    }
+
+    #[test]
+    fn image_attachment_populated() {
+        let inst = test_inst();
+        let d = json!({
+            "id": "msg1",
+            "channel_id": "ch1",
+            "content": "look at this",
+            "author": { "id": "u1" },
+            "attachments": [
+                { "url": "https://cdn.discord.com/x.png", "content_type": "image/png" }
+            ]
+        });
+        let msg = parse_message(&inst, &d).expect("should parse");
+        assert_eq!(msg.attachments.len(), 1);
+        assert_eq!(msg.attachments[0].kind, AttachmentKind::Image);
+        match &msg.attachments[0].source {
+            AttachmentSource::Discord { url } => {
+                assert_eq!(url, "https://cdn.discord.com/x.png")
+            }
+            _ => panic!("expected Discord source"),
+        }
+    }
+
+    #[test]
+    fn image_only_message_not_dropped() {
+        let inst = test_inst();
+        // No content, but has an image attachment → must NOT be dropped.
+        let d = json!({
+            "id": "msg2",
+            "channel_id": "ch1",
+            "content": "",
+            "author": { "id": "u1" },
+            "attachments": [
+                { "url": "https://cdn.discord.com/y.jpg", "content_type": "image/jpeg" }
+            ]
+        });
+        let msg = parse_message(&inst, &d).expect("image-only message must not be dropped");
+        assert_eq!(msg.attachments.len(), 1);
+        assert!(msg.content.is_empty());
+    }
+
+    #[test]
+    fn non_image_attachment_ignored() {
+        let inst = test_inst();
+        let d = json!({
+            "id": "msg3",
+            "channel_id": "ch1",
+            "content": "a file",
+            "author": { "id": "u1" },
+            "attachments": [
+                { "url": "https://cdn.discord.com/f.pdf", "content_type": "application/pdf" }
+            ]
+        });
+        let msg = parse_message(&inst, &d).expect("should parse");
+        assert!(msg.attachments.is_empty()); // pdf is not an image
+    }
+}

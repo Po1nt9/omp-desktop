@@ -753,6 +753,49 @@ mod md_tests {
         let (ty, _) = build_reply_payload(&s);
         assert_eq!(ty, "post");
     }
+
+    #[test]
+    fn image_message_routes_to_attachments() {
+        use crate::remote_im::types::{AttachmentKind, AttachmentSource};
+        let inst = ChannelInstance {
+            id: "feishu-1".into(),
+            channel: "feishu".into(),
+            name: "f".into(),
+            enabled: true,
+            secrets: Default::default(),
+            options: json!({}),
+            acl: json!({}),
+            project_scope: json!({}),
+        };
+        let root = json!({
+            "event": {
+                "message": {
+                    "message_type": "image",
+                    "message_id": "om_123",
+                    "chat_id": "oc_123",
+                    "chat_type": "p2p",
+                    "content": "{\"image_key\":\"img_v2_abc\"}"
+                },
+                "sender": { "sender_id": { "open_id": "ou_123" } }
+            }
+        });
+        let msg = parse_im_event(&inst, &root).expect("image message should parse");
+        assert_eq!(msg.attachments.len(), 1);
+        assert_eq!(msg.attachments[0].kind, AttachmentKind::Image);
+        match &msg.attachments[0].source {
+            AttachmentSource::Feishu {
+                file_key,
+                message_id,
+                ..
+            } => {
+                assert_eq!(file_key, "img_v2_abc");
+                assert_eq!(message_id, "om_123");
+            }
+            _ => panic!("expected Feishu source"),
+        }
+        // The old [image:key] content tag must no longer be injected.
+        assert!(!msg.content.contains("[image:"));
+    }
 }
 
 fn receive_id_type(id: &str) -> &'static str {
