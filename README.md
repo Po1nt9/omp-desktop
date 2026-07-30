@@ -33,10 +33,11 @@
 2. [Status](#status)
 3. [Development](#development)
 4. [Platforms](#platforms)
-5. [Provenance](#provenance)
-6. [Documentation](#documentation)
-7. [Contributing](#contributing)
-8. [License](#license)
+5. [Install & First Run / 安装与首次运行](#install--first-run--安装与首次运行)
+6. [Provenance](#provenance)
+7. [Documentation](#documentation)
+8. [Contributing](#contributing)
+9. [License](#license)
 
 ---
 
@@ -88,6 +89,50 @@ OMP Desktop targets three operating systems:
 | macOS | Apple Silicon + Intel |
 | Windows | x64 |
 | Linux | x64 (AppImage / deb / rpm) |
+
+## Install & First Run / 安装与首次运行
+
+Download the latest installer from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases).
+
+从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载最新安装包。
+
+> [!IMPORTANT]
+> Builds are **not yet code-signed**. macOS and Windows will show a security
+> warning on first launch — the steps below show how to bypass it. Signing
+> certificates are the remaining Plan 9 blocker; see
+> [signing requirements](./docs/release/signing-requirements.md).
+
+### macOS
+
+1. Open the `.dmg` and drag **OMP Desktop** to Applications.
+2. First launch will be blocked by Gatekeeper ("unidentified developer"). Bypass:
+   - Right-click the app → **Open** → **Open** in the dialog; **or**
+   - Terminal: `xattr -dr com.apple.quarantine "/Applications/OMP Desktop.app"`
+3. The bypass is one-time — subsequent launches open normally.
+
+### Windows
+
+1. Run the `OMP-Desktop_*_x64-setup.exe` installer (NSIS), or use the portable
+   zip (green/绿色版): extract anywhere and run `OMP-Desktop.exe`.
+2. SmartScreen may warn "Windows protected your PC" → **More info** → **Run anyway**.
+3. WebView2 Runtime is required (usually preinstalled on Win10/11; the installer
+   downloads it if missing).
+
+### Linux
+
+- **AppImage**: `chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
+- **deb**: `sudo apt install ./OMP-Desktop_*.deb` (depends on `libwebkit2gtk-4.1-0`, `libgtk-3-0`)
+- **rpm**: `sudo dnf install OMP-Desktop_*.rpm` (or `rpm -i`)
+
+### First run: point at the OMP Runtime
+
+OMP Desktop ships **without** a bundled Runtime — you provide the OMP CLI
+yourself so it can be upgraded independently. On first launch:
+
+1. Install the [OMP Runtime](https://github.com/can1357/oh-my-pi) CLI.
+2. Open **Settings** in OMP Desktop.
+3. Set the **Manual CLI path** to the `omp` (or `omp.exe`) binary location.
+4. Agent sessions now spawn the Runtime you pointed at.
 
 ## Provenance
 

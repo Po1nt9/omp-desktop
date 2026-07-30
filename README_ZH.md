@@ -33,10 +33,11 @@
 2. [状态](#状态)
 3. [开发](#开发)
 4. [平台](#平台)
-5. [来源](#来源)
-6. [文档](#文档)
-7. [贡献](#贡献)
-8. [许可证](#许可证)
+5. [安装与首次运行](#安装与首次运行)
+6. [来源](#来源)
+7. [文档](#文档)
+8. [贡献](#贡献)
+9. [许可证](#许可证)
 
 ---
 
@@ -87,6 +88,44 @@ OMP Desktop 面向三个操作系统：
 | macOS | Apple Silicon + Intel |
 | Windows | x64 |
 | Linux | x64（AppImage / deb / rpm） |
+
+## 安装与首次运行
+
+从 [Releases 页面](https://github.com/Po1nt9/omp-desktop/releases) 下载最新安装包。
+
+> [!IMPORTANT]
+> 当前构建**尚未代码签名**。macOS 和 Windows 首次启动会有安全警告——下方步骤说明如何绕过。
+> 签名证书是 Plan 9 剩余阻塞项，详见
+> [签名要求](./docs/release/signing-requirements.md)。
+
+### macOS
+
+1. 打开 `.dmg`，将 **OMP Desktop** 拖入「应用程序」。
+2. 首次启动会被 Gatekeeper 拦截（「来自身份不明的开发者」）。绕过方式：
+   - 右键点击 App → **打开** → 对话框中再次点 **打开**；**或**
+   - 终端执行：`xattr -dr com.apple.quarantine "/Applications/OMP Desktop.app"`
+3. 绕过仅首次需要——之后启动恢复正常。
+
+### Windows
+
+1. 运行 `OMP-Desktop_*_x64-setup.exe` 安装程序（NSIS），或用绿色便携版 zip：解压后运行 `OMP-Desktop.exe`。
+2. SmartScreen 可能提示「Windows 已保护你的电脑」→ **更多信息** → **仍要运行**。
+3. 需要 WebView2 Runtime（Win10/11 通常已预装；缺失时安装程序会自动下载）。
+
+### Linux
+
+- **AppImage**：`chmod +x OMP-Desktop_*.AppImage && ./OMP-Desktop_*.AppImage`
+- **deb**：`sudo apt install ./OMP-Desktop_*.deb`（依赖 `libwebkit2gtk-4.1-0`、`libgtk-3-0`）
+- **rpm**：`sudo dnf install OMP-Desktop_*.rpm`（或 `rpm -i`）
+
+### 首次运行：指定 OMP Runtime
+
+OMP Desktop **不内置** Runtime——由你自行提供 OMP CLI，以便独立升级 Runtime。首次启动：
+
+1. 安装 [OMP Runtime](https://github.com/can1357/oh-my-pi) CLI。
+2. 在 OMP Desktop 中打开 **设置**。
+3. 将 **手动 CLI 路径（Manual CLI path）** 指向 `omp`（或 `omp.exe`）二进制位置。
+4. 此后 Agent 会话会启动你指定的 Runtime。
 
 ## 来源
 
