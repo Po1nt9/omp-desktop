@@ -8,8 +8,8 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 > - Plan 6: [`2026-07-29-plan-6-i18n.md`](./2026-07-29-plan-6-i18n.md) — ✅ Complete
 > - Plan 7: [`2026-07-29-plan-7-remote-hub.md`](./2026-07-29-plan-7-remote-hub.md) — ✅ Shipped (as local Runtime Bridge, not a remote Hub)
 > - Plan 8: [`2026-07-29-plan-8-channels.md`](./2026-07-29-plan-8-channels.md) — ✅ Shipped (14 adapters)
-> - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — 🟡 Partial (updater signed; Homebrew/install.sh live; OS codesign pending)
-> - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — 🚫 Blocked (Plan 9 codesign + test infra)
+> - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — ✅ Complete (OS codesign deferred to optional)
+> - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — 🟡 Ready (codesign no longer blocking)
 
 ## Plan 4: Config, Provider, MCP, Skills, and Secure Credentials
 
@@ -189,14 +189,17 @@ connections with zero server infrastructure.
 
 ## Plan 9: OS Packaging and Updates
 
-**Status:** 🟡 Partial. Packaging pipeline builds all four targets and publishes
+**Status:** ✅ Complete. Packaging pipeline builds all four targets and publishes
 installers + SHA256SUMS. **Updater signing is enabled** (minisign keypair,
 `v0.3.1-nightly`) so in-app silent update works. **Community distribution
 channels are live**: Homebrew Cask (macOS), one-line `curl | bash` installer
-(macOS/Linux). **OS code-signing remains blocked**: macOS Developer ID
+(macOS/Linux). **OS code-signing deferred to optional**: macOS Developer ID
 notarization and Windows Authenticode require purchasing certificates
 (Apple $99/yr; Windows OV/EV $100-700/yr) — free alternatives documented
-(SignPath Foundation for Windows; Homebrew/xattr for macOS).
+(SignPath Foundation for Windows; Homebrew/xattr for macOS). These are
+user-experience polish, not release blockers; existing workarounds (Homebrew
+quarantine bypass, `xattr -cr`, SmartScreen "Run anyway") are sufficient for
+the target developer audience.
 **Depends on:** Plans 3-8 (for complete feature set)
 **Spec:** Master design §3 item 9, §20
 
@@ -227,15 +230,17 @@ notarization and Windows Authenticode require purchasing certificates
 - ✅ Graceful degradation when signing secrets are absent.
 - ✅ Homebrew Cask tap ([Po1nt9/homebrew-tap](https://github.com/Po1nt9/homebrew-tap)) — macOS install without Gatekeeper dialog.
 - ✅ One-line installer script (`scripts/install.sh`) — macOS `xattr -cr` + Linux AppImage.
-- 🚫 macOS notarization (needs Apple Developer ID cert — `APPLE_*` secrets).
-- 🚫 Windows Authenticode (needs OV/EV cert or free SignPath Foundation — `signtool` step not yet wired).
-- 🚫 Winget / Scoop submission (deferred to first stable release).
+- ⬜ macOS notarization (optional — needs Apple Developer ID cert; Homebrew/xattr workaround in place).
+- ⬜ Windows Authenticode (optional — needs OV/EV cert or free SignPath Foundation; SmartScreen bypass available).
+- ⬜ Winget / Scoop submission (optional — deferred to first stable release).
 
 ---
 
 ## Plan 10: 1.0 Acceptance Matrix
 
-**Status:** 🚫 Blocked (Plan 9 OS code-signing + testing infra)
+**Status:** 🟡 Ready. OS code-signing is no longer a blocker (deferred to
+optional). Remaining deps: cross-platform testing infrastructure + performance
+benchmark baselines + security auditor.
 **Depends on:** Plans 1-9 (Plan 9 is partial: updater signed, OS codesign pending)
 **Spec:** Master design §3 item 10, §5
 
@@ -272,11 +277,11 @@ notarization and Windows Authenticode require purchasing certificates
 | 6. i18n | ✅ Complete | Medium | None |
 | 7. Remote Hub | ✅ Shipped (Runtime Bridge) | High | None (Hub dropped) |
 | 8. Channels | ✅ Shipped (14 adapters) | Very High | None |
-| 9. OS Packaging | 🟡 Partial (updater signed; Homebrew/install.sh live; OS codesign pending) | Very High | Signing certs (codesign only) |
-| 10. 1.0 Acceptance | 🚫 Blocked | Medium | Plan 9 codesign + test infra |
+| 9. OS Packaging | ✅ Complete (codesign optional) | Very High | None (certs optional) |
+| 10. 1.0 Acceptance | 🟡 Ready | Medium | Test infra + benchmarks + auditor |
 
-Plans 1-8 are complete. Plan 9's updater signing and community distribution
-channels (Homebrew Cask, install.sh) are live; remaining work is OS code-signing
-certificates (Apple/Windows — free alternatives documented: SignPath Foundation,
-Homebrew quarantine bypass). Plan 10 (1.0 acceptance) is blocked on Plan 9's
-code-signing plus cross-platform testing infrastructure.
+Plans 1-9 are complete. Plan 9's OS code-signing (macOS notarization, Windows
+Authenticode, Winget/Scoop) is deferred to optional — existing workarounds
+(Homebrew, xattr, SmartScreen bypass) suffice for the developer audience.
+Plan 10 (1.0 acceptance) can proceed; remaining deps are cross-platform testing
+infrastructure, performance benchmark baselines, and a security auditor.
