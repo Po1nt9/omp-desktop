@@ -44,7 +44,7 @@ struct RuntimeEntry {
     /// Accumulated assistant text from the event stream; cleared at the
     /// start of each turn, read after `prompt()` returns.
     text_buf: Arc<Mutex<String>>,
-    /// Drain barrier: the background collector calls `notify_waiters` once it
+    /// Drain barrier: the background collector calls `notify_one` once it
     /// has processed the terminal `AcpEvent::Stream { done: true, .. }` marker
     /// (sent by `prompt()` after the RPC resolves). A turn `await`s
     /// `notified()` before reading `text_buf`, so all prior chunks are
