@@ -44,6 +44,13 @@ struct RuntimeEntry {
     /// Accumulated assistant text from the event stream; cleared at the
     /// start of each turn, read after `prompt()` returns.
     text_buf: Arc<Mutex<String>>,
+    /// Drain barrier: the background collector calls `notify_waiters` once it
+    /// has processed the terminal `AcpEvent::Stream { done: true, .. }` marker
+    /// (sent by `prompt()` after the RPC resolves). A turn `await`s
+    /// `notified()` before reading `text_buf`, so all prior chunks are
+    /// guaranteed accumulated before the snapshot is taken — closing the
+    /// producer/consumer drain race on short/fast replies.
+    drained: Arc<tokio::sync::Notify>,
 }
 
 // `AcpClient` does not derive Debug, so RuntimeEntry can't either; provide a
@@ -776,24 +783,51 @@ impl Engine {
         let (acp, mut events) = AcpClient::spawn_with_options(cli_path, cwd.clone(), spawn_opts)
             .map_err(|e| format!("runtime_unavailable: spawn failed: {}", e.message))?;
 
-        // Start the event collector task: accumulate only assistant text.
+        // Start the event collector task: accumulate only assistant text and
+        // signal the drain barrier on the terminal `done: true` marker.
         let text_buf = Arc::new(Mutex::new(String::new()));
+        let drained = Arc::new(tokio::sync::Notify::new());
         let buf_clone = text_buf.clone();
+        let drained_clone = drained.clone();
         tokio::spawn(async move {
             while let Some(ev) = events.recv().await {
                 if let AcpEvent::Stream {
                     kind: StreamKind::Assistant,
                     text,
+                    done,
                     ..
                 } = ev
                 {
+                    // Accumulate any text from this chunk (the terminal
+                    // marker carries empty text, so this is a no-op then).
                     buf_clone.lock().push_str(&text);
+                    if done {
+                        // Drain barrier: every chunk sent before this marker
+                        // has now been accumulated. Unblocks the turn that is
+                        // `await`ing `notified()` before reading `text_buf`.
+                        //
+                        // Use `notify_one` (not `notify_waiters`): the turn
+                        // can only register its waiter AFTER `prompt()` returns
+                        // (the marker is enqueued inside `prompt()`), and the
+                        // collector may process this marker before the turn is
+                        // rescheduled. `notify_one` stores a single permit when
+                        // there is no waiter yet, so the later `notified()`
+                        // resolves immediately instead of hanging. The permit
+                        // is always consumed by the originating turn, and a
+                        // failed `prompt()` sends no terminal marker, so no
+                        // stray permit leaks across turns.
+                        drained_clone.notify_one();
+                    }
                 }
             }
             tracing::info!("remote_im: runtime event collector exited");
         });
 
-        let entry = Arc::new(RuntimeEntry { acp, text_buf });
+        let entry = Arc::new(RuntimeEntry {
+            acp,
+            text_buf,
+            drained,
+        });
         self.runtimes.lock().insert(cwd, entry.clone());
         Ok(entry)
     }
@@ -884,6 +918,20 @@ impl Engine {
                 error: Some(format!("agent turn failed: {}", e.message)),
             };
         }
+
+        // Await the drain barrier: `prompt()` resolves only after enqueuing the
+        // terminal `AcpEvent::Stream { done: true, .. }` marker, but that marker
+        // is consumed asynchronously by the collector task. Block here until the
+        // collector has processed it, guaranteeing every prior chunk is already
+        // accumulated in `text_buf` before we snapshot it. Without this, fast
+        // short replies could have their last chunks still queued on the event
+        // channel at read time, yielding a truncated reply.
+        //
+        // Correct across turns: the collector's `notify_one` (on the terminal
+        // marker) either wakes this waiter or stores a permit it consumes; the
+        // turn never reads `text_buf` without the collector having passed the
+        // marker, and no permit is left dangling for a later turn.
+        runtime.drained.notified().await;
 
         // Collect the streamed assistant text.
         let reply_text = runtime.text_buf.lock().clone();
