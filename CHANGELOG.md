@@ -51,6 +51,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `verify-updater-setup.sh` (fd9728a).
   macOS ARM64 真机验收：性能基准（冷启动 0.10s / RSS 39 MB）、产物
   SHA256 校验、更新验证器全绿、品牌检查通过；矩阵翻转至 55/12/90/1。
+- **CI hardening (mock E2E + poison-free lock):** CI was red on all 3
+  platforms — `cargo test` never built the `mock_acp_runtime` E2E binary,
+  and the resulting panics poisoned the `std::sync::Mutex` around
+  `OMP_DESKTOP_HOME`, cascading ~15 PoisonError failures. CI now builds the
+  mock bin explicitly on every OS and `APP_HOME_ENV_LOCK` is a poison-free
+  `parking_lot::Mutex`; store disk tests isolate their own temp HOME. All
+  jobs green again (518/0/1 on Windows). Flips AC-2.11 (4-target packaging
+  run, all 6 release jobs) and AC-10.6 (license files now confirmed inside
+  the macOS bundle at Resources/_up_/) to PASS; matrix now 57/12/88/1.
+  CI 加固：mock E2E 二进制显式构建 + 锁改为无中毒 parking_lot 实现；
+  store 磁盘测试自隔离临时 HOME；3 平台 CI 全绿，4 目标打包发布全绿，
+  授权文件确认打包进 macOS 应用；矩阵翻转至 57/12/88/1。
 
 ### Known Limitations / 已知限制
 
