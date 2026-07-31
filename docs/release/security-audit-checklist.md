@@ -17,11 +17,11 @@ Source: master design §8 (credential architecture and migration).
 
 | ID | Check | Method | Status | Notes |
 |---|---|---|---|---|
-| SA-C.1 | SecretStore uses OS keychain: macOS Keychain, Windows Credential Manager, Linux Secret Service | Code audit: `src-tauri/src/secrets.rs` | PENDING | |
+| SA-C.1 | SecretStore uses OS keychain: macOS Keychain, Windows Credential Manager, Linux Secret Service | Code audit: `src-tauri/src/secrets.rs` | PASS (2026-07-31) | `secrets/store.rs` `KeychainStore` wraps the `keyring` crate (macOS Keychain / Windows Credential Manager / Linux Secret Service) behind the `SecretStore` trait; `default_store()` is the process-wide handle with `install_test_store`/`MockStore` fault injection for tests. Keychain is the only credential backend (strict mode; on/off toggle retired). |
 | SA-C.2 | `agent.db` stores only `keychain:v1:<opaque-id>` references, never plaintext secrets | Code audit + DB inspection | PENDING | |
-| SA-C.3 | System secure storage unavailable → blocks save/refresh with actionable error; no silent plaintext fallback | Code audit + manual test (disable keychain) | PENDING | |
+| SA-C.3 | System secure storage unavailable → blocks save/refresh with actionable error; no silent plaintext fallback | Code audit + manual test (disable keychain) | PASS (2026-07-31) | Strict mode (§8.1): `save_secrets` / `remote_im::config::save_instance` return `StoreError` carrying i18n key `credentials.storeUnavailable` (actionable: start gnome-keyring/Secret Service + restart; existing credentials untouched) and write nothing to disk. `load_secrets`/`get_secrets` fail closed (None) once the migration ledger `store_unavailable` flag is set; plaintext pass-through only while the store is healthy. No plaintext fallback or reverse-copy path remains. Tests: `store_unavailable_blocks_save_and_fails_load_closed`, remote_im outage test (443 lib tests green). Manual disable-keychain run on Linux still owed before final sign-off. |
 | SA-C.4 | Remote platform credentials use isolated namespace, ACL, and metadata type (separate from Agent Provider credentials) | Code audit: `src-tauri/src/secrets.rs` remote namespace | PENDING | |
-| SA-C.5 | Migration 6-step idempotency: dry run → copy → readback (constant-time compare) → reference commit → tombstone → cleanup | `cargo test` migration suite | PENDING | |
+| SA-C.5 | Migration 6-step idempotency: dry run → copy → readback (constant-time compare) → reference commit → tombstone → cleanup | `cargo test` migration suite | PASS (2026-07-31) | `secrets/migration.rs` `Migrator` implements all 6 steps against the `MigrationSource` trait; 16-test suite covers every §18.2.6 scenario: dry-run enumerate/skip/conflict, success, idempotent rerun, store-unavailable deferral, readback-failure rollback, cleanup-failure tombstone+retry (`__tombstoned_v1__`), reference-commit rollback. Startup integration test: both sources migrate on launch, second run no-op. |
 | SA-C.6 | Neither Desktop nor CLI defines its own keychain service/account naming; all go through unified Rust SecretStore helper | Code audit | PENDING | |
 | SA-C.7 | Release artifacts contain no plaintext secret fallback | Artifact inspection: grep built binaries for secret patterns | PENDING | |
 | SA-C.8 | auth-broker is the sole writer for OAuth refresh (Desktop + CLI shared) | Code audit | PENDING | |
@@ -54,7 +54,7 @@ Source: master design §14 (Remote Hub and channels).
 
 | ID | Check | Method | Status | Notes |
 |---|---|---|---|---|
-| SA-R.1 | Channel credentials stored in SecretStore remote namespace (isolated from Agent Provider credentials) | Code audit | PENDING | |
+| SA-R.1 | Channel credentials stored in SecretStore remote namespace (isolated from Agent Provider credentials) | Code audit | PASS (2026-07-31) | Channel secrets live under `NS_REMOTE = "remote"` with keys `<instance_id>:<field>`; provider keys under `NS_PROVIDER = "provider"` — no shared namespace. Disk holds only `keychain:v1:remote:<key>` references in `channel-secret-refs.json`; legacy `channel-secrets.json` is migrated at startup and securely deleted. `remote_im/config.rs` save/get/delete all route through `SecretStore`; 4 tests incl. refs-win dual-read, fail-closed outage, delete sweep. |
 | SA-R.2 | All channels default-off | Config audit | PENDING | |
 | SA-R.3 | Webhook default loopback; public ingress requires explicit user reverse-proxy/tunnel configuration | Code audit | PENDING | |
 | SA-R.4 | Identity whitelist enforcement per channel | `cargo test` remote_im suite (59 tests) | PENDING | |

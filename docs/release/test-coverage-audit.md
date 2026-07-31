@@ -12,7 +12,7 @@
 | Suite | Count | How to Run | Coverage Scope |
 |---|---|---|---|
 | Frontend (vitest) | 94 files / 831 tests (830 pass + 1 flaky) | `pnpm test` | React components, Tauri command mocks, fail-closed behavior, UI logic, hooks, i18n rendering, code language detection, end-of-turn detection, project path handling, voice audio, redaction, runtime availability, file preview |
-| Rust (cargo test) | 421 tests (421 pass + 1 ignored) | `cargo test --manifest-path src-tauri/Cargo.toml` | See module breakdown below. +3 wecom signature tests, +1 permission delete test added in Phase 2; +2 v1 mock-transport contract tests added with transport injection (2026-07-31). |
+| Rust (cargo test) | 443 tests (443 pass + 1 ignored) | `cargo test --manifest-path src-tauri/Cargo.toml` | See module breakdown below. +3 wecom signature tests, +1 permission delete test added in Phase 2; +2 v1 mock-transport contract tests added with transport injection (2026-07-31); +18 §8.2 credential migration/strict-mode tests (16 migration incl. startup integration, 2 strict secrets, 4 remote_im config, −3 retired plaintext-fallback tests, −1 net remote_im dedup) (2026-07-31 evening). |
 | Brand policy | 9 tests | `node scripts/check-brand-policy.mjs` (+ `.test.mjs`) | Brand scan rules: lowercase brand detection, Grok/xAI coupling residue, Runtime brand normalization, allowlist scoping. Code-span exemption added for `omp` CLI binary names. |
 | i18n completeness | 5 tests | `node scripts/check-i18n-completeness.mjs` (+ `.test.mjs`) | Three-locale (en/zh-CN/zh-TW) key coverage, ICU parameter/type validation, empty value detection, hardcoded string detection |
 | Legal baseline | tests | `node scripts/check-legal-baseline.mjs` (+ `.test.mjs`) | MIT license attribution (RongleCat, OMP/Pi authors), NOTICE files, font/font-highlight.js attributions |
@@ -22,7 +22,7 @@
 
 | Module | Tests | Scope |
 |---|---|---|
-| `remote_im` | 62 | Channel adapters, dedup store, rate limiter, protocol start, weixin flow, catalog, media, bridge, session, config, validation |
+| `remote_im` | 69 | Channel adapters, dedup store, rate limiter, protocol start, weixin flow, catalog, media, bridge, session, config (incl. 4 SecretStore credential tests), validation |
 | `commands` | 24 | Tauri command handlers |
 | `acp_client` | 21 | ACP protocol client, prompt blocks |
 | `permission` | 20 | Permission model, per-path gates |
@@ -33,7 +33,7 @@
 | `extensions` | 13 | Extension protocol v1 |
 | `mirror` | 12 | Auth mirror |
 | `stream_stall` | 11 | Stream stall detection |
-| `secrets` | 11 | OS keychain integration (Keychain/Credential Manager/Secret Service) |
+| `secrets` | 29 | SecretStore (Keychain/Credential Manager/Secret Service) + MockStore fault injection, 6-step §8.2 migration engine (16 tests incl. startup integration), strict-mode save/load |
 | `event_journal` | 11 | Event journal persistence, commit points, standard path format |
 | `acp_golden_test` | 9 | ACP golden file contract tests |
 | `permission_rules` | 8 | Permission rule evaluation |
@@ -53,7 +53,7 @@
 | TC-M.3 | §3 Locale coverage 100% + ICU zero errors | `check-i18n-completeness.mjs` (5 tests) — key coverage + ICU validation | Critical flow screenshots in 3 locales | No screenshot automation |
 | TC-M.4 | §4 Brand scan zero violations | `check-brand-policy.mjs` (9 tests) — scan + allowlist | Allowlist functional regression (xAI Provider, Grok models display correctly) | — |
 | TC-M.5 | §5 Active Directory discovery CLI parity | — | Desktop vs CLI discovery comparison across 3 OS | No automated parity test |
-| TC-M.6 | §6 Credential migration all-pass | `secrets` (11), `mirror` (12) — keychain roundtrip, migration steps | System secure storage unavailable scenario; artifact plaintext scan | Some migration sub-items manual-only (AC-6.4, AC-6.8) |
+| TC-M.6 | §6 Credential migration all-pass | `secrets` (29, incl. 16-test migration suite covering all §18.2.6 scenarios + startup integration), `mirror` (12) — keychain roundtrip, migration steps, strict-mode fail-closed | Artifact plaintext scan (AC-6.8) | AC-6.4 store-unavailable now automated via MockStore fault injection; AC-6.8 still needs built-binary grep |
 | TC-M.7 | §7 Crash recovery no auto-replay | `event_journal` (11), `journal_throttle` (8) — journal persistence, commit points | Manual crash injection: kill sidecar mid-turn → restart → verify no replay | No automated crash recovery test |
 | TC-M.8 | §8 Remote channel acceptance | `remote_im` (62) — dedup, rate limiter, protocol start, weixin flow, catalog, media, bridge, config, validation | Real platform smoke tests on ≥1 OS per channel | No real-platform smoke automation; applicability items (edit/button/group/channel/thread) mostly manual |
 | TC-M.9 | §9 Workspace routing + tool containment | `path_scope`, `fs_browser` (19) — path canonicalization, scope enforcement | OMP canonical path + shell containment + MCP/subagent inheritance verification | Depends on Runtime capabilities; no automated containment test |
@@ -74,7 +74,7 @@ These gaps correspond to acceptance matrix items that cannot reach `PASS` withou
 | ~~**v1 transport injection**~~ | AC-1.2/1.3/1.4/1.8/1.9, AC-5.1/5.2 | ~~Critical~~ **Resolved 2026-07-31** | `OmpExtension::request()` now dispatches through an injected `V1Transport` trait object (`omp_desktop_v1/transport.rs`); `AcpClient` implements it via generic JSON-RPC forwarding, and the session manager installs it on capability negotiation. Mock-transport contract tests verify live dispatch + error→`runtime_unavailable` mapping. Remaining work on these items is real-Runtime E2E, not plumbing. |
 | Mock E2E happy-path test | AC-2.9 | **High** | Deferred from Plan 7 final review. Should simulate: session create → prompt → response → permission approval → tool execution → turn end, all with mock Runtime. |
 | End-to-end capability negotiation test | AC-1.1–AC-1.13 | **High** | Current contract tests verify individual methods. Need integration test: Desktop ↔ bundled Runtime negotiate full baseline, assert all 13 groups present. (Executable now that the v1 transport is live.) |
-| **6-step credential migration suite** | AC-6.1/6.2/6.5/6.6/6.7, AC-2.10 | **High** | Master design §8.2's dry-run/readback/tombstone/rollback migration is unimplemented. Only a 2-step copy+clear exists. |
+| ~~**6-step credential migration suite**~~ | AC-6.1/6.2/6.5/6.6/6.7, AC-2.10 | ~~**High**~~ **Resolved 2026-07-31** | §8.2 implemented per `docs/superpowers/plans/2026-07-31-credential-migration.md`: `SecretStore` trait + generic `Migrator` (dry-run/copy/readback/reference-commit/cleanup/rollback-tombstone) + `SecretsJsonSource`/`ChannelSecretsSource` adapters + idempotent startup auto-migration. 16-test migration suite green; strict mode removed the plaintext fallback (AC-6.4) and the keychain toggle. |
 | **Subagent policy inheritance** | AC-1.5 | **High** | `agent_subagents.rs` only syncs on/off; no permission/policy/MCP inheritance in Desktop. |
 | **Host+Hub trace correlation** | AC-1.13 | **High** | grep "trace_id/correlation/span/otel" = zero matches. Mandatory Host+Hub scope is absent. |
 | **Event-journal recovery wiring** | AC-1.10 | **High** | `replay_from`/`load_from` have no production call sites — recovery path not wired to session reconnect. |
@@ -108,12 +108,15 @@ Code audit (SA-C/SA-P/SA-R/SA-L domains) found issues beyond test coverage:
 
 **Remaining (architectural, need migration plans):**
 
-| Issue | Severity | Matrix Items |
-|---|---|---|
-| Remote channel credentials plaintext in `channel-secrets.json` | HIGH | SA-R.1 / AC-6.2 |
-| Silent plaintext fallback when OS secure storage unavailable | HIGH | SA-C.3 / AC-6.4 |
+None open. Both credential gaps below were resolved 2026-07-31 by the §8.2
+migration plan — kept for the record:
 
-> Note: AC-6.4 was previously listed as "Manual-Acceptable" (verify actionable error). Phase 2 code audit **confirmed** it as a real FAIL: `secrets.rs:410-431` silently writes plaintext `secrets.json` when keychain is off/unavailable. This is an architectural gap, not a verification gap — flipping it breaks plaintext-mode users and needs a migration plan.
+| Issue | Severity | Matrix Items | Resolution |
+|---|---|---|---|
+| ~~Remote channel credentials plaintext in `channel-secrets.json`~~ | HIGH | SA-R.1 / AC-6.2 | Migrated to SecretStore `remote` namespace at startup; file securely deleted; disk holds references only. |
+| ~~Silent plaintext fallback when OS secure storage unavailable~~ | HIGH | SA-C.3 / AC-6.4 | Strict mode: blocked save with actionable i18n error + fail-closed load; no fallback path remains. |
+
+> Historical note: AC-6.4 was previously listed as "Manual-Acceptable" (verify actionable error). Phase 2 code audit confirmed it as a real FAIL (`save_secrets` silently wrote plaintext when keychain was off/unavailable). Resolved 2026-07-31: strict mode + MockStore fault-injection tests made it automated, not manual.
 
 ### Known Code Quality Items (from Plan 7 Final Review)
 
@@ -129,8 +132,8 @@ Deferred items noted during Plan 7 merge, not release-blocking but should be tra
 Areas with strong automated coverage (no gaps identified):
 
 - **Permission model**: 20 permission + 8 permission_rules + 5 permission_host_test = 33 tests covering per-path gates, fail-closed, request binding.
-- **Remote IM infrastructure**: 62 tests covering dedup, rate limiting, protocol start, channel flow, media, config validation.
+- **Remote IM infrastructure**: 69 tests covering dedup, rate limiting, protocol start, channel flow, media, config validation, SecretStore credential refs.
 - **Event journal**: 11 tests covering persistence, commit points, path format, throttle.
-- **Secrets**: 11 tests covering keychain roundtrip, migration steps.
+- **Secrets**: 29 tests covering keychain roundtrip, MockStore fault injection, 6-step migration engine (dry-run/readback/tombstone/rollback/idempotency/startup), strict-mode fail-closed.
 - **Brand/legal/provenance**: 4 check scripts with dedicated test files, run in CI.
 - **Frontend**: 831 tests across 94 files — comprehensive component and hook coverage.
