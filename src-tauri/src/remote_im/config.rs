@@ -544,4 +544,49 @@ mod tests {
         std::env::remove_var("OMP_DESKTOP_HOME");
         let _ = fs::remove_dir_all(&tmp);
     }
+
+    /// AC-8.7 / AC-8.17: key rotation — saving a new value for an existing
+    /// field replaces it in the OS store immediately; the on-disk reference
+    /// stays stable (one row per field) and no plaintext of either value
+    /// touches disk.
+    #[test]
+    fn save_instance_rotates_existing_secret_in_place() {
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _g = guard();
+        let tmp = test_home("rotate");
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
+        let mock = Arc::new(MockStore::new());
+        install_test_store(mock.clone());
+
+        save_instance(&dto("inst1"), &secrets(&[("bot_token", "tok-v1")])).unwrap();
+        assert_eq!(
+            get_secrets("inst1").get("bot_token").map(String::as_str),
+            Some("tok-v1")
+        );
+
+        save_instance(&dto("inst1"), &secrets(&[("bot_token", "tok-v2")])).unwrap();
+
+        // The rotated value resolves immediately through the same reference.
+        assert_eq!(
+            get_secrets("inst1").get("bot_token").map(String::as_str),
+            Some("tok-v2")
+        );
+        let refs = read_channel_refs(&channel_refs_path());
+        let row = refs.get("inst1").expect("refs row for inst1");
+        assert_eq!(row.len(), 1);
+        assert_eq!(
+            row.get("bot_token").map(String::as_str),
+            Some("keychain:v1:remote:inst1:bot_token")
+        );
+        let legacy = tmp.join("remote").join("channel-secrets.json");
+        if legacy.is_file() {
+            let raw = fs::read_to_string(&legacy).unwrap();
+            assert!(!raw.contains("tok-v1"));
+            assert!(!raw.contains("tok-v2"));
+        }
+
+        reset_test_store();
+        std::env::remove_var("OMP_DESKTOP_HOME");
+        let _ = fs::remove_dir_all(&tmp);
+    }
 }

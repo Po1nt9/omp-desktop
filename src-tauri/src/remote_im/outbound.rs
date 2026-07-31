@@ -350,4 +350,17 @@ mod tests {
             &json!({ "requireMention": false })
         ));
     }
+
+    /// AC-8.7: revocation — unregister drops the instance's secrets from the
+    /// router immediately.
+    #[test]
+    fn unregister_revokes_router_secrets() {
+        let r = OutboundRouter::new();
+        let mut secrets = HashMap::new();
+        secrets.insert("token".into(), "t".into());
+        r.register("inst-9", "weixin", secrets, json!({}));
+        assert!(r.secrets_for_test("inst-9").is_some());
+        r.unregister("inst-9");
+        assert!(r.secrets_for_test("inst-9").is_none());
+    }
 }
