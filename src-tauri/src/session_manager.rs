@@ -2650,12 +2650,30 @@ impl SessionManager {
             &settings.session_data_mode,
         ));
         let cli_path = std::path::PathBuf::new();
+        // AC-1.5: clamped subagent ceiling — never wider than the session's
+        // own effective policy. Reaches the runtime via TOML (independent
+        // mode) + OMP_SUBAGENT_POLICY env (both modes).
+        let subagent_policy = crate::permission::subagent_effective_policy(
+            crate::permission::PermissionPolicy::parse(&prefs.permission_policy),
+            settings
+                .subagent_policy
+                .as_deref()
+                .map(crate::permission::PermissionPolicy::parse),
+        )
+        .as_str()
+        .to_string();
+        let _ = crate::agent_subagents::sync_subagent_policy_to_agent_profile(
+            &settings.session_data_mode,
+            &subagent_policy,
+        );
         let spawn_opts = crate::acp_client::SpawnOptions {
             model_id: Some(agent_model.clone()),
             effort: Some(prefs.effort.clone()),
             permission_policy: Some(prefs.permission_policy.clone()),
             binary_path,
             agent_dir,
+            subagents_enabled: Some(settings.subagents_enabled),
+            subagent_policy: Some(subagent_policy),
         };
 
         let (client, mut events) = match AcpClient::spawn_with_options(cli_path, cwd, spawn_opts)

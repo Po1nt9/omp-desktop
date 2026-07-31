@@ -6,7 +6,7 @@
 //! protocol is handled by the `OmpExtension` client.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -201,6 +201,14 @@ pub struct SpawnOptions {
     pub binary_path: Option<PathBuf>,
     /// Optional agent working directory injected as `PI_CODING_AGENT_DIR`.
     pub agent_dir: Option<PathBuf>,
+    /// AC-1.5: subagent kill switch. `None` = leave CLI defaults (enabled).
+    /// `Some(false)` = force-disable via `--no-subagents` + `GROK_SUBAGENTS=0`.
+    pub subagents_enabled: Option<bool>,
+    /// AC-1.5: clamped subagent policy ceiling (wire form, from
+    /// `permission::subagent_effective_policy`). Exported as
+    /// `OMP_SUBAGENT_POLICY` so shared mode gets the same cap the TOML
+    /// channel delivers in independent mode.
+    pub subagent_policy: Option<String>,
 }
 
 /// Backend identifier surfaced to the UI. Currently a placeholder carried over
@@ -214,6 +222,27 @@ pub fn runtime_unavailable_error() -> AgentError {
         AgentErrorCode::RuntimeUnavailable,
         "Agent runtime is unavailable (fail-closed shell).",
     )
+}
+
+/// Assemble the `omp acp --stdio` spawn command (AC-1.5: extracted so the
+/// subagent kill switch / policy env wiring is unit-testable without
+/// spawning a process).
+fn build_spawn_command(binary: &Path, opts: &SpawnOptions) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(binary);
+    cmd.arg("acp").arg("--stdio");
+    if let Some(dir) = &opts.agent_dir {
+        cmd.env("PI_CODING_AGENT_DIR", dir);
+    }
+    cmd.env("OMP_DESKTOP_V1_PROTOCOL", "1");
+    crate::agent_subagents::apply_subagents_to_command(
+        &mut cmd,
+        opts.subagents_enabled.unwrap_or(true),
+        opts.subagent_policy.as_deref(),
+    );
+    cmd.stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    cmd
 }
 
 impl AcpClient {
@@ -258,15 +287,7 @@ impl AcpClient {
             return Err(runtime_unavailable_error());
         }
 
-        let mut cmd = tokio::process::Command::new(&binary);
-        cmd.arg("acp").arg("--stdio");
-        if let Some(dir) = &opts.agent_dir {
-            cmd.env("PI_CODING_AGENT_DIR", dir);
-        }
-        cmd.env("OMP_DESKTOP_V1_PROTOCOL", "1");
-        cmd.stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+        let mut cmd = build_spawn_command(&binary, &opts);
 
         let child = cmd.spawn().map_err(|e| {
             AgentError::new(
@@ -2194,10 +2215,75 @@ mod spawn_reactivation_tests {
             model_id: Some("gpt-4".to_string()),
             effort: Some("high".to_string()),
             permission_policy: Some("yolo".to_string()),
+            subagents_enabled: Some(true),
+            subagent_policy: None,
         };
         assert_eq!(opts.binary_path, Some(PathBuf::from("/usr/local/bin/omp")));
         assert_eq!(opts.agent_dir, Some(PathBuf::from("/tmp/agent")));
         assert_eq!(opts.model_id.as_deref(), Some("gpt-4"));
+    }
+
+    // ── AC-1.5: spawn wiring — kill switch + clamped policy reach the process ──
+
+    #[test]
+    fn spawn_command_carries_subagent_kill_switch_and_policy() {
+        let opts = SpawnOptions {
+            subagents_enabled: Some(false),
+            subagent_policy: Some("ask".to_string()),
+            ..Default::default()
+        };
+        let cmd = build_spawn_command(Path::new("/nonexistent/omp"), &opts);
+        let std = cmd.as_std();
+        let args: Vec<_> = std
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        assert!(
+            args.iter().any(|a| a == "--no-subagents"),
+            "args: {args:?}"
+        );
+        let envs: Vec<_> = std
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().to_string(),
+                    v.map(|v| v.to_string_lossy().to_string()),
+                )
+            })
+            .collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| k == "GROK_SUBAGENTS" && v.as_deref() == Some("0")),
+            "envs: {envs:?}"
+        );
+        assert!(
+            envs.iter()
+                .any(|(k, v)| k == "OMP_SUBAGENT_POLICY" && v.as_deref() == Some("ask")),
+            "envs: {envs:?}"
+        );
+        // Pre-existing wiring intact.
+        assert!(
+            envs.iter()
+                .any(|(k, v)| k == "OMP_DESKTOP_V1_PROTOCOL" && v.as_deref() == Some("1")),
+            "envs: {envs:?}"
+        );
+    }
+
+    #[test]
+    fn spawn_command_default_opts_leave_subagents_alone() {
+        let opts = SpawnOptions::default();
+        let cmd = build_spawn_command(Path::new("/nonexistent/omp"), &opts);
+        let std = cmd.as_std();
+        assert!(
+            !std.get_args().any(|a| a == "--no-subagents"),
+            "default must not force-disable"
+        );
+        assert!(
+            !std
+                .get_envs()
+                .any(|(k, _)| k == "GROK_SUBAGENTS" || k == "OMP_SUBAGENT_POLICY"),
+            "default must not set subagent env"
+        );
     }
 
     #[test]

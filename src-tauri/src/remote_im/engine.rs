@@ -997,6 +997,10 @@ impl Engine {
             permission_policy: self.effective_permission_policy(),
             binary_path: Some(binary_path.clone()),
             agent_dir,
+            // AC-1.5: the remote engine path manages its own policy via the
+            // AC-8.4 approval flow; subagent config stays at CLI defaults.
+            subagents_enabled: None,
+            subagent_policy: None,
         };
         // cli_path is empty; SpawnOptions::binary_path takes precedence
         // inside spawn_with_options.
