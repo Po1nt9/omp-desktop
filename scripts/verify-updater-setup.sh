@@ -99,12 +99,13 @@ case "$CHANNEL" in
     ;;
 esac
 LATEST_URL="https://github.com/${REPO}/releases/download/${ROLLING}/${MANIFEST}"
+MANIFEST_PATH="/tmp/omp-desktop-${CHANNEL}.json"
 if [[ $FETCH_LATEST -eq 1 ]]; then
   if command -v curl >/dev/null 2>&1; then
-    code=$(curl -sS -o /tmp/omp-desktop-${CHANNEL}.json -w '%{http_code}' -L "$LATEST_URL" || true)
+    code=$(curl -sS -o "$MANIFEST_PATH" -w '%{http_code}' -L "$LATEST_URL" || true)
     if [[ "$code" == "200" ]]; then
       if command -v python3 >/dev/null 2>&1; then
-        if python3 -c 'import json,sys; json.load(open("/tmp/omp-desktop-${CHANNEL}.json"))' 2>/dev/null; then
+        if python3 -c "import json,sys; json.load(open('$MANIFEST_PATH'))" 2>/dev/null; then
           pass "latest.json fetchable and valid JSON ($LATEST_URL)"
         else
           fail "latest.json HTTP 200 but not valid JSON"
