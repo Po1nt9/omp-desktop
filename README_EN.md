@@ -180,6 +180,11 @@ Those files do not describe the current OMP Desktop product.
 | Code of conduct | [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) |
 | Security | [`SECURITY.md`](./SECURITY.md) |
 | Credential management | [`docs/credential-management.md`](./docs/credential-management.md) |
+| Provider setup | [`docs/provider-setup.md`](./docs/provider-setup.md) |
+| Permission model | [`docs/permission-model.md`](./docs/permission-model.md) |
+| Remote access risk | [`docs/remote-access-risk.md`](./docs/remote-access-risk.md) |
+| Recovery boundary | [`docs/recovery-boundary.md`](./docs/recovery-boundary.md) |
+| Internationalization (i18n) | [`docs/i18n-guide.md`](./docs/i18n-guide.md) |
 | Upstream history | [`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) |
 
 ## Contributing

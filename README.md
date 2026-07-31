@@ -173,6 +173,11 @@ OMP Desktop 基于 MIT 许可证的上游源码适配：
 | 行为准则 | [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) |
 | 安全披露 | [`SECURITY.md`](./SECURITY.md) |
 | 凭据管理 | [`docs/credential-management.md`](./docs/credential-management.md) |
+| Provider 配置 | [`docs/provider-setup.md`](./docs/provider-setup.md) |
+| 权限模型 | [`docs/permission-model.md`](./docs/permission-model.md) |
+| 远程访问风险 | [`docs/remote-access-risk.md`](./docs/remote-access-risk.md) |
+| 恢复边界 | [`docs/recovery-boundary.md`](./docs/recovery-boundary.md) |
+| 国际化 (i18n) | [`docs/i18n-guide.md`](./docs/i18n-guide.md) |
 | 上游历史 | [`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) |
 
 ## 贡献

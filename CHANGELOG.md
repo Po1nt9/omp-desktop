@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   six-step startup migration, and operator recipes (AC-12.3).
   新增凭据管理指南：凭据仅存系统安全存储（严格模式，无明文 fallback），
   记录 keychain:v1: 引用格式与六步启动迁移（AC-12.3）。
+- **Guides batch (§12):** five new user-facing guides — provider setup,
+  permission model, remote access risk, recovery boundary, and i18n — plus an
+  OS-codesign warning table with signing costs in the update guide.
+  (AC-12.2/12.4/12.5/12.6/12.7/12.8.)
+  指南批量补齐（§12）：新增 Provider 配置、权限模型、远程访问风险、恢复边界、
+  i18n 五篇指南，并在更新指南中补充 OS 签名警告表与签名成本。
 
 ### Known Limitations / 已知限制
 
