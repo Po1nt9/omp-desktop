@@ -100,7 +100,11 @@
     },
     "macOS": {
       "infoPlist": "Info.plist"
-    }
+    },
+    "resources": [
+      "../THIRD_PARTY_NOTICES",
+      "../LICENSE"
+    ]
   },
   "plugins": {
     "updater": {
