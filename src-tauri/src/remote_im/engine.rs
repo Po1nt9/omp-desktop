@@ -109,6 +109,10 @@ impl<F: FnOnce()> Drop for ReclaimOnDrop<F> {
     }
 }
 
+/// AC-8.4: default remote-approval TTL (seconds). In-memory only — the
+/// grant dies on restart (master design §11: approvals are not persisted).
+pub const DEFAULT_APPROVAL_TTL_SECS: i64 = 3600;
+
 /// Current unix time in seconds (0 on clock-before-epoch, matching the
 /// recovery module's defensive style).
 fn now_secs() -> i64 {
@@ -146,6 +150,9 @@ pub struct Engine {
     rate_limiter: super::rate_limiter::RateLimiter,
     /// AC-8.4: webhook freshness + nonce anti-replay (in-memory).
     replay_guard: ReplayGuard,
+    /// AC-8.4: remote-approval expiry (unix secs). `None` = not granted.
+    /// Never persisted — dies on restart; toggling yolo re-grants.
+    approval_expires_at: Mutex<Option<i64>>,
 }
 
 impl Engine {
@@ -171,6 +178,7 @@ impl Engine {
             dedup: super::dedup_store::DedupStore::open_default(),
             rate_limiter: super::rate_limiter::RateLimiter::new_default(),
             replay_guard: ReplayGuard::new(super::replay_guard::DEFAULT_FRESHNESS_WINDOW_SECS),
+            approval_expires_at: Mutex::new(None),
         }
     }
 
@@ -192,6 +200,7 @@ impl Engine {
             dedup: super::dedup_store::DedupStore::ephemeral(),
             rate_limiter: super::rate_limiter::RateLimiter::new_default(),
             replay_guard: ReplayGuard::new(super::replay_guard::DEFAULT_FRESHNESS_WINDOW_SECS),
+            approval_expires_at: Mutex::new(None),
         }
     }
 
@@ -213,6 +222,47 @@ impl Engine {
 
     pub fn remove_instance(&self, id: &str) {
         self.instances.lock().remove(id);
+    }
+
+    /// Grant remote approval for `ttl_secs` from now (AC-8.4 D1).
+    pub fn grant_approval(&self, ttl_secs: i64) {
+        self.grant_approval_at(now_secs(), ttl_secs);
+    }
+
+    pub(crate) fn grant_approval_at(&self, now: i64, ttl_secs: i64) {
+        *self.approval_expires_at.lock() = Some(now + ttl_secs);
+    }
+
+    /// Revoke remote approval immediately (toggle off).
+    pub fn revoke_approval(&self) {
+        *self.approval_expires_at.lock() = None;
+    }
+
+    pub fn approval_active(&self) -> bool {
+        self.approval_active_at(now_secs())
+    }
+
+    pub(crate) fn approval_active_at(&self, now: i64) -> bool {
+        (*self.approval_expires_at.lock()).is_some_and(|exp| now < exp)
+    }
+
+    pub fn approval_expires_at(&self) -> Option<i64> {
+        *self.approval_expires_at.lock()
+    }
+
+    /// AC-8.4 D3: while approval is active, remote turns spawn the Runtime
+    /// with the yolo (AlwaysApprove) policy; otherwise `None` = Runtime
+    /// default policy applies.
+    pub fn effective_permission_policy(&self) -> Option<String> {
+        self.effective_permission_policy_at(now_secs())
+    }
+
+    pub(crate) fn effective_permission_policy_at(&self, now: i64) -> Option<String> {
+        if self.approval_active_at(now) {
+            Some("yolo".into())
+        } else {
+            None
+        }
     }
 
     pub async fn handle(&self, msg: IncomingMessage) {
@@ -933,7 +983,8 @@ impl Engine {
         let spawn_opts = SpawnOptions {
             model_id: None,
             effort: None,
-            permission_policy: None,
+            // AC-8.4: yolo only while the TTL-bound approval is active.
+            permission_policy: self.effective_permission_policy(),
             binary_path: Some(binary_path.clone()),
             agent_dir,
         };
@@ -1641,5 +1692,51 @@ mod tests {
             !engine.dedup.check_and_mark("wecom", "ok-1"),
             "fresh message must reach the dedup gate"
         );
+    }
+
+    /// AC-8.4 D1/D3: granting approval activates it for the TTL and makes
+    /// remote turns spawn the Runtime with the yolo policy.
+    #[test]
+    fn approval_grant_activates_yolo_policy() {
+        let engine = Engine::new_ephemeral(OutboundRouter::new(), false);
+        engine.grant_approval_at(1_000, 600);
+        assert!(engine.approval_active_at(1_001));
+        assert_eq!(
+            engine.effective_permission_policy_at(1_001).as_deref(),
+            Some("yolo")
+        );
+        assert_eq!(engine.approval_expires_at(), Some(1_600));
+    }
+
+    /// AC-8.4 D1: approval expires exactly at the TTL boundary.
+    #[test]
+    fn approval_expires_after_ttl() {
+        let engine = Engine::new_ephemeral(OutboundRouter::new(), false);
+        engine.grant_approval_at(1_000, 600);
+        assert!(engine.approval_active_at(1_599));
+        assert!(!engine.approval_active_at(1_600));
+        assert_eq!(engine.effective_permission_policy_at(1_600), None);
+    }
+
+    /// AC-8.4 D1: revoking (toggle off) deactivates immediately.
+    #[test]
+    fn approval_revoke_is_immediate() {
+        let engine = Engine::new_ephemeral(OutboundRouter::new(), false);
+        engine.grant_approval_at(1_000, 600);
+        engine.revoke_approval();
+        assert!(!engine.approval_active_at(1_001));
+        assert_eq!(engine.effective_permission_policy_at(1_001), None);
+        assert_eq!(engine.approval_expires_at(), None);
+    }
+
+    /// AC-8.4 §11: a fresh Engine (restart) starts with NO active approval
+    /// even when the persisted yolo flag is true — approvals never survive
+    /// a restart; the user must re-enable.
+    #[test]
+    fn approval_does_not_survive_restart() {
+        let engine = Engine::new_ephemeral(OutboundRouter::new(), true);
+        assert!(!engine.approval_active());
+        assert_eq!(engine.effective_permission_policy(), None);
+        assert_eq!(engine.approval_expires_at(), None);
     }
 }
