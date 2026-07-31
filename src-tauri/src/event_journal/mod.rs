@@ -9,6 +9,7 @@
 //! See `docs/superpowers/plans/2026-07-29-plan-3-supervisor-core-acp.md`
 //! Task 4 for the contract.
 
+pub mod recovery;
 pub mod tests;
 
 use serde::{Deserialize, Serialize};
@@ -172,6 +173,16 @@ impl EventJournal {
     /// Read-only access to the full event list.
     pub fn events(&self) -> &[JournalEvent] {
         &self.events
+    }
+
+    /// Session this journal belongs to.
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    /// Recorded commit points, oldest first.
+    pub fn commit_points(&self) -> &[CommitPoint] {
+        &self.commit_points
     }
 
     /// Standard on-disk path: `<session_dir>/event_journal.json`.
