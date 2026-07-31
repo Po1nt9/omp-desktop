@@ -3275,6 +3275,20 @@ function AboutUpdateRow({
             ? ` · ${channelInfo.endpoint.replace(/^https:\/\//, "")}`
             : ""}
         </div>
+        {channelInfo.releaseChannel !== "unknown" && (
+          <div
+            className="settings-row__hint"
+            data-release-channel={channelInfo.releaseChannel}
+          >
+            {channelInfo.releaseChannel === "beta"
+              ? t("settings.releaseChannel.beta")
+              : channelInfo.releaseChannel === "nightly"
+                ? t("settings.releaseChannel.nightly")
+                : t("settings.releaseChannel.stable")}
+            {" · "}
+            {t("settings.releaseChannelDesc")}
+          </div>
+        )}
       </div>
       <div className="settings-about-update">
         <div className="settings-about-update__actions">

@@ -1000,6 +1000,11 @@ const en = {
     "Update channel: in-app (signed release)",
   "settings.autoUpdateChannelManual":
     "Update channel: GitHub download (unsigned / local build)",
+  "settings.releaseChannel.stable": "Release channel: stable",
+  "settings.releaseChannel.beta": "Release channel: beta",
+  "settings.releaseChannel.nightly": "Release channel: nightly",
+  "settings.releaseChannelDesc":
+    "Channels are tied to the installed build — install a beta/nightly build to switch.",
   "settings.close": "Close",
   "settings.sharedConfirm":
     "Switch to shared ~/.grok? Data will not merge silently. Confirm?",
@@ -3098,6 +3103,10 @@ const zh: Record<MessageKey, string> = {
   "settings.autoUpdateChannelSilent": "更新通道：应用内（已签名正式版）",
   "settings.autoUpdateChannelManual":
     "更新通道：GitHub 下载（未签名 / 本地构建）",
+  "settings.releaseChannel.stable": "更新渠道：stable（稳定版）",
+  "settings.releaseChannel.beta": "更新渠道：beta（测试版）",
+  "settings.releaseChannel.nightly": "更新渠道：nightly（每日构建）",
+  "settings.releaseChannelDesc": "渠道随安装包固定——安装 beta/nightly 安装包即可切换。",
   "settings.close": "关闭",
   "settings.sharedConfirm":
     "切换到共享 ~/.grok？数据不会静默合并，请确认。",

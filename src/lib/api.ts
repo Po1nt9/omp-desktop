@@ -337,8 +337,10 @@ export async function isUpdaterPluginEnabled() {
 export type UpdaterStatus = {
   platformSupported: boolean;
   pluginEnabled: boolean;
-  /** `silent` | `github_manual` */
+  /** Delivery mode: `silent` | `github_manual` */
   channel: string;
+  /** Build-baked release channel: `stable` | `beta` | `nightly` (AC-10.9). */
+  releaseChannel: string;
   endpoint: string;
 };
 

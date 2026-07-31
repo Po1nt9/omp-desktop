@@ -961,6 +961,10 @@ export const zhTW: Record<MessageKey, string> = {
   "settings.autoUpdateChannelSilent": "更新通道：應用內（已簽名正式版）",
   "settings.autoUpdateChannelManual":
     "更新通道：GitHub 下載（未簽名 / 本地建置）",
+  "settings.releaseChannel.stable": "更新渠道：stable（穩定版）",
+  "settings.releaseChannel.beta": "更新渠道：beta（測試版）",
+  "settings.releaseChannel.nightly": "更新渠道：nightly（每日建構）",
+  "settings.releaseChannelDesc": "渠道隨安裝包固定——安裝 beta/nightly 安裝包即可切換。",
   "settings.close": "關閉",
   "settings.sharedConfirm":
     "切換到共用 ~/.grok？資料不會靜默合併，請確認。",

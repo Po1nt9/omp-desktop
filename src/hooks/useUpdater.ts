@@ -13,6 +13,10 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { invoke } from "@tauri-apps/api/core";
 import { isDesktopHost, type AppUpdateCheck } from "@/lib/api";
+import {
+  normalizeUpdaterStatus,
+  type UpdaterChannelInfo,
+} from "@/lib/updateChannelInfo";
 
 export type UpdateStatus =
   | { state: "idle" }
@@ -101,22 +105,13 @@ async function githubCheckUpdate(): Promise<AppUpdateCheck> {
   return invoke<AppUpdateCheck>("app_check_update");
 }
 
-export type UpdaterChannelInfo = {
-  /** `silent` when signed release plugin path is live; else `github_manual`. */
-  channel: "silent" | "github_manual" | "unknown";
-  pluginEnabled: boolean;
-  platformSupported: boolean;
-  endpoint: string;
-};
+export type { UpdaterChannelInfo, ReleaseChannel } from "@/lib/updateChannelInfo";
 
 export function useUpdater() {
   const [status, setStatusState] = useState<UpdateStatus>(initialUpdateStatus);
-  const [channelInfo, setChannelInfo] = useState<UpdaterChannelInfo>({
-    channel: "unknown",
-    pluginEnabled: false,
-    platformSupported: false,
-    endpoint: "",
-  });
+  const [channelInfo, setChannelInfo] = useState<UpdaterChannelInfo>(
+    normalizeUpdaterStatus({}),
+  );
   const statusRef = useRef<UpdateStatus>(initialUpdateStatus());
   const updateRef = useRef<Update | null>(null);
   const checkInFlightRef = useRef(false);
@@ -417,20 +412,11 @@ export function useUpdater() {
           platformSupported: boolean;
           pluginEnabled: boolean;
           channel: string;
+          releaseChannel: string;
           endpoint: string;
         }>("updater_status");
         if (!aliveRef.current || generationRef.current !== gen) return;
-        setChannelInfo({
-          channel:
-            s.channel === "silent"
-              ? "silent"
-              : s.channel === "github_manual"
-                ? "github_manual"
-                : "unknown",
-          pluginEnabled: !!s.pluginEnabled,
-          platformSupported: !!s.platformSupported,
-          endpoint: s.endpoint || "",
-        });
+        setChannelInfo(normalizeUpdaterStatus(s));
       } catch {
         /* ignore — About still works via status machine */
       }
