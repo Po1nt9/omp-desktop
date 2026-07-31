@@ -75,6 +75,9 @@ export type BridgeStatus = {
   enabled: boolean;
   lifecycle: BridgeLifecycle;
   allowRemoteYolo: boolean;
+  /** AC-8.4: in-memory approval state (TTL-bound; dies on restart). */
+  approvalActive?: boolean;
+  approvalExpiresAt?: number | null;
   connectedChannels: Array<{
     channel: RemoteChannelId;
     instanceId: string;

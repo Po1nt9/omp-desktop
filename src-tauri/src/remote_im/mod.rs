@@ -46,6 +46,11 @@ pub struct BridgeStatusDto {
     pub enabled: bool,
     pub lifecycle: String,
     pub allow_remote_yolo: bool,
+    /// AC-8.4: in-memory approval state (TTL-bound; dies on restart).
+    #[serde(default)]
+    pub approval_active: bool,
+    #[serde(default)]
+    pub approval_expires_at: Option<i64>,
     pub connected_channels: Vec<ConnectedChannelDto>,
     pub last_error: Option<String>,
     pub mock: bool,

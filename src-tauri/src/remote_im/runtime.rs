@@ -22,6 +22,11 @@ pub struct RuntimeHandle {
 }
 
 impl RuntimeHandle {
+    /// AC-8.4: bridge-side access for approval grant/revoke + status.
+    pub(crate) fn engine(&self) -> &Arc<Engine> {
+        &self.engine
+    }
+
     pub async fn stop(self) {
         let _ = self.cancel_tx.send(true);
         // Give connectors a moment to exit long-poll / WS loops via cancel.
@@ -160,4 +165,33 @@ pub async fn start_runtime(
         },
         active,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// AC-8.4: the handle exposes the engine so the bridge can grant/revoke
+    /// approval; a fresh engine starts inactive even with persisted yolo.
+    #[tokio::test]
+    async fn handle_engine_accessor_exposes_approval_state() {
+        let (cancel_tx, _rx) = watch::channel(false);
+        let (keepalive_tx, _keepalive_rx) = mpsc::channel::<IncomingMessage>(1);
+        let engine = Arc::new(Engine::new_ephemeral(OutboundRouter::new(), true));
+        let h = RuntimeHandle {
+            cancel_tx,
+            pump: tokio::spawn(async {}),
+            connectors: vec![],
+            _keepalive_tx: keepalive_tx,
+            outbound: OutboundRouter::new(),
+            engine,
+        };
+        assert!(!h.engine().approval_active());
+        h.engine()
+            .grant_approval(crate::remote_im::engine::DEFAULT_APPROVAL_TTL_SECS);
+        assert!(h.engine().approval_active());
+        assert!(h.engine().approval_expires_at().is_some());
+        h.engine().revoke_approval();
+        assert!(!h.engine().approval_active());
+    }
 }

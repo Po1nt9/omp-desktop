@@ -1,10 +1,12 @@
 //! Bridge runtime: **in-process Rust** multi-IM connectors (no Node / agent-connect).
 
 use super::config;
+use super::engine::Engine;
 use super::runtime::{self, RuntimeHandle};
 use super::{BridgeStatusDto, ConnectedChannelDto};
 use parking_lot::Mutex;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -35,6 +37,10 @@ pub struct BridgeRuntime {
     pub last_error: Option<String>,
     connected_cache: Mutex<Vec<ConnectedChannelDto>>,
     running: Mutex<bool>,
+    /// AC-8.4: sync cache of the running engine (Arc clone) so `status()` /
+    /// `set_config()` can read approval state / grant / revoke without
+    /// awaiting the global runtime slot.
+    engine_cache: Mutex<Option<Arc<Engine>>>,
 }
 
 impl Default for BridgeRuntime {
@@ -51,6 +57,7 @@ impl Default for BridgeRuntime {
             last_error: None,
             connected_cache: Mutex::new(Vec::new()),
             running: Mutex::new(false),
+            engine_cache: Mutex::new(None),
         }
     }
 }
@@ -103,6 +110,16 @@ impl BridgeRuntime {
                 self.lifecycle.clone()
             },
             allow_remote_yolo: self.allow_remote_yolo,
+            approval_active: self
+                .engine_cache
+                .lock()
+                .as_ref()
+                .is_some_and(|e| e.approval_active()),
+            approval_expires_at: self
+                .engine_cache
+                .lock()
+                .as_ref()
+                .and_then(|e| e.approval_expires_at()),
             connected_channels: connected,
             last_error: self.last_error.clone(),
             mock: false,
@@ -125,6 +142,18 @@ impl BridgeRuntime {
         }
         if let Some(y) = allow_remote_yolo {
             self.allow_remote_yolo = y;
+            // AC-8.4: toggling yolo grants (TTL-bound) / revokes the
+            // in-memory approval on the running engine, if any. A stopped
+            // bridge has nothing to grant — the next start is inactive
+            // anyway (approvals never survive restart).
+            let eng = self.engine_cache.lock().clone();
+            if let Some(e) = eng {
+                if y {
+                    e.grant_approval(crate::remote_im::engine::DEFAULT_APPROVAL_TTL_SECS);
+                } else {
+                    e.revoke_approval();
+                }
+            }
         }
         self.persist_config();
         Ok(())
@@ -159,6 +188,7 @@ impl BridgeRuntime {
                     .collect();
                 *self.connected_cache.lock() = dtos.clone();
                 *self.running.lock() = true;
+                *self.engine_cache.lock() = Some(handle.engine().clone());
                 {
                     let mut slot = runtime_slot().lock().await;
                     slot.handle = Some(handle);
@@ -189,6 +219,7 @@ impl BridgeRuntime {
         }
         *self.running.lock() = false;
         self.connected_cache.lock().clear();
+        *self.engine_cache.lock() = None;
         if clear_enabled {
             self.enabled = false;
             self.persist_config();

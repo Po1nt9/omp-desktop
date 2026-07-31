@@ -155,6 +155,16 @@ pub struct Engine {
     approval_expires_at: Mutex<Option<i64>>,
 }
 
+impl std::fmt::Debug for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Engine")
+            .field("lang", &self.lang)
+            .field("allow_remote_yolo", &self.allow_remote_yolo)
+            .field("approval_expires_at", &self.approval_expires_at)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Engine {
     pub fn new(
         outbound: OutboundRouter,
