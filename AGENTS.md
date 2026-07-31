@@ -4,9 +4,10 @@
 
 1. **`docs/superpowers/`** — current OMP Desktop specs and plans.
    - [2026-07-28-omp-desktop-design.md](docs/superpowers/specs/2026-07-28-omp-desktop-design.md) — frozen master design
-   - [2026-07-28-repository-brand-baseline.md](docs/superpowers/plans/2026-07-28-repository-brand-baseline.md) — repository brand baseline plan
-2. **Plan 1 baseline is fail-closed.** Agent execution, Provider authentication, and runtime-owned configuration return `runtime_unavailable`. Do not advertise these as working capabilities.
-3. The OMP Runtime source is pinned as a submodule at `runtime/oh-my-pi` (commit `a2eb2070baaa984256b4a4d2f4c6513d08515f71`).
+   - [2026-07-29-plans-4-10-roadmap.md](docs/superpowers/plans/2026-07-29-plans-4-10-roadmap.md) — Plans 1-10 status tracker
+2. **`docs/release/`** — 1.0 release authority: [acceptance matrix](docs/release/1.0-acceptance-matrix.md), [security audit checklist](docs/release/security-audit-checklist.md), [test coverage audit](docs/release/test-coverage-audit.md). Plan 10 Phase 1 (preparation work) is complete; all items are `PENDING` execution.
+3. **Frontend/core is fail-closed without a Runtime.** UI boot (`App.fail-closed.test.tsx`) and core ACP surface `runtime_unavailable` when no Runtime is configured. The `remote_im` engine (Plan 7 Runtime Bridge) calls the real Runtime once `binary_path`/`agent_dir` are set in Settings. Do not advertise Agent execution, Provider auth, or remote channels as working without a configured Runtime.
+3. The OMP Runtime source is pinned as a submodule at `runtime/oh-my-pi` (commit `64db4c38a1b570efc8a2085e65d86e3ae23e4ef2`). Verify with `git submodule status` before relying on it.
 4. Historical upstream material lives under `docs/upstream-history/grok-app/` and does **not** describe the current product.
 
 ## Development

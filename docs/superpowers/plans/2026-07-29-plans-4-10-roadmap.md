@@ -241,7 +241,7 @@ the target developer audience.
 **Status:** 🟡 Ready. OS code-signing is no longer a blocker (deferred to
 optional). Remaining deps: cross-platform testing infrastructure + performance
 benchmark baselines + security auditor.
-**Depends on:** Plans 1-9 (Plan 9 is partial: updater signed, OS codesign pending)
+**Depends on:** Plans 1-9 (all ✅ Complete; Plan 9 OS code-signing deferred to optional)
 **Spec:** Master design §3 item 10, §5
 
 ### Scope
