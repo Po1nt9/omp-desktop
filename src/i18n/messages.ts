@@ -10,7 +10,7 @@ const en = {
   // App chrome
   "app.name": "OMP",
   "app.tagline": "MIT · Unofficial · Sister project grok-go",
-  "app.versionFooter": "OMP v0.3.0-nightly · MIT · Unofficial · Sister project grok-go",
+  "app.versionFooter": "OMP v0.3.1-nightly · MIT · Unofficial · Sister project grok-go",
 
   // Window chrome (Windows self-drawn controls)
   "window.minimize": "Minimize",
@@ -2146,7 +2146,7 @@ const en = {
 const zh: Record<MessageKey, string> = {
   "app.name": "OMP",
   "app.tagline": "MIT · 非 xAI 官方 · 姐妹项目 grok-go",
-  "app.versionFooter": "OMP v0.3.0-nightly · MIT · 非 xAI 官方 · 姐妹项目 grok-go",
+  "app.versionFooter": "OMP v0.3.1-nightly · MIT · 非 xAI 官方 · 姐妹项目 grok-go",
 
   "window.minimize": "最小化",
   "window.maximize": "最大化",

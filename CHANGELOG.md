@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The rolling `omp-desktop-latest` release now ships `latest.json` +
   per-platform `.sig` archives. 应用内自动更新已启用（minisign 签名）。
 
+### Added / 新增
+
+- **Update channels (stable/beta/nightly):** the update feed is now isolated
+  per channel. Channel identity is baked into each build from its version
+  suffix; CI publishes per-channel rolling manifests
+  (`omp-desktop-latest`/`latest.json`, `omp-desktop-beta`/`beta.json`,
+  `omp-desktop-nightly`/`nightly.json`) and marks beta/nightly releases as
+  GitHub prereleases. Settings → About shows the build's channel.
+  更新渠道（stable/beta/nightly）隔离：渠道身份随构建固定，CI 按渠道发布
+  滚动 manifest，关于页显示当前渠道。
+
 ### Known Limitations / 已知限制
 
 - Builds remain **not code-signed** by Apple / Windows (Plan 9, paid certs).

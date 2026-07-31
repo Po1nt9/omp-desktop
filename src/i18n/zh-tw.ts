@@ -4,7 +4,7 @@ import type { MessageKey } from "./messages";
 export const zhTW: Record<MessageKey, string> = {
   "app.name": "OMP",
   "app.tagline": "MIT · 非 xAI 官方 · 姊妹專案 grok-go",
-  "app.versionFooter": "OMP v0.3.0-nightly · MIT · 非 xAI 官方 · 姊妹專案 grok-go",
+  "app.versionFooter": "OMP v0.3.1-nightly · MIT · 非 xAI 官方 · 姊妹專案 grok-go",
 
   "window.minimize": "最小化",
   "window.maximize": "最大化",

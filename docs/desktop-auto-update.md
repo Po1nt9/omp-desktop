@@ -1,43 +1,78 @@
 # Desktop auto-update
 
-OMP Desktop uses the **Tauri 2 updater**: signed release artifacts, a rolling
-`latest.json` endpoint, in-app check/download/install, and a hard stop of
+OMP Desktop uses the **Tauri 2 updater**: signed release artifacts, per-channel
+rolling manifest endpoints, in-app check/download/install, and a hard stop of
 managed agent / Remote IM processes before the binary swap.
 
-> **Current status:** the updater is **signed and live** as of `v0.3.1-nightly`.
+> **Current status:** the updater is **signed and live** as of `v0.3.1-nightly`,
+> with **three isolated update channels** (stable / beta / nightly, AC-10.9).
 > Settings → About "check for update" runs the silent download → install →
-> relaunch path, and the rolling `omp-desktop-latest` release ships `latest.json`
-> + per-platform `.sig` archives for all four targets. macOS Gatekeeper / Windows
+> relaunch path, and each channel's rolling release ships its manifest +
+> per-platform `.sig` archives for all four targets. macOS Gatekeeper / Windows
 > SmartScreen still warn because OS code-signing (Apple Developer ID /
 > Authenticode) is not yet configured — see
 > [Signing requirements](./release/signing-requirements.md) for that remaining
 > Plan 9 work. The minisign keypair verifies *archive integrity*, independent of
 > OS trust.
 
+## Update channels (AC-10.9)
+
+The channel is a **build-time identity**, derived from the version string
+(prerelease suffix): `1.1.0-nightly.20260801` → nightly, `1.1.0-beta.1` → beta,
+`1.0.0` → stable. There is **no runtime switcher** — users pick a channel by
+installing that channel's build (Chrome / VS Code model). The same derivation
+drives CI (tag suffix → endpoint + GitHub prerelease flag), the baked updater
+endpoint, and the manual GitHub fallback, so a build can never cross channels.
+
+| Channel | Rolling release | Manifest | GitHub prerelease |
+|---------|-----------------|----------|-------------------|
+| stable | `omp-desktop-latest` | `latest.json` | no |
+| beta | `omp-desktop-beta` | `beta.json` | yes |
+| nightly | `omp-desktop-nightly` | `nightly.json` | yes |
+
+Cut a channel release by tagging its version: `pnpm release:tag 1.1.0-beta.1`
+or `…-nightly.YYYYMMDD`. CI derives the channel from the tag
+(`scripts/update-channel-lib.mjs`), bakes the matching endpoint, and marks
+beta/nightly releases as GitHub prereleases (keeps `/releases/latest`
+stable-only).
+
+**Transitional dual-publish (D5):** until the first stable release ships,
+nightly tags also publish `latest.json` to `omp-desktop-latest`
+(`DUAL_PUBLISH_LEGACY_LATEST=1` in `release.yml`) so installed
+v0.3.x-nightly builds — whose baked endpoint is the legacy stable feed — keep
+receiving updates. Delete that flag at the 1.0 stable cut.
+
+All three channels share one minisign signing keypair (a channel switch always
+means installing a different signed build anyway).
+
 ## Architecture
 
 ```
-CI release (tag vX.Y.Z)
-  ├── vX.Y.Z                 user-facing installers (DMG / AppImage / NSIS …)
-  └── omp-desktop-latest     rolling updater release
-        └── latest.json  + per-platform archive + .sig
+CI release (tag vX.Y.Z[-suffix])
+  ├── vX.Y.Z[-suffix]        user-facing installers (DMG / AppImage / NSIS …)
+  └── omp-desktop-{latest|beta|nightly}   rolling updater release, per channel
+        └── {latest|beta|nightly}.json  + per-platform archive + .sig
                  ▲
-                 │ check()
+                 │ check()   (endpoint baked per channel at build time)
         Desktop  tauri-plugin-updater  (release builds only)
                  │ prepare_for_app_update → stop agents / Remote IM
                  │ install + relaunch
-        UI: Settings → About
+        UI: Settings → About (shows delivery mode + release channel)
 ```
 
 Unsigned / local builds keep the previous GitHub "open release page" path — the
 `updater` crate is always linked (Tauri ACL requirement) but only **registered**
-when the build-time cfg is set.
+when the build-time cfg is set. The manual path is channel-aware: beta/nightly
+builds list recent releases and pick the newest tag their channel owns with
+prerelease-aware semver ordering (`select_release_for_channel`).
 
 ## App pieces
 
 | Piece | Location |
 |-------|----------|
 | Build-time gate | `src-tauri/build.rs` → `cfg(omp_desktop_updater_enabled)` when both `OMP_DESKTOP_UPDATER_*` env vars are set (crate always linked for ACL) |
+| Channel identity | `src-tauri/src/update_channel.rs` — `UpdateChannel::from_version(env!("CARGO_PKG_VERSION"))` |
+| Channel derivation (CI) | `scripts/update-channel-lib.mjs` — tag → channel / endpoint / prerelease flag |
 | Release conf delta | `scripts/build-release-config.mjs` → `src-tauri/tauri.release.conf.json` (gitignored — always regenerate) |
 | Platform support | `is_auto_update_supported` — Linux requires AppImage (`APPIMAGE` env) |
 | Pre-relaunch teardown | `prepare_for_app_update` — **only after** successful `install()`, never before |
@@ -80,28 +115,33 @@ Before treating silent update as "on" for users:
    ```sh
    ./scripts/verify-updater-setup.sh
    ./scripts/verify-updater-setup.sh --fetch-latest
+   OMP_DESKTOP_UPDATE_CHANNEL=nightly ./scripts/verify-updater-setup.sh --fetch-latest
    ```
-3. **Release cut:** tag `vX.Y.Z` so CI builds installers **and** refreshes `omp-desktop-latest` + `latest.json` + `.sig`.
+3. **Release cut:** tag `vX.Y.Z[-suffix]` so CI builds installers **and** refreshes the channel's rolling release + manifest + `.sig` (`-beta.N` / `-nightly.*` tags land on their own channels and are flagged prerelease).
 4. **Smoke on a prior signed build:** Settings → About shows the in-app (signed release) channel → Check → Download → Install and restart → version matches tag.
 5. **Failure path:** if install fails, agents / Remote IM must keep running (`prepare_for_app_update` only after successful `install()`).
 6. **Unsigned / local builds:** About must show the GitHub download channel and still open Release / download installer (no crash).
 
-## Rolling endpoint
+## Rolling endpoints
 
 ```text
-https://github.com/Po1nt9/omp-desktop/releases/download/omp-desktop-latest/latest.json
+stable:  https://github.com/Po1nt9/omp-desktop/releases/download/omp-desktop-latest/latest.json
+beta:    https://github.com/Po1nt9/omp-desktop/releases/download/omp-desktop-beta/beta.json
+nightly: https://github.com/Po1nt9/omp-desktop/releases/download/omp-desktop-nightly/nightly.json
 ```
 
 Publish two GitHub releases per cut:
 
-1. **`vX.Y.Z`** — human installers + notes
-2. **`omp-desktop-latest`** — updater archives + `latest.json` (clobber each release)
+1. **`vX.Y.Z[-suffix]`** — human installers + notes (prerelease flag derived from the suffix)
+2. **the channel's rolling release** — updater archives + manifest (clobber each release)
 
 ## Build steps (outline)
 
 ```sh
 export OMP_DESKTOP_UPDATER_PUBLIC_KEY=...
-export OMP_DESKTOP_UPDATER_ENDPOINT=https://github.com/Po1nt9/omp-desktop/releases/download/omp-desktop-latest/latest.json
+# Endpoint: set OMP_DESKTOP_UPDATER_ENDPOINT explicitly, or let it derive from
+# GITHUB_REPOSITORY + OMP_DESKTOP_RELEASE_VERSION (channel from version suffix).
+export OMP_DESKTOP_UPDATER_ENDPOINT=https://github.com/Po1nt9/omp-desktop/releases/download/omp-desktop-nightly/nightly.json
 export TAURI_SIGNING_PRIVATE_KEY=...
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=...
 
@@ -119,8 +159,11 @@ file not found. The crate is always a hard dependency (Tauri ACL); only
 After all platforms upload assets to `vX.Y.Z`:
 
 ```sh
-TAG=v0.3.0 REPO=Po1nt9/omp-desktop bash scripts/assemble-updater-manifest.sh
+TAG=v0.3.0 REPO=Po1nt9/omp-desktop CHANNEL=stable bash scripts/assemble-updater-manifest.sh
 ```
+
+`CHANNEL` defaults to `stable`; CI passes the tag-derived channel. Nightly runs
+also set `DUAL_PUBLISH_LEGACY_LATEST=1` (transitional, see above).
 
 Platform keys: `darwin-aarch64`, `darwin-x86_64`, `linux-x86_64`, `windows-x86_64`.
 
