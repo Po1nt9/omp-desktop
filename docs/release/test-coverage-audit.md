@@ -12,7 +12,7 @@
 | Suite | Count | How to Run | Coverage Scope |
 |---|---|---|---|
 | Frontend (vitest) | 94 files / 831 tests (830 pass + 1 flaky) | `pnpm test` | React components, Tauri command mocks, fail-closed behavior, UI logic, hooks, i18n rendering, code language detection, end-of-turn detection, project path handling, voice audio, redaction, runtime availability, file preview |
-| Rust (cargo test) | 419 tests (419 pass + 1 ignored) | `cargo test --manifest-path src-tauri/Cargo.toml` | See module breakdown below. +3 wecom signature tests, +1 permission delete test added in Phase 2. |
+| Rust (cargo test) | 421 tests (421 pass + 1 ignored) | `cargo test --manifest-path src-tauri/Cargo.toml` | See module breakdown below. +3 wecom signature tests, +1 permission delete test added in Phase 2; +2 v1 mock-transport contract tests added with transport injection (2026-07-31). |
 | Brand policy | 9 tests | `node scripts/check-brand-policy.mjs` (+ `.test.mjs`) | Brand scan rules: lowercase brand detection, Grok/xAI coupling residue, Runtime brand normalization, allowlist scoping. Code-span exemption added for `omp` CLI binary names. |
 | i18n completeness | 5 tests | `node scripts/check-i18n-completeness.mjs` (+ `.test.mjs`) | Three-locale (en/zh-CN/zh-TW) key coverage, ICU parameter/type validation, empty value detection, hardcoded string detection |
 | Legal baseline | tests | `node scripts/check-legal-baseline.mjs` (+ `.test.mjs`) | MIT license attribution (RongleCat, OMP/Pi authors), NOTICE files, font/font-highlight.js attributions |
@@ -71,9 +71,9 @@ These gaps correspond to acceptance matrix items that cannot reach `PASS` withou
 
 | Gap | Matrix Items | Priority | Notes |
 |---|---|---|---|
-| **v1 transport injection** | AC-1.2/1.3/1.4/1.8/1.9, AC-5.1/5.2 | **Critical** | `OmpExtension::request()` (`omp_desktop_v1/mod.rs:72-93`) is a fail-closed stub — all 32 `_omp/desktop/v1/*` methods return runtime_unavailable regardless of negotiated capability. Highest-leverage remaining work; turns ~16 PARTIAL items into verifiable PASS/FAIL. |
+| ~~**v1 transport injection**~~ | AC-1.2/1.3/1.4/1.8/1.9, AC-5.1/5.2 | ~~Critical~~ **Resolved 2026-07-31** | `OmpExtension::request()` now dispatches through an injected `V1Transport` trait object (`omp_desktop_v1/transport.rs`); `AcpClient` implements it via generic JSON-RPC forwarding, and the session manager installs it on capability negotiation. Mock-transport contract tests verify live dispatch + error→`runtime_unavailable` mapping. Remaining work on these items is real-Runtime E2E, not plumbing. |
 | Mock E2E happy-path test | AC-2.9 | **High** | Deferred from Plan 7 final review. Should simulate: session create → prompt → response → permission approval → tool execution → turn end, all with mock Runtime. |
-| End-to-end capability negotiation test | AC-1.1–AC-1.13 | **High** | Current contract tests verify individual methods. Need integration test: Desktop ↔ bundled Runtime negotiate full baseline, assert all 13 groups present. (Blocked by the v1 transport gap above.) |
+| End-to-end capability negotiation test | AC-1.1–AC-1.13 | **High** | Current contract tests verify individual methods. Need integration test: Desktop ↔ bundled Runtime negotiate full baseline, assert all 13 groups present. (Executable now that the v1 transport is live.) |
 | **6-step credential migration suite** | AC-6.1/6.2/6.5/6.6/6.7, AC-2.10 | **High** | Master design §8.2's dry-run/readback/tombstone/rollback migration is unimplemented. Only a 2-step copy+clear exists. |
 | **Subagent policy inheritance** | AC-1.5 | **High** | `agent_subagents.rs` only syncs on/off; no permission/policy/MCP inheritance in Desktop. |
 | **Host+Hub trace correlation** | AC-1.13 | **High** | grep "trace_id/correlation/span/otel" = zero matches. Mandatory Host+Hub scope is absent. |
@@ -81,7 +81,7 @@ These gaps correspond to acceptance matrix items that cannot reach `PASS` withou
 | Automated crash recovery test | AC-7.1 | **High** | Kill sidecar mid-turn, restart, assert: no auto-replay, turn marked `unknown/interrupted`. Currently no auto-replay by absence-of-code, not asserted. |
 | **Remote approval expiry + anti-replay** | AC-8.4 | **High** | No approval/expiry/nonce/replay infrastructure in remote_im; `allow_remote_yolo` is a bare boolean. |
 | **Single update channel** | AC-10.9 | **Medium** | Only silent/github_manual exist; no stable/beta/nightly isolation. |
-| Discovery parity test | AC-5.1 | **Medium** | Compare Desktop discovery API output vs CLI `omp` discovery for same env vars/profile/cwd. (Blocked by v1 transport gap.) |
+| Discovery parity test | AC-5.1 | **Medium** | Compare Desktop discovery API output vs CLI `omp` discovery for same env vars/profile/cwd. (Executable now that the v1 transport is live.) |
 
 ### Important but Manual-Acceptable
 
