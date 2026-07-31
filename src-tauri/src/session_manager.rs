@@ -2810,9 +2810,40 @@ impl SessionManager {
                         s.product_mode = Some(prefs.mode.clone());
                         s.backend = crate::acp_client::BACKEND_ID.into();
                         s.needs_history_bootstrap = need_bootstrap;
-                        // Plan 3 Task 5: attach a fresh event journal for this
-                        // session so turn boundaries are durable for replay.
-                        s.event_journal = Some(EventJournal::new(s.app_session_id.clone()));
+                        // Plan 3 Task 5 + AC-1.10: recover any interrupted turn
+                        // from the on-disk journal (close + marker, idempotent),
+                        // then continue the persisted journal so event IDs and
+                        // sequences stay stable across restarts (§5.2 baseline).
+                        let recovery =
+                            crate::event_journal::recovery::recover_session_journal(
+                                &s.app_session_id,
+                            );
+                        if let Some(
+                            crate::event_journal::recovery::RecoveryReport::Interrupted {
+                                marker_message_id,
+                                content,
+                                ..
+                            },
+                        ) = &recovery
+                        {
+                            let _ = app.emit(
+                                "session://turn_marker",
+                                serde_json::json!({
+                                    "sessionId": s.app_session_id,
+                                    "messageId": marker_message_id,
+                                    "marker": "turn_interrupted",
+                                    "reason": "crash_recovery",
+                                    "content": content,
+                                }),
+                            );
+                        }
+                        let journal_path =
+                            EventJournal::standard_path(&s.app_session_id);
+                        s.event_journal = Some(
+                            EventJournal::load_from(&journal_path).unwrap_or_else(|_| {
+                                EventJournal::new(s.app_session_id.clone())
+                            }),
+                        );
                         Self::touch_activity_locked(s);
                         meta = s.meta.clone();
                     }
