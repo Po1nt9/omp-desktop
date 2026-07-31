@@ -15,6 +15,7 @@ mod outbound;
 mod pb_frame;
 mod projects;
 mod rate_limiter;
+mod replay_guard;
 #[cfg(test)]
 mod catalog_ac4_tests;
 #[cfg(test)]
