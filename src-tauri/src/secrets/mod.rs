@@ -206,14 +206,14 @@ pub fn merge_secrets(disk: SecretsFile, from_keychain: SecretsFile) -> SecretsFi
     }
 }
 
-fn read_disk_secrets(path: &PathBuf) -> SecretsFile {
+pub(crate) fn read_disk_secrets(path: &PathBuf) -> SecretsFile {
     match fs::read_to_string(path) {
         Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
         Err(_) => SecretsFile::default(),
     }
 }
 
-fn write_disk_secrets(path: &PathBuf, value: &SecretsFile) -> Result<(), String> {
+pub(crate) fn write_disk_secrets(path: &PathBuf, value: &SecretsFile) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

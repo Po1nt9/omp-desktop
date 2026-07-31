@@ -358,6 +358,92 @@ impl<'a> Migrator<'a> {
     }
 }
 
+// ── secrets.json adapter ───────────────────────────────────────────────────
+
+use crate::store::SecretsFile;
+
+const KEY_OFFICIAL: &str = "official_api_key";
+const KEY_RELAY: &str = "relay_api_key";
+
+/// Migrates the two plaintext fields of `secrets.json`. The reference is
+/// written into the field itself, so step 4 removes plaintext from disk
+/// atomically; tombstone/cleanup are no-ops beyond engine bookkeeping.
+pub struct SecretsJsonSource {
+    pub path: PathBuf,
+}
+
+impl SecretsJsonSource {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+
+    fn read(&self) -> SecretsFile {
+        crate::secrets::read_disk_secrets(&self.path)
+    }
+
+    fn write(&self, file: &SecretsFile) -> Result<(), String> {
+        crate::secrets::write_disk_secrets(&self.path, file)
+    }
+}
+
+impl MigrationSource for SecretsJsonSource {
+    fn enumerate(&self) -> Result<Vec<LegacyEntry>, String> {
+        let disk = self.read();
+        let mut out = Vec::new();
+        for (field, value) in [
+            (KEY_OFFICIAL, &disk.official_api_key),
+            (KEY_RELAY, &disk.relay_api_key),
+        ] {
+            if let Some(v) = value {
+                if !v.is_empty() && !is_reference(v) {
+                    out.push(LegacyEntry {
+                        migration_id: format!("provider:{field}"),
+                        namespace: super::store::NS_PROVIDER,
+                        key: field.to_string(),
+                    });
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    fn read_legacy(&self, entry: &LegacyEntry) -> Result<Option<String>, String> {
+        let disk = self.read();
+        Ok(match entry.key.as_str() {
+            KEY_OFFICIAL => disk.official_api_key,
+            KEY_RELAY => disk.relay_api_key,
+            _ => None,
+        })
+    }
+
+    fn commit_reference(&self, entry: &LegacyEntry, reference: &str) -> Result<(), String> {
+        let mut disk = self.read();
+        match entry.key.as_str() {
+            KEY_OFFICIAL => {
+                disk.official_api_key = Some(reference.to_string());
+                disk.keychain_has_official = true;
+            }
+            KEY_RELAY => {
+                disk.relay_api_key = Some(reference.to_string());
+                disk.keychain_has_relay = true;
+            }
+            _ => return Err(format!("unknown secrets.json field {}", entry.key)),
+        }
+        self.write(&disk)
+    }
+
+    fn tombstone(&self, _entry: &LegacyEntry) -> Result<(), String> {
+        // The reference replaced the plaintext at step 4; nothing further
+        // to mark on disk.
+        Ok(())
+    }
+
+    fn cleanup(&self, _entry: &LegacyEntry) -> Result<(), String> {
+        // File already holds only the reference + metadata.
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -678,5 +764,96 @@ mod tests {
         let report = mig.run(&source, &plan);
         assert_eq!(report.cleaned, 1);
         let _ = std::fs::remove_file(&path);
+    }
+
+    mod secrets_json {
+        use super::*;
+
+        fn tmp_secrets(tag: &str, official: Option<&str>, relay: Option<&str>) -> PathBuf {
+            let path = std::env::temp_dir().join(format!(
+                "omp-secrets-src-{}-{}.json",
+                tag,
+                std::process::id()
+            ));
+            let file = SecretsFile {
+                official_api_key: official.map(|s| s.to_string()),
+                relay_api_key: relay.map(|s| s.to_string()),
+                relay_base_url: Some("https://relay.example".into()),
+                default_model: Some("grok-4".into()),
+                ..Default::default()
+            };
+            std::fs::write(&path, serde_json::to_string_pretty(&file).unwrap()).unwrap();
+            path
+        }
+
+        #[test]
+        fn enumerates_plaintext_fields_only() {
+            let path = tmp_secrets("enum", Some("sk-live"), None);
+            let source = SecretsJsonSource::new(path.clone());
+            let entries = source.enumerate().unwrap();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].migration_id, "provider:official_api_key");
+            assert_eq!(entries[0].namespace, NS_PROVIDER);
+            assert_eq!(entries[0].key, "official_api_key");
+            // References are not re-enumerated.
+            let path2 = tmp_secrets(
+                "enum2",
+                Some("keychain:v1:provider:official_api_key"),
+                None,
+            );
+            let source2 = SecretsJsonSource::new(path2.clone());
+            assert!(source2.enumerate().unwrap().is_empty());
+            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(&path2);
+        }
+
+        #[test]
+        fn commit_reference_replaces_plaintext_atomically() {
+            let path = tmp_secrets("commit", Some("sk-live"), Some("rk-live"));
+            let source = SecretsJsonSource::new(path.clone());
+            let entry = LegacyEntry {
+                migration_id: "provider:official_api_key".into(),
+                namespace: NS_PROVIDER,
+                key: "official_api_key".into(),
+            };
+            source
+                .commit_reference(&entry, "keychain:v1:provider:official_api_key")
+                .unwrap();
+            let raw = std::fs::read_to_string(&path).unwrap();
+            assert!(!raw.contains("sk-live"));
+            assert!(raw.contains("keychain:v1:provider:official_api_key"));
+            // Metadata and the untouched relay field survive.
+            assert!(raw.contains("relay.example"));
+            assert!(raw.contains("rk-live"));
+            let disk: SecretsFile = serde_json::from_str(&raw).unwrap();
+            assert!(disk.keychain_has_official);
+            let _ = std::fs::remove_file(&path);
+        }
+
+        #[test]
+        fn full_engine_run_over_secrets_json() {
+            let store = MockStore::new();
+            let path = tmp_secrets("full", Some("sk-live"), Some("rk-live"));
+            let ledger = ledger_path_tmp("full-src");
+            let source = SecretsJsonSource::new(path.clone());
+            let mig = Migrator::new(&store, &ledger);
+            let plan = mig.dry_run(&source).unwrap();
+            assert_eq!(plan.entries.len(), 2);
+            let report = mig.run(&source, &plan);
+            assert_eq!((report.cleaned, report.failed), (2, 0));
+            let raw = std::fs::read_to_string(&path).unwrap();
+            assert!(!raw.contains("sk-live"));
+            assert!(!raw.contains("rk-live"));
+            assert_eq!(
+                store.get(NS_PROVIDER, "official_api_key").unwrap().as_deref(),
+                Some("sk-live")
+            );
+            assert_eq!(
+                store.get(NS_PROVIDER, "relay_api_key").unwrap().as_deref(),
+                Some("rk-live")
+            );
+            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(&ledger);
+        }
     }
 }
