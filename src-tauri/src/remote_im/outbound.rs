@@ -290,4 +290,64 @@ mod tests {
         assert_eq!(got.get("_instance_id").map(|s| s.as_str()), Some("inst-42"));
         assert_eq!(got.get("token").map(|s| s.as_str()), Some("t"));
     }
+
+    /// AC-8.3: allow_from parsing — open / fail-closed / explicit list /
+    /// whitespace + comma tolerance / snake_case alias.
+    #[test]
+    fn allow_from_list_parses_open_fail_closed_and_lists() {
+        assert_eq!(allow_from_list(&json!({})), None); // missing → open
+        assert_eq!(allow_from_list(&json!({ "allowFrom": "*" })), None);
+        assert_eq!(allow_from_list(&json!({ "allowFrom": " * " })), None);
+        assert_eq!(allow_from_list(&json!({ "allowFrom": "" })), Some(vec![])); // fail-closed
+        assert_eq!(
+            allow_from_list(&json!({ "allowFrom": "ou_a,ou_b" })),
+            Some(vec!["ou_a".to_string(), "ou_b".to_string()])
+        );
+        assert_eq!(
+            allow_from_list(&json!({ "allowFrom": " ou_a , ou_b ," })),
+            Some(vec!["ou_a".to_string(), "ou_b".to_string()])
+        );
+        assert_eq!(
+            allow_from_list(&json!({ "allow_from": "ou_a" })),
+            Some(vec!["ou_a".to_string()])
+        );
+    }
+
+    /// AC-8.3: whitelist accept/reject decisions.
+    #[test]
+    fn sender_allowed_accepts_and_rejects_per_allow_from() {
+        // Open ACL allows anyone.
+        assert!(sender_allowed(&json!({}), "ou_x"));
+        assert!(sender_allowed(&json!({ "allowFrom": "*" }), "ou_x"));
+        // Fail-closed empty list rejects everyone.
+        assert!(!sender_allowed(&json!({ "allowFrom": "" }), "ou_x"));
+        // Explicit list: accept listed, reject unlisted.
+        let acl = json!({ "allowFrom": "ou_a, ou_b" });
+        assert!(sender_allowed(&acl, "ou_a"));
+        assert!(sender_allowed(&acl, "ou_b"));
+        assert!(!sender_allowed(&acl, "ou_evil"));
+        // Sender ids are matched exactly (no trimming of the sender side).
+        assert!(!sender_allowed(&acl, " ou_a"));
+    }
+
+    /// AC-8.3: enable is blocked only by an explicit empty allow list.
+    #[test]
+    fn allow_from_blocks_enable_only_on_empty_list() {
+        assert!(allow_from_blocks_enable(&json!({ "allowFrom": "" })));
+        assert!(!allow_from_blocks_enable(&json!({})));
+        assert!(!allow_from_blocks_enable(&json!({ "allowFrom": "*" })));
+        assert!(!allow_from_blocks_enable(&json!({ "allowFrom": "ou_a" })));
+    }
+
+    /// AC-8.3: require_mention defaults to true; options/acl can opt out.
+    #[test]
+    fn require_mention_defaults_true_with_overrides() {
+        assert!(require_mention(&json!({}), &json!({})));
+        assert!(!require_mention(&json!({ "require_mention": false }), &json!({})));
+        assert!(!require_mention(&json!({}), &json!({ "requireMention": false })));
+        assert!(require_mention(
+            &json!({ "require_mention": true }),
+            &json!({ "requireMention": false })
+        ));
+    }
 }
