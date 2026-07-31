@@ -15,6 +15,23 @@ managed agent / Remote IM processes before the binary swap.
 > Plan 9 work. The minisign keypair verifies *archive integrity*, independent of
 > OS trust.
 
+## OS trust warnings while unsigned
+
+Until OS code-signing lands (Plan 9), expect — and verify past — the platform
+warnings:
+
+| Platform | Unsigned consequence | User workaround |
+|----------|---------------------|-----------------|
+| macOS | Gatekeeper blocks launch ("unidentified developer") | Right-click → Open, or `xattr -dr com.apple.quarantine /Applications/OMP\ Desktop.app` |
+| Windows | SmartScreen "Windows protected your PC" | "More info" → "Run anyway" |
+| Linux | None (AppImage is unsigned by design) | — |
+
+Signing costs (details + secret inventory in
+[Signing requirements](./release/signing-requirements.md)): Apple Developer
+Program **USD $99/year**; Windows Authenticode OV roughly **$100–300/year**,
+EV roughly **$300–700/year**; the SignPath Foundation offers a free tier for
+open-source projects.
+
 ## Update channels (AC-10.9)
 
 The channel is a **build-time identity**, derived from the version string
