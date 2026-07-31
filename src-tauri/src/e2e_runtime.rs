@@ -174,3 +174,103 @@ async fn e2e_mock_tool_call_lifecycle() {
     assert_eq!(joined_assistant(&events), "Hello world.");
     client.kill().await;
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_crash_mid_turn_fails_pending_without_replay() {
+    let (client, mut rx) = spawn_mock();
+    client
+        .initialize_and_new_session()
+        .await
+        .expect("initialize + session/new against mock");
+
+    let prompt = tokio::spawn({
+        let c = Arc::clone(&client);
+        async move { c.prompt("scenario:hang").await }
+    });
+    // Let the prompt reach the mock before the "crash".
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    client.kill().await;
+
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), prompt)
+        .await
+        .expect("prompt task hung after kill")
+        .expect("prompt task join");
+    assert!(outcome.is_err(), "killed mid-turn prompt must fail, got Ok");
+
+    let events = collect_until(&mut rx, |e| matches!(e, AcpEvent::ProcessExited { .. })).await;
+    let prompt_requests = events
+        .iter()
+        .filter(|e| matches!(e, AcpEvent::Stderr { line } if line.contains("method=session/prompt")))
+        .count();
+    assert_eq!(
+        prompt_requests, 1,
+        "host must never re-issue session/prompt after a crash: {events:?}"
+    );
+    assert!(!client.is_alive());
+}
+
+/// Hold the module guard AND the shared app-home env lock for the whole
+/// test, and point OMP_DESKTOP_HOME at a fresh temp dir (pattern copied from
+/// `event_journal/recovery.rs` tests — env overrides race without it).
+static HOME_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn test_home(tag: &str) -> (
+    std::sync::MutexGuard<'static, ()>,
+    std::sync::MutexGuard<'static, ()>,
+    PathBuf,
+) {
+    let module = HOME_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    let env = crate::paths::APP_HOME_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let dir = std::env::temp_dir().join(format!("omp-e2e-home-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::env::set_var("OMP_DESKTOP_HOME", &dir);
+    (module, env, dir)
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_crash_journal_marks_interrupted_no_replay() {
+    let (_module, _env, _dir) = test_home("crash-journal");
+    let sid = "e2e-crash-sess";
+
+    // TurnStart write-ahead: the dangling boundary a crash leaves behind.
+    {
+        let mut journal = crate::event_journal::EventJournal::new(sid.to_string());
+        crate::event_journal::recovery::append_turn_start_durable(&mut journal);
+    } // journal dropped; write-ahead save already hit disk
+
+    // Live sidecar crash mid-turn.
+    let (client, mut rx) = spawn_mock();
+    client
+        .initialize_and_new_session()
+        .await
+        .expect("initialize + session/new against mock");
+    let prompt = tokio::spawn({
+        let c = Arc::clone(&client);
+        async move { c.prompt("scenario:hang").await }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    client.kill().await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), prompt).await;
+    let _ = collect_until(&mut rx, |e| matches!(e, AcpEvent::ProcessExited { .. })).await;
+
+    // Recovery closes the dangling turn honestly — exactly once.
+    let report = crate::event_journal::recovery::recover_session_journal(sid);
+    match report {
+        Some(crate::event_journal::recovery::RecoveryReport::Interrupted { content, .. }) => {
+            assert!(
+                content.starts_with("turn_interrupted"),
+                "marker content must be the turn_interrupted pipe, got: {content}"
+            );
+        }
+        other => panic!("expected Interrupted recovery report, got {other:?}"),
+    }
+    // Idempotent: a second recovery finds a clean journal, no duplicate marker.
+    assert_eq!(
+        crate::event_journal::recovery::recover_session_journal(sid),
+        Some(crate::event_journal::recovery::RecoveryReport::Clean)
+    );
+}

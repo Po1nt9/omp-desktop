@@ -176,7 +176,9 @@ fn main() {
                             &result_frame(&id, stream["sessionPromptResult"].clone()),
                         );
                     }
-                    // hang scenario added by a later task; default = happy.
+                    // Crash-injection target (AC-7.1): never reply, never
+                    // notify — the Host only unblocks when the process dies.
+                    "hang" => {}
                     _ => {
                         send_updates(
                             &mut out,
