@@ -115,6 +115,7 @@ pub async fn fetch_attachment(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::types::AttachmentKind;
 
     #[test]
     fn test_mime_from_extension() {
@@ -134,5 +135,59 @@ mod tests {
         };
         assert_eq!(mb.data, vec![1, 2, 3]);
         assert_eq!(mb.mime_type, "image/png");
+    }
+
+    /// Spawn a one-shot HTTP/1.1 server on 127.0.0.1 that replies with the
+    /// given raw response bytes; returns the base URL (no trailing slash).
+    fn spawn_one_shot_http(response: Vec<u8>) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            use std::io::{Read, Write};
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf); // consume the request line + headers
+            stream.write_all(&response).unwrap();
+        });
+        format!("http://{addr}")
+    }
+
+    fn discord_attachment(url: String) -> Attachment {
+        Attachment {
+            kind: AttachmentKind::Image,
+            source: AttachmentSource::Discord { url },
+        }
+    }
+
+    /// AC-8.14: Discord fetch leg — Content-Type header wins over the URL
+    /// extension; bytes pass through unchanged.
+    #[tokio::test]
+    async fn fetch_attachment_discord_uses_content_type_header() {
+        let body = b"\xff\xd8\xff".to_vec(); // jpeg magic
+        let mut resp = b"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: 3\r\nConnection: close\r\n\r\n".to_vec();
+        resp.extend_from_slice(&body);
+        let base = spawn_one_shot_http(resp);
+        let att = discord_attachment(format!("{base}/cdn/attachments/1/photo.bin"));
+        let got = fetch_attachment("discord", &HashMap::new(), &Value::Null, &att)
+            .await
+            .unwrap();
+        assert_eq!(got.data, body);
+        assert_eq!(got.mime_type, "image/jpeg");
+    }
+
+    /// AC-8.14: Discord fetch leg — without a Content-Type header the MIME
+    /// falls back to the URL extension.
+    #[tokio::test]
+    async fn fetch_attachment_discord_falls_back_to_extension() {
+        let body = b"RIFFWEBP".to_vec();
+        let mut resp = b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\n".to_vec();
+        resp.extend_from_slice(&body);
+        let base = spawn_one_shot_http(resp);
+        let att = discord_attachment(format!("{base}/cdn/attachments/1/sticker.webp"));
+        let got = fetch_attachment("discord", &HashMap::new(), &Value::Null, &att)
+            .await
+            .unwrap();
+        assert_eq!(got.data, body);
+        assert_eq!(got.mime_type, "image/webp");
     }
 }
