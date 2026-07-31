@@ -44,17 +44,28 @@ pub fn assess(journal: &EventJournal) -> RecoveryState;
 /// the next assess() sees paired turn boundaries and returns Clean.
 pub fn close_interrupted_turn(journal: &mut EventJournal, turn_start_event_id: &str);
 
-/// Full recovery for one session directory. Returns Some(RecoveryState) when a
-/// journal existed and was assessed; None when no journal file exists.
+/// Full recovery for one session directory. Returns None when no journal file
+/// exists. Filesystem-only; the session://turn_marker emit happens at the
+/// session_manager call site, which needs the marker id/content.
 /// - load_from(standard_path) — Err (corrupt): log warn, quarantine the file to
 ///   `event_journal.corrupt-<unixts>.json`, return Some(Clean) and let the caller
 ///   start a fresh journal. No marker without evidence of an in-flight turn.
 /// - Interrupted: close_interrupted_turn + save_to + append marker message
 ///   (idempotency comes from the journal being closed — not from marker dedup).
-pub fn recover_session_journal(app_session_id: &str) -> Option<RecoveryState>;
+pub enum RecoveryReport {
+    Clean,
+    Interrupted { turn_start_event_id: String, marker_message_id: String, content: String },
+}
+pub fn recover_session_journal(app_session_id: &str) -> Option<RecoveryReport>;
+
+/// TurnStart write-ahead (D1): append TurnStart and immediately save_to the
+/// standard path. Best-effort: logs on save error, never fails the turn.
+pub fn append_turn_start_durable(journal: &mut EventJournal) -> String;
 ```
 
 `assess` rule, precisely: let `tail` = `commit_points.last().map(|cp| replay_from(cp))` flattened (empty when no commits). Walk `tail` (or all events when no commit points) maintaining a turn-depth counter on TurnStart/TurnEnd; `Interrupted` iff depth > 0 at the end, anchored at the last unmatched TurnStart. This also future-proofs against nested/multi-turn tails.
+
+`EventJournal` gains two read-only accessors (fields are currently private): `pub fn session_id(&self) -> &str` and `pub fn commit_points(&self) -> &[CommitPoint]`.
 
 ### 3.2 Wiring (three cuts in `session_manager.rs`)
 
