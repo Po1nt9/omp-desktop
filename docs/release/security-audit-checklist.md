@@ -58,7 +58,7 @@ Source: master design §14 (Remote Hub and channels).
 | SA-R.2 | All channels default-off | Config audit | PENDING | |
 | SA-R.3 | Webhook default loopback; public ingress requires explicit user reverse-proxy/tunnel configuration | Code audit | PENDING | |
 | SA-R.4 | Identity whitelist enforcement per channel | `cargo test` remote_im suite (59 tests) | PENDING | |
-| SA-R.5 | Approval expiry + anti-replay | `cargo test` remote_im suite | PENDING | |
+| SA-R.5 | Approval expiry + anti-replay | `cargo test` remote_im suite | PASS | 2026-07-31: `replay_guard.rs` ±300s freshness window + per-channel nonce cache (7 tests); engine gate drops Stale/Replayed before dedup (3 tests); TTL-bound in-memory approval (`DEFAULT_APPROVAL_TTL_SECS=3600`, never persisted) wired to `SpawnOptions.permission_policy="yolo"` (4 tests); bridge grant/revoke + status DTO (1 test). |
 | SA-R.6 | Dedup: SQLite `seen_messages` table, `(channel,message_id)` composite PK, `INSERT OR IGNORE` atomic, 7-day TTL (cleanup every 1024 inserts), `dedup.sqlite` persistence | `cargo test` dedup_store suite | PENDING | |
 | SA-R.7 | Rate limiting: fixed window, per-channel 60/min + per-scope 10/min, in-memory, lazy window reset | `cargo test` rate_limiter suite | PENDING | |
 | SA-R.8 | Revocation handling per channel | `cargo test` remote_im suite | PENDING | |
