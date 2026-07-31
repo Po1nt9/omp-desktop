@@ -99,3 +99,39 @@ async fn e2e_mock_happy_path_turn() {
     );
     client.kill().await;
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_mock_permission_gate_turn() {
+    let (client, mut rx) = spawn_mock();
+    client
+        .initialize_and_new_session()
+        .await
+        .expect("initialize + session/new against mock");
+
+    let prompt = tokio::spawn({
+        let c = Arc::clone(&client);
+        async move { c.prompt("scenario:permission\nwrite the file").await }
+    });
+
+    // The mock must request permission before streaming any reply text.
+    let events = collect_until(&mut rx, |e| matches!(e, AcpEvent::PermissionRequest { .. })).await;
+    let (rpc_id, options) = events
+        .iter()
+        .find_map(|e| match e {
+            AcpEvent::PermissionRequest { rpc_id, options, .. } => Some((*rpc_id, options.clone())),
+            _ => None,
+        })
+        .expect("PermissionRequest event");
+
+    let option_id = crate::permission::pick_option_id(&options, "allow_once")
+        .expect("allow_once option present");
+    client
+        .respond_permission(rpc_id, crate::acp_client::PermissionOutcome::Selected { option_id })
+        .await
+        .expect("respond_permission");
+
+    prompt.await.expect("prompt task join").expect("prompt rpc after approval");
+    let rest = collect_until(&mut rx, |e| matches!(e, AcpEvent::PromptComplete { .. })).await;
+    assert_eq!(joined_assistant(&rest), "Hello world.");
+    client.kill().await;
+}

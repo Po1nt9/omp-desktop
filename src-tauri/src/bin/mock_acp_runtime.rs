@@ -17,6 +17,7 @@ use std::io::{BufRead, BufReader, Write};
 
 const HANDSHAKE: &str = include_str!("../../tests/fixtures/acp/handshake_initialize.json");
 const STREAM: &str = include_str!("../../tests/fixtures/acp/stream_chunks.json");
+const PERMISSION: &str = include_str!("../../tests/fixtures/acp/permission_request.json");
 
 fn fixture(raw: &str) -> Value {
     serde_json::from_str(raw).expect("fixture parses")
@@ -92,11 +93,22 @@ fn send_updates(out: &mut impl Write, session_id: &str, updates: &[Value]) {
     }
 }
 
+/// Block until the Host answers our reverse-request `rpc` (permission leg).
+fn wait_for_reply(reader: &mut impl BufRead, rpc: u64) {
+    while let Some(frame) = read_frame(reader) {
+        if frame.get("id").and_then(|v| v.as_u64()) == Some(rpc) && frame.get("result").is_some() {
+            return;
+        }
+    }
+}
+
 fn main() {
     let mut reader = BufReader::new(std::io::stdin());
     let mut out = std::io::stdout();
     let handshake = fixture(HANDSHAKE);
     let stream = fixture(STREAM);
+    let permission = fixture(PERMISSION);
+    let mut next_agent_rpc_id: u64 = 9000;
     let session_id = String::from("mock-sess-1");
 
     while let Some(frame) = read_frame(&mut reader) {
@@ -127,9 +139,26 @@ fn main() {
                 let Some(id) = id else { continue };
                 let text = frame.get("params").map(prompt_text).unwrap_or_default();
                 let scenario = scenario_of(&text).to_string();
-                match scenario {
-                    // permission/toolcall/hang scenarios added by later tasks;
-                    // default = happy.
+                match scenario.as_str() {
+                    "permission" => {
+                        let rpc = next_agent_rpc_id;
+                        next_agent_rpc_id += 1;
+                        let mut req = permission["inbound"].clone();
+                        req["id"] = json!(rpc);
+                        req["params"]["sessionId"] = json!(session_id);
+                        write_frame(&mut out, &req);
+                        wait_for_reply(&mut reader, rpc);
+                        send_updates(
+                            &mut out,
+                            &session_id,
+                            stream["inbound"].as_array().expect("stream inbound array"),
+                        );
+                        write_frame(
+                            &mut out,
+                            &result_frame(&id, stream["sessionPromptResult"].clone()),
+                        );
+                    }
+                    // toolcall/hang scenarios added by later tasks; default = happy.
                     _ => {
                         send_updates(
                             &mut out,
