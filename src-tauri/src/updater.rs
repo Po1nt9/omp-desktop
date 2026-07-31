@@ -67,6 +67,9 @@ pub struct UpdaterStatusDto {
     pub plugin_enabled: bool,
     /// `silent` when plugin path is live; otherwise `github_manual`.
     pub channel: String,
+    /// Release channel baked into this build (`stable` / `beta` / `nightly`),
+    /// derived from the version string (AC-10.9 — no runtime switch).
+    pub release_channel: String,
     /// Compile-time endpoint (empty when plugin off).
     pub endpoint: String,
 }
@@ -89,10 +92,15 @@ pub fn updater_status() -> UpdaterStatusDto {
     } else {
         String::new()
     };
+    let release_channel =
+        crate::update_channel::UpdateChannel::from_version(env!("CARGO_PKG_VERSION"))
+            .as_str()
+            .to_string();
     UpdaterStatusDto {
         platform_supported,
         plugin_enabled,
         channel,
+        release_channel,
         endpoint,
     }
 }
@@ -167,6 +175,18 @@ mod tests {
         } else {
             assert_eq!(s.channel, "github_manual");
         }
+    }
+
+    #[test]
+    fn updater_status_release_channel_matches_version() {
+        let s = updater_status();
+        let expect =
+            crate::update_channel::UpdateChannel::from_version(env!("CARGO_PKG_VERSION"));
+        assert_eq!(s.release_channel, expect.as_str());
+        assert!(matches!(
+            s.release_channel.as_str(),
+            "stable" | "beta" | "nightly"
+        ));
     }
 
     #[test]

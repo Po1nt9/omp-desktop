@@ -6,6 +6,7 @@ mod agents_catalog;
 mod agent_prefs;
 mod app_update;
 mod updater;
+mod update_channel;
 mod agent_subagents;
 mod extensions;
 mod hooks;

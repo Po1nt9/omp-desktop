@@ -35,6 +35,9 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Prerelease-aware version ordering for update channels (AC-10.9). Already in
+# the tree via tauri-plugin-updater — no new compiled code.
+semver = "1"
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"

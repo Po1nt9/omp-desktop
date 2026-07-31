@@ -2961,6 +2961,7 @@ dependencies = [
  "rfd",
  "rusqlite",
  "schemars 0.8.22",
+ "semver",
  "serde",
  "serde_json",
  "sha1",
