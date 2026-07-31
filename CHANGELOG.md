@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   revocation, and Discord attachment fetch against a mock HTTP server.
   验收差距补齐：i18n 门新增占位符一致性校验；remote_im 新增白名单、
   凭据轮换/吊销与 Discord 附件抓取测试。
+- **macOS ARM64 acceptance run:** performance benchmarks (cold start 0.10s
+  median, peak RSS 39 MB), release artifact verification (DMG + app.tar.gz
+  SHA256 match), updater verifier green (ok=7 warn=1 fail=0), and brand
+  inspection all pass on Apple Silicon. Flips AC-2.1/2.12/4.3/10.7/10.8
+  to PASS; matrix now 55/12/90/1. Fixed bash variable expansion bug in
+  `verify-updater-setup.sh` (fd9728a).
+  macOS ARM64 真机验收：性能基准（冷启动 0.10s / RSS 39 MB）、产物
+  SHA256 校验、更新验证器全绿、品牌检查通过；矩阵翻转至 55/12/90/1。
 
 ### Known Limitations / 已知限制
 
