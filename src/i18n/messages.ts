@@ -1456,6 +1456,8 @@ const en = {
   "endOfTurn.stallMaybeDone": "This turn may already be finished",
   "endOfTurn.permissionDenied": "Permission denied",
   "endOfTurn.error": "Turn ended with an error",
+  "endOfTurn.interrupted":
+    "Turn interrupted — final state unknown; boundary side effects may be unknown. Review, then start a new turn.",
   "endOfTurn.unknown": "Turn ended",
   "turnActivity.title": "This turn · {n} steps",
   "turnActivity.titleWithErrors": "This turn · {n} steps · {e} failed",
@@ -3540,6 +3542,8 @@ const zh: Record<MessageKey, string> = {
   "endOfTurn.stallMaybeDone": "本轮可能已经完成",
   "endOfTurn.permissionDenied": "权限被拒绝",
   "endOfTurn.error": "本轮以错误结束",
+  "endOfTurn.interrupted":
+    "本轮已中断——最终状态未知；退出边界的副作用状态可能未知。请检查状态后发起新回合。",
   "endOfTurn.unknown": "本轮已结束",
   "turnActivity.title": "本回合活动 · {n} 步",
   "turnActivity.titleWithErrors": "本回合活动 · {n} 步 · {e} 失败",

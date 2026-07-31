@@ -9,6 +9,7 @@ export type EndOfTurnReason =
   | "permission_denied"
   | "error"
   | "cancelled"
+  | "interrupted"
   | "unknown";
 
 export interface EndOfTurnChipModel {
@@ -21,6 +22,7 @@ export interface EndOfTurnChipModel {
     | "endOfTurn.stall"
     | "endOfTurn.permissionDenied"
     | "endOfTurn.error"
+    | "endOfTurn.interrupted"
     | "endOfTurn.unknown";
   tone: "neutral" | "warning" | "error";
 }
@@ -83,6 +85,17 @@ export function mapEndOfTurnReason(
       tone: "neutral",
     };
   }
+  if (
+    r === "crash_recovery" ||
+    r === "interrupted" ||
+    r === "turn_interrupted"
+  ) {
+    return {
+      reason: "interrupted",
+      messageKey: "endOfTurn.interrupted",
+      tone: "error",
+    };
+  }
   return {
     reason: "unknown",
     messageKey: "endOfTurn.unknown",
@@ -95,6 +108,7 @@ export function isEndOfTurnMarker(marker: string | null | undefined): boolean {
   const m = (marker || "").toLowerCase();
   return (
     m === "turn_cancelled" ||
+    m === "turn_interrupted" ||
     m === "turn_end" ||
     m === "stream_stall" ||
     m === "end_of_turn"
@@ -117,6 +131,12 @@ export function parseEndOfTurnContent(
   }
   if (content.startsWith("turn_cancelled")) {
     return "cancelled";
+  }
+  if (content.startsWith("turn_interrupted|")) {
+    return mapEndOfTurnReason(content.slice("turn_interrupted|".length)).reason;
+  }
+  if (content.startsWith("turn_interrupted")) {
+    return "interrupted";
   }
   return null;
 }

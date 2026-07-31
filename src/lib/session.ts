@@ -658,7 +658,7 @@ export function applyTurnMarker(
       marker,
       toolStatus: payload.reason || "cancelled",
       createdAt: new Date().toISOString(),
-      isError: marker === "turn_cancelled",
+      isError: marker === "turn_cancelled" || marker === "turn_interrupted",
     },
   ];
 }

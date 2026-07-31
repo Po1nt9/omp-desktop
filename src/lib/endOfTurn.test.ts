@@ -24,3 +24,26 @@ describe("endOfTurn", () => {
     expect(parseEndOfTurnContent("turn_cancelled")).toBe("cancelled");
   });
 });
+
+describe("turn_interrupted / crash_recovery", () => {
+  it("maps crash_recovery to interrupted chip model", () => {
+    const m = mapEndOfTurnReason("crash_recovery");
+    expect(m.reason).toBe("interrupted");
+    expect(m.messageKey).toBe("endOfTurn.interrupted");
+    expect(m.tone).toBe("error");
+  });
+
+  it("parses turn_interrupted|crash_recovery content", () => {
+    expect(parseEndOfTurnContent("turn_interrupted|crash_recovery")).toBe(
+      "interrupted",
+    );
+  });
+
+  it("parses bare turn_interrupted content", () => {
+    expect(parseEndOfTurnContent("turn_interrupted")).toBe("interrupted");
+  });
+
+  it("treats turn_interrupted as an end-of-turn marker", () => {
+    expect(isEndOfTurnMarker("turn_interrupted")).toBe(true);
+  });
+});

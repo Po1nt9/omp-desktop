@@ -1405,6 +1405,8 @@ export const zhTW: Record<MessageKey, string> = {
   "endOfTurn.stallMaybeDone": "本輪可能已經完成",
   "endOfTurn.permissionDenied": "權限被拒絕",
   "endOfTurn.error": "本輪以錯誤結束",
+  "endOfTurn.interrupted":
+    "本輪已中斷——最終狀態未知；退出邊界的副作用狀態可能未知。請檢查狀態後發起新回合。",
   "endOfTurn.unknown": "本輪已結束",
   "turnActivity.title": "本回合活動 · {n} 步",
   "turnActivity.titleWithErrors": "本回合活動 · {n} 步 · {e} 失敗",

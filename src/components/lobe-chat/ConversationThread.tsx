@@ -839,6 +839,7 @@ export function ConversationThread({
               m.marker === "turn_cancelled" ||
               (m.role === "tool" &&
                 (m.content?.startsWith("turn_cancelled") ||
+                  m.content?.startsWith("turn_interrupted") ||
                   m.content?.startsWith("turn_end|")))
             ) {
               return wrap(
