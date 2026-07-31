@@ -740,9 +740,10 @@ const en = {
   "settings.cliSessionsEmpty": "No CLI sessions found under ~/runtime-home/sessions.",
   "settings.cliSessionsMsgs": "{n} messages",
   "settings.cliSessionsLinked": "In app",
-  "settings.storeApiKeysInKeychain": "Store API keys in system keychain",
-  "settings.storeApiKeysInKeychainDesc":
-    "Off by default: keys stay in the app data folder (mode 0600). Turn on to use the OS keychain — the system may ask once. Official login still uses OMP Runtime auth.",
+  "credentials.storeUnavailable":
+    "System secure storage is unavailable, so credentials cannot be saved or used. On Linux, start a Secret Service provider (e.g. gnome-keyring) and unlock it, then restart OMP Desktop. Your existing credentials were left untouched.",
+  "credentials.storeError":
+    "System secure storage reported an error. Existing credentials were left untouched; retry after restarting OMP Desktop.",
   "settings.experimentalMemory": "Cross-session memory (experimental)",
   "settings.experimentalMemoryDesc":
     "Let OMP Runtime remember project facts across chats via --experimental-memory / GROK_MEMORY. Experimental — may change. Off by default; when off, agents force --no-memory for isolation.",
@@ -2841,9 +2842,10 @@ const zh: Record<MessageKey, string> = {
   "settings.cliSessionsEmpty": "在 ~/runtime-home/sessions 下未找到 CLI 会话。",
   "settings.cliSessionsMsgs": "{n} 条消息",
   "settings.cliSessionsLinked": "已在应用中",
-  "settings.storeApiKeysInKeychain": "用系统钥匙串保存 API Key",
-  "settings.storeApiKeysInKeychainDesc":
-    "默认关闭：密钥写在应用数据目录（0600）。开启后写入系统钥匙串，系统可能要求一次授权。官方登录仍走 OMP Runtime 鉴权，不受此项影响。",
+  "credentials.storeUnavailable":
+    "系统安全存储不可用，无法保存或使用凭据。Linux 下请启动 Secret Service 提供程序（如 gnome-keyring）并解锁，然后重启 OMP Desktop。已有凭据保持不变。",
+  "credentials.storeError":
+    "系统安全存储报错。已有凭据保持不变，请重启 OMP Desktop 后重试。",
   "settings.experimentalMemory": "跨会话记忆（实验性）",
   "settings.experimentalMemoryDesc":
     "通过 --experimental-memory / GROK_MEMORY 让 OMP Runtime 跨对话记住项目事实。实验性功能，行为可能变化。默认关闭；关闭时 Agent 强制 --no-memory 以隔离。",

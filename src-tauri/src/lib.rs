@@ -72,6 +72,13 @@ use session_manager::SessionManager;
 pub fn run() {
     let _ = paths::ensure_app_dirs();
     logging::init();
+    // §8.2: idempotent credential migration into the OS secure store. A store
+    // outage sets the Safe Mode flag in the ledger and leaves plaintext
+    // untouched; per-entry failures roll back and retry next launch.
+    {
+        let store = secrets::store::default_store();
+        secrets::migration::run_startup_migration(store.as_ref());
+    }
     // Windows: AppUserModelID before window/taskbar so Show Desktop / jump lists
     // treat us as a normal app (matches NSIS shortcut AUMID).
     #[cfg(windows)]

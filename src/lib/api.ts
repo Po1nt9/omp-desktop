@@ -854,11 +854,6 @@ export interface AppSettings {
   /** Pure stream silence before cancel prompt, seconds (default 120). */
   streamStallSeconds?: number;
   /**
-   * When true, App API keys go in the OS keychain.
-   * Default false: keys stay in secrets.json (0600). Official login uses auth.json.
-   */
-  storeApiKeysInKeychain?: boolean;
-  /**
    * OS-level sandbox for spawned agents: off | workspace | read-only | strict | devbox.
    * Default "off". Passed as `grok --sandbox <profile>` / GROK_SANDBOX on spawn.
    */

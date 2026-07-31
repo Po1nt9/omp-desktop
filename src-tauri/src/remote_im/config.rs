@@ -36,11 +36,11 @@ fn channels_path() -> PathBuf {
     remote_dir().join("channels.json")
 }
 
-fn secrets_path() -> PathBuf {
+pub(crate) fn secrets_path() -> PathBuf {
     remote_dir().join("channel-secrets.json")
 }
 
-fn channel_refs_path() -> PathBuf {
+pub(crate) fn channel_refs_path() -> PathBuf {
     remote_dir().join("channel-secret-refs.json")
 }
 

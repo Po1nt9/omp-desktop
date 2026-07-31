@@ -1061,7 +1061,6 @@ export default function App() {
   const [streamStallSeconds, setStreamStallSeconds] = useState(180);
   /** 0 = omit `--max-turns` (CLI default). */
   const [maxAgentTurns, setMaxAgentTurns] = useState(0);
-  const [storeApiKeysInKeychain, setStoreApiKeysInKeychain] = useState(false);
   const [sandboxProfile, setSandboxProfile] = useState("off");
   /** Preferred CLI agent definition for spawn (`""` = CLI default). */
   const [preferredAgent, setPreferredAgent] = useState("");
@@ -1579,7 +1578,6 @@ export default function App() {
             : 0,
         );
       }
-      setStoreApiKeysInKeychain(!!settings.storeApiKeysInKeychain);
       {
         const sb = (settings.sandboxProfile || "off").trim().toLowerCase();
         const known = ["off", "workspace", "read-only", "strict", "devbox"];
@@ -8714,20 +8712,6 @@ export default function App() {
                 maxAgentTurns: n > 0 ? n : null,
               }),
             );
-          }}
-          storeApiKeysInKeychain={storeApiKeysInKeychain}
-          onStoreApiKeysInKeychain={(v) => {
-            const prev = storeApiKeysInKeychain;
-            setStoreApiKeysInKeychain(v);
-            void api
-              .settingsGet()
-              .then((s) =>
-                api.settingsSet({ ...s, storeApiKeysInKeychain: v }),
-              )
-              .catch((e) => {
-                setStoreApiKeysInKeychain(prev);
-                showToast(String(e), 4500);
-              });
           }}
           sandboxProfile={sandboxProfile}
           onSandboxProfile={(v) => {

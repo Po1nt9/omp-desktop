@@ -136,6 +136,8 @@ pub struct LegacyEntry {
 
 /// A plaintext source to migrate. Implementations must never log values.
 pub trait MigrationSource {
+    /// Short identifier for logs ("secrets_json" / "channel_secrets").
+    fn name(&self) -> &'static str;
     fn enumerate(&self) -> Result<Vec<LegacyEntry>, String>;
     fn read_legacy(&self, entry: &LegacyEntry) -> Result<Option<String>, String>;
     fn commit_reference(&self, entry: &LegacyEntry, reference: &str) -> Result<(), String>;
@@ -358,6 +360,63 @@ impl<'a> Migrator<'a> {
     }
 }
 
+// ── startup wiring ─────────────────────────────────────────────────────────
+
+/// §8.2 startup migration, wired once at app launch after `ensure_app_dirs`.
+///
+/// Idempotent: already-`Cleaned` entries are skipped, mid-states resume. A
+/// store outage persists the ledger's `store_unavailable` flag (Safe Mode
+/// signal) and leaves legacy plaintext readable; per-entry failures roll back
+/// the store entry and are retried next launch. Never logs secret values.
+pub fn run_startup_migration(store: &dyn SecretStore) {
+    let migrator = Migrator::new(store, &ledger_path());
+    let secrets_json = SecretsJsonSource::new(crate::paths::secrets_file());
+    let channel = ChannelSecretsSource::new(
+        crate::remote_im::config::secrets_path(),
+        crate::remote_im::config::channel_refs_path(),
+    );
+    let sources: [&dyn MigrationSource; 2] = [&secrets_json, &channel];
+
+    for source in sources {
+        let plan = match migrator.dry_run(source) {
+            Ok(p) => p,
+            Err(e) => {
+                // dry_run already persisted store_unavailable on outage.
+                tracing::warn!(
+                    target: "grok_app::secrets",
+                    source = source.name(),
+                    error = %e,
+                    message_key = e.message_key(),
+                    "credential migration dry-run failed; legacy secrets left untouched"
+                );
+                continue;
+            }
+        };
+        if plan.entries.is_empty() && plan.conflicts.is_empty() {
+            continue;
+        }
+        let report = migrator.run(source, &plan);
+        if report.failed > 0 || report.pending > 0 || !plan.conflicts.is_empty() {
+            tracing::warn!(
+                target: "grok_app::secrets",
+                source = source.name(),
+                cleaned = report.cleaned,
+                failed = report.failed,
+                pending = report.pending,
+                conflicts = plan.conflicts.len(),
+                "credential migration incomplete; failed/pending entries retry next launch"
+            );
+        } else {
+            tracing::info!(
+                target: "grok_app::secrets",
+                source = source.name(),
+                cleaned = report.cleaned,
+                "credential migration completed"
+            );
+        }
+    }
+}
+
 // ── secrets.json adapter ───────────────────────────────────────────────────
 
 use crate::store::SecretsFile;
@@ -387,6 +446,9 @@ impl SecretsJsonSource {
 }
 
 impl MigrationSource for SecretsJsonSource {
+    fn name(&self) -> &'static str {
+        "secrets_json"
+    }
     fn enumerate(&self) -> Result<Vec<LegacyEntry>, String> {
         let disk = self.read();
         let mut out = Vec::new();
@@ -535,6 +597,9 @@ impl ChannelSecretsSource {
 }
 
 impl MigrationSource for ChannelSecretsSource {
+    fn name(&self) -> &'static str {
+        "channel_secrets"
+    }
     fn enumerate(&self) -> Result<Vec<LegacyEntry>, String> {
         let map = self.read_legacy_map();
         let mut out = Vec::new();
@@ -641,6 +706,9 @@ mod tests {
     }
 
     impl MigrationSource for MemSource {
+        fn name(&self) -> &'static str {
+            "mem"
+        }
         fn enumerate(&self) -> Result<Vec<LegacyEntry>, String> {
             Ok(self.entries.clone())
         }
@@ -1132,5 +1200,54 @@ mod tests {
             let _ = std::fs::remove_dir_all(secrets.parent().unwrap());
             let _ = std::fs::remove_file(&ledger);
         }
+    }
+
+    #[test]
+    fn startup_migration_moves_both_sources_and_is_idempotent() {
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let tmp = std::env::temp_dir().join(format!("omp-startup-mig-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("remote")).unwrap();
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
+
+        // Seed legacy plaintext in both sources.
+        std::fs::write(
+            tmp.join("secrets.json"),
+            r#"{"officialApiKey":"sk-startup","relayBaseUrl":"https://r.example"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.join("remote").join("channel-secrets.json"),
+            r#"{"inst1":{"botToken":"tg-startup"}}"#,
+        )
+        .unwrap();
+
+        let store = MockStore::new();
+        run_startup_migration(&store);
+
+        // Key material now lives only in the store, namespaced per source.
+        assert!(store.contains(NS_PROVIDER, "official_api_key"));
+        assert!(store.contains(crate::secrets::store::NS_REMOTE, "inst1:botToken"));
+        // secrets.json holds a reference, not plaintext.
+        let raw = std::fs::read_to_string(tmp.join("secrets.json")).unwrap();
+        assert!(raw.contains("keychain:v1:provider:official_api_key"));
+        assert!(!raw.contains("sk-startup"));
+        // channel-secrets.json fully cleaned up (secure delete).
+        assert!(!tmp.join("remote").join("channel-secrets.json").exists());
+        let refs_raw =
+            std::fs::read_to_string(tmp.join("remote").join("channel-secret-refs.json")).unwrap();
+        assert!(refs_raw.contains("keychain:v1:remote:inst1:botToken"));
+
+        // Second launch is a no-op.
+        let before = store.len();
+        run_startup_migration(&store);
+        assert_eq!(store.len(), before);
+        assert!(MigrationLedger::load(&ledger_path())
+            .entries
+            .iter()
+            .all(|e| e.state == MigrationState::Cleaned));
+
+        std::env::remove_var("OMP_DESKTOP_HOME");
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

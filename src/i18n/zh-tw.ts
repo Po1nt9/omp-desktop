@@ -707,9 +707,10 @@ export const zhTW: Record<MessageKey, string> = {
   "settings.cliSessionsEmpty": "在 ~/runtime-home/sessions 下找不到 CLI 工作階段。",
   "settings.cliSessionsMsgs": "{n} 則訊息",
   "settings.cliSessionsLinked": "已在應用程式中",
-  "settings.storeApiKeysInKeychain": "以系統鑰匙圈儲存 API Key",
-  "settings.storeApiKeysInKeychainDesc":
-    "預設關閉：金鑰寫在應用資料目錄（0600）。開啟後寫入系統鑰匙圈，系統可能要求一次授權。官方登入仍走 OMP Runtime 驗證，不受此項影響。",
+  "credentials.storeUnavailable":
+    "系統安全儲存不可用，無法儲存或使用憑證。Linux 下請啟動 Secret Service 提供者（如 gnome-keyring）並解鎖，然後重新啟動 OMP Desktop。現有憑證保持不變。",
+  "credentials.storeError":
+    "系統安全儲存回報錯誤。現有憑證保持不變，請重新啟動 OMP Desktop 後重試。",
   "settings.experimentalMemory": "跨工作階段記憶（實驗性）",
   "settings.experimentalMemoryDesc":
     "透過 --experimental-memory / GROK_MEMORY 讓 OMP Runtime 跨對話記住專案事實。實驗性功能，行為可能變化。預設關閉；關閉時 Agent 強制 --no-memory 以隔離。",

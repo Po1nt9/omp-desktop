@@ -382,15 +382,6 @@ export const SETTINGS_ENTRIES: readonly SettingsEntry[] = [
     keywords: ["voice", "keep agents", "语音", "保留"],
   },
   {
-    id: "general.keychain",
-    section: "general",
-    tab: "app",
-    anchorId: "settings-anchor-keychain",
-    labelKey: "settings.storeApiKeysInKeychain",
-    descKeys: ["settings.storeApiKeysInKeychainDesc"],
-    keywords: ["keychain", "api key", "secrets"],
-  },
-  {
     id: "general.clearMemory",
     section: "general",
     tab: "app",

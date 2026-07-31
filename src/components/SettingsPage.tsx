@@ -225,9 +225,6 @@ export interface SettingsPageProps {
   /** Keep delegated agent sessions when Live Voice ends. */
   voiceKeepAgentsOnEnd?: boolean;
   onVoiceKeepAgentsOnEnd?: (v: boolean) => void;
-  /** Store App API keys in OS keychain (default off → secrets.json). */
-  storeApiKeysInKeychain?: boolean;
-  onStoreApiKeysInKeychain?: (v: boolean) => void;
   /** OS sandbox for agent spawn: off | workspace | read-only | strict | devbox. */
   sandboxProfile?: string;
   onSandboxProfile?: (v: string) => void;
@@ -644,8 +641,6 @@ export function SettingsPage({
   onAgentIdleMinutes,
   streamStallSeconds = 180,
   onStreamStallSeconds,
-  storeApiKeysInKeychain = false,
-  onStoreApiKeysInKeychain,
   sandboxProfile = "off",
   onSandboxProfile,
   maxAgentTurns = 0,
@@ -1804,28 +1799,6 @@ export function SettingsPage({
                   t={t}
                   onImported={onCliSessionsImported}
                 />
-              ) : null}
-              {onStoreApiKeysInKeychain ? (
-                <div
-                  className={"settings-row" + rowHighlight("settings-anchor-keychain")}
-                  id="settings-anchor-keychain"
-                >
-                  <div className="settings-row__text">
-                    <div className="settings-row__label">
-                      {t("settings.storeApiKeysInKeychain")}
-                    </div>
-                    <div className="settings-row__desc">
-                      {t("settings.storeApiKeysInKeychainDesc")}
-                    </div>
-                  </div>
-                  <UiCheck
-                    checked={storeApiKeysInKeychain}
-                    onChange={() =>
-                      onStoreApiKeysInKeychain(!storeApiKeysInKeychain)
-                    }
-                    ariaLabel={t("settings.storeApiKeysInKeychain")}
-                  />
-                </div>
               ) : null}
               {workspaceCwd ? (
                 <div

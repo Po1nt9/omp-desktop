@@ -3,7 +3,7 @@
 mod app_sessions;
 mod bridge;
 mod channels;
-mod config;
+pub(crate) mod config;
 mod control_plane;
 mod dedup_store;
 mod engine;
