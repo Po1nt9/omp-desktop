@@ -118,3 +118,100 @@ describe("error sentinels", () => {
     ).toBe(true);
   });
 });
+
+describe("transport seam (AC-1.5)", () => {
+  const capAll: DesktopV1Capability = {
+    schemaVersion: 1,
+    schemaDigest: "test-digest",
+    methods: [
+      "_omp/desktop/v1/todo.list",
+      "_omp/desktop/v1/subagents.status",
+      "_omp/desktop/v1/subagents.setEnabled",
+    ],
+    notifications: [],
+    optionalFeatures: [],
+  };
+
+  it("todo.list round-trips phases through the injected transport", async () => {
+    const client = new OmpDesktopV1Client();
+    client.setCapability(capAll);
+    const seen: Array<{ method: string; params: unknown }> = [];
+    client.setTransport(async (method, params) => {
+      seen.push({ method, params });
+      return {
+        phases: [
+          {
+            name: "phase-1",
+            tasks: [
+              { content: "design", status: "completed" },
+              { content: "implement", status: "in_progress" },
+              { content: "test", status: "pending" },
+              { content: "drop", status: "abandoned" },
+              { content: "wait", status: "blocked" },
+            ],
+          },
+        ],
+      };
+    });
+
+    const result = await client.call("todo.list", { sessionId: "s-1" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.phases).toHaveLength(1);
+      expect(result.value.phases[0].tasks.map((t) => t.status)).toEqual([
+        "completed",
+        "in_progress",
+        "pending",
+        "abandoned",
+        "blocked",
+      ]);
+    }
+    expect(seen).toEqual([
+      { method: "_omp/desktop/v1/todo.list", params: { sessionId: "s-1" } },
+    ]);
+  });
+
+  it("subagents.status round-trips", async () => {
+    const client = new OmpDesktopV1Client();
+    client.setCapability(capAll);
+    client.setTransport(async () => ({ enabled: true, activeCount: 2 }));
+    const result = await client.call("subagents.status", {});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ enabled: true, activeCount: 2 });
+    }
+  });
+
+  it("subagents.setEnabled forwards params and echoes result", async () => {
+    const client = new OmpDesktopV1Client();
+    client.setCapability(capAll);
+    const seen: unknown[] = [];
+    client.setTransport(async (_method, params) => {
+      seen.push(params);
+      return { enabled: false };
+    });
+    const result = await client.call("subagents.setEnabled", { enabled: false });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ enabled: false });
+    expect(seen).toEqual([{ enabled: false }]);
+  });
+
+  it("transport rejection maps to runtime_unavailable", async () => {
+    const client = new OmpDesktopV1Client();
+    client.setCapability(capAll);
+    client.setTransport(async () => {
+      throw new Error("boom");
+    });
+    const result = await client.call("todo.list", {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("runtime_unavailable");
+  });
+
+  it("capability without transport stays fail-closed", async () => {
+    const client = new OmpDesktopV1Client();
+    client.setCapability(capAll);
+    const result = await client.call("todo.list", {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("runtime_unavailable");
+  });
+});

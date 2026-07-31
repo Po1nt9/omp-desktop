@@ -14,7 +14,7 @@
 
 import type { MethodMap, MethodName } from "./methods";
 import type { DesktopV1Capability } from "./capability";
-import { type DesktopV1Error, RUNTIME_UNAVAILABLE, UNKNOWN_METHOD } from "./errors";
+import { type DesktopV1Error, isDesktopV1Error, RUNTIME_UNAVAILABLE, UNKNOWN_METHOD } from "./errors";
 
 export type { MethodMap, MethodName } from "./methods";
 export type * from "./methods";
@@ -39,6 +39,16 @@ export { isDesktopV1Error, RUNTIME_UNAVAILABLE, UNKNOWN_METHOD } from "./errors"
  */
 export type CallResult<T> = { ok: true; value: T } | { ok: false; error: DesktopV1Error };
 
+/**
+ * Injected transport for `_omp/desktop/v1/*` requests (Plan 3 seam, AC-1.5).
+ * Receives the fully-namespaced method and the raw params; resolves with the
+ * JSON-RPC result payload. Rejections map to `runtime_unavailable`.
+ */
+export type DesktopV1Transport = (
+  method: string,
+  params: unknown,
+) => Promise<unknown>;
+
 /** Wire namespace prefix for every v1 method. */
 const NAMESPACE = "_omp/desktop/v1/";
 
@@ -51,6 +61,15 @@ const NAMESPACE = "_omp/desktop/v1/";
  */
 export class OmpDesktopV1Client {
   private capability: DesktopV1Capability | null = null;
+  private transport: DesktopV1Transport | null = null;
+
+  /**
+   * Inject (or clear with `null`) the request transport. Until a transport
+   * is set the client stays fail-closed even with a negotiated capability.
+   */
+  setTransport(t: DesktopV1Transport | null): void {
+    this.transport = t;
+  }
 
   /**
    * Store (or clear with `null`) the capability descriptor advertised by
@@ -91,9 +110,18 @@ export class OmpDesktopV1Client {
     if (!this.capability.methods.includes(fullMethod)) {
       return { ok: false, error: UNKNOWN_METHOD };
     }
-    // Plan 2 fail-closed: the real transport is not wired yet.
-    // Plan 3 will inject the AcpClient / Tauri invoke transport here.
-    void params; // params will be forwarded to the transport in Plan 3.
-    return { ok: false, error: RUNTIME_UNAVAILABLE };
+    if (!this.transport) {
+      // Plan 2 fail-closed: no transport injected yet.
+      return { ok: false, error: RUNTIME_UNAVAILABLE };
+    }
+    try {
+      const value = (await this.transport(fullMethod, params)) as MethodMap[K]["result"];
+      return { ok: true, value };
+    } catch (e) {
+      if (isDesktopV1Error(e)) {
+        return { ok: false, error: e };
+      }
+      return { ok: false, error: RUNTIME_UNAVAILABLE };
+    }
   }
 }
