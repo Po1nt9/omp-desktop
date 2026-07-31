@@ -14,6 +14,7 @@ pub mod capability;
 pub mod errors;
 pub mod generated;
 pub mod ids;
+pub mod transport;
 
 #[cfg(test)]
 mod tests;

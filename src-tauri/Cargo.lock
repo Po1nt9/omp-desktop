@@ -2943,6 +2943,7 @@ name = "omp-desktop"
 version = "0.3.0-nightly"
 dependencies = [
  "arboard",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "chrono",
