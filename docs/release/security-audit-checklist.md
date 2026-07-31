@@ -35,13 +35,13 @@ Source: master design §11 (permission and security boundary).
 
 | ID | Check | Method | Status | Notes |
 |---|---|---|---|---|
-| SA-P.1 | Per-path decision table enforced: bash (tool tier + policy + cwd/shell containment), edit (policy + canonical target path gate), delete (independent high-risk gate + canonical path), move (source + destination separately canonicalized/gated), elicitation (schema-allowed values only), plan approval (active plan/turn ID gate), subagent (parent policy + explicit inheritance/narrowing) | Code audit + contract tests | PENDING | |
+| SA-P.1 | Per-path decision table enforced: bash (tool tier + policy + cwd/shell containment), edit (policy + canonical target path gate), delete (independent high-risk gate + canonical path), move (source + destination separately canonicalized/gated), elicitation (schema-allowed values only), plan approval (active plan/turn ID gate), subagent (parent policy + explicit inheritance/narrowing) | Code audit + contract tests | PENDING | Subagent component resolved 2026-07-31 (see SA-P.7); other paths pending. |
 | SA-P.2 | Fail-closed on missing capability: no tool execution without approval; missing Runtime capability → read-only or disabled | Test suite + code audit | PENDING | |
 | SA-P.3 | Request binding: every permission request bound to runtime instance + session + turn + request ID | Code audit | PENDING | |
 | SA-P.4 | Timeout / restart / turn-end invalidates pending requests | Code audit + test | PENDING | |
 | SA-P.5 | "First legal decision wins" applies only to the same pending request; other requests unaffected | Code audit | PENDING | |
 | SA-P.6 | Process-level override (single sidecar) not disguised as per-session setting in UI | UI audit | PENDING | |
-| SA-P.7 | Subagent cannot escalate beyond parent policy; MCP/workspace constraints inherited | Code audit + test | PENDING | |
+| SA-P.7 | Subagent cannot escalate beyond parent policy; MCP/workspace constraints inherited | Code audit + test | PASS | Desktop side (2026-07-31, AC-1.5): `permission::subagent_effective_policy` clamp — subagent ceiling never wider than the session's effective policy, proven by an exhaustive 7×8 matrix test; clamped policy reaches the Runtime via `[subagents] policy/inherit_mcp/inherit_workspace = true` TOML (independent mode) and `OMP_SUBAGENT_POLICY` env (both modes); host gate `subagent_spawn_gate_denies` rejects subagent-spawn permission requests when subagents are disabled even under AlwaysApprove (host test). Runtime-side honoring of the declared constraints remains Runtime responsibility — real-Runtime E2E pending. |
 | SA-P.8 | Delete gate independent from edit/move approval — no inheritance | Code audit | PENDING | |
 | SA-P.9 | Move: either source or destination out-of-bounds → reject | Code audit | PENDING | |
 | SA-P.10 | `allow_always` / `reject_always` treated as managed-session memory scope only; UI does not describe them as cross-restart persistent rules (until versioned policy API negotiated) | UI audit + code audit | PENDING | |
