@@ -5,6 +5,7 @@
 //! Production backend is the OS keychain via the `keyring` crate; tests use
 //! `MockStore` with programmable failure points.
 
+#[cfg(test)]
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -47,10 +48,13 @@ impl StoreError {
 impl std::fmt::Display for StoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StoreError::Unavailable { detail, .. } => {
-                write!(f, "secure store unavailable: {detail}")
+            StoreError::Unavailable {
+                message_key,
+                detail,
+            } => {
+                write!(f, "{message_key}: secure store unavailable: {detail}")
             }
-            StoreError::Backend(e) => write!(f, "secure store error: {e}"),
+            StoreError::Backend(e) => write!(f, "{}: secure store error: {e}", self.message_key()),
         }
     }
 }

@@ -640,8 +640,6 @@ pub async fn settings_set(
     settings: AppSettings,
 ) -> Result<AppSettings, String> {
     let prev = store::load_settings();
-    let keychain_flip =
-        prev.store_api_keys_in_keychain != settings.store_api_keys_in_keychain;
     let session_data_mode_changed =
         prev.session_data_mode != settings.session_data_mode;
     let memory_flip = prev.experimental_memory != settings.experimental_memory;
@@ -655,17 +653,6 @@ pub async fn settings_set(
     let sandbox_flip = prev.sandbox_profile.trim() != settings.sandbox_profile.trim();
 
     store::save_settings(&settings)?;
-
-    if keychain_flip {
-        if let Err(e) =
-            crate::secrets::apply_keychain_preference(settings.store_api_keys_in_keychain)
-        {
-            let mut rolled = settings.clone();
-            rolled.store_api_keys_in_keychain = prev.store_api_keys_in_keychain;
-            let _ = store::save_settings(&rolled);
-            return Err(e);
-        }
-    }
 
     if session_data_mode_changed {
         mgr.recycle_all_agents(&app, "session_data_mode").await;
@@ -931,12 +918,8 @@ pub async fn secrets_get_masked() -> Result<serde_json::Value, String> {
         "defaultModel": providers.default_model.or(s.default_model),
         "providerCount": providers.providers.len(),
         "agentHome": providers.agent_home,
-        // Report user preference — do not soft-probe Keychain on cold start.
-        "secretsBackend": match crate::secrets::configured_backend() {
-            crate::secrets::SecretsBackendKind::Keychain => "keychain",
-            crate::secrets::SecretsBackendKind::File => "file",
-        },
-        "storeApiKeysInKeychain": store::load_settings().store_api_keys_in_keychain,
+        // Strict mode (§8.1): the OS secure store is the only credential backend.
+        "secretsBackend": "keychain",
     }))
 }
 
@@ -1209,11 +1192,8 @@ pub async fn doctor_report() -> Result<serde_json::Value, String> {
     };
     let has_official_key = secrets.official_api_key.is_some();
     let has_relay = secrets.relay_base_url.is_some() && secrets.relay_api_key.is_some();
-    // Never include secret values — only which backend holds them.
-    let secrets_backend = match crate::secrets::active_backend() {
-        crate::secrets::SecretsBackendKind::Keychain => "keychain",
-        crate::secrets::SecretsBackendKind::File => "file",
-    };
+    // Never include secret values — strict mode always uses the OS store.
+    let secrets_backend = "keychain";
 
     // Flat snapshot for clipboard / legacy consumers (no secret values).
     let raw = serde_json::json!({

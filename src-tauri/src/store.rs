@@ -178,11 +178,6 @@ pub struct AppSettings {
     /// Pure stream silence before cancel prompt (I06). Default 120 seconds.
     #[serde(default = "default_stream_stall_seconds")]
     pub stream_stall_seconds: u32,
-    /// Store App API keys in the OS keychain (macOS Keychain / Win Cred / Secret Service).
-    /// Default **false**: keys stay in `secrets.json` (0600) so cold start does not
-    /// trigger system password prompts. Official CLI login still uses `auth.json`.
-    #[serde(default)]
-    pub store_api_keys_in_keychain: bool,
     /// OS-level sandbox profile for spawned `grok agent` processes
     /// (`off` | `workspace` | `read-only` | `strict` | `devbox`). Default off.
     /// Passed as top-level `grok --sandbox <profile>` / `GROK_SANDBOX` at spawn.
@@ -341,7 +336,6 @@ impl Default for AppSettings {
             // Fresh installs already start on the current default.
             pool_size_migrated: true,
             stream_stall_seconds: default_stream_stall_seconds(),
-            store_api_keys_in_keychain: false,
             sandbox_profile: default_sandbox_profile(),
             experimental_memory: false,
             max_agent_turns: None,
@@ -474,15 +468,6 @@ fn write_json<T: Serialize>(path: &PathBuf, value: &T) -> Result<(), String> {
 pub fn load_settings() -> AppSettings {
     let _ = ensure_app_dirs();
     let mut s: AppSettings = read_json(&settings_file());
-    // One-time: installs that already stored keys in keychain before the opt-in
-    // keep keychain mode so keys remain reachable without a silent loss.
-    if !s.store_api_keys_in_keychain {
-        let disk = crate::secrets::load_secrets_disk_only();
-        if disk.keychain_has_official || disk.keychain_has_relay {
-            s.store_api_keys_in_keychain = true;
-            let _ = write_json(&settings_file(), &s);
-        }
-    }
     // One-time: installs predating the multi-session rework persisted the old
     // default pool size (3). Without this they stay at three warm agents and
     // hit the process limit while browsing a couple of chats.

@@ -1,23 +1,22 @@
-//! App secrets backend: OS keychain (preferred) with file fallback.
+//! App secrets backend: OS secure store only (strict mode, master design §8.1).
 //!
-//! Callers use [`crate::store::load_secrets`] / [`crate::store::save_secrets`] only —
+//! Callers use [`crate::secrets::load_secrets`] / [`crate::secrets::save_secrets`] only —
 //! this module owns where `official_api_key` / `relay_api_key` actually live.
 //!
 //! - macOS: Keychain via `keyring` (`apple-native`)
 //! - Windows: Credential Manager (`windows-native`)
 //! - Linux: FreeDesktop Secret Service when available (`sync-secret-service`)
-//! - Fallback: `secrets.json` with mode `0600` when the OS store is unavailable
+//!
+//! There is **no plaintext fallback**: when the OS store is unavailable, saving
+//! is blocked with an actionable error and `secrets.json` holds at most opaque
+//! `keychain:v1:<ns>:<key>` references written by the §8.2 migration.
 //!
 //! Non-secret metadata (`relay_base_url`, `default_model`, `keychain_has_*`) always
 //! stays in `secrets.json`.
-//!
-//! **Startup UX:** never write a probe entry or unlock keychain just to paint
-//! "has key" flags. Presence uses disk flags / plaintext leftovers; real key
-//! material is loaded lazily when a caller needs the value.
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::Arc;
 
 use parking_lot::Mutex;
 
@@ -27,125 +26,59 @@ use crate::store::SecretsFile;
 pub mod migration;
 pub mod store;
 
-/// Reverse-DNS service id shared with app data layout (`com.omp-desktop.omp-desktop`).
-const KEYRING_SERVICE: &str = "com.omp-desktop.omp-desktop";
+use migration::{is_reference, ledger_path, make_reference, MigrationLedger};
+use store::{default_store, SecretStore, NS_PROVIDER};
 
 const KEY_OFFICIAL: &str = "official_api_key";
 const KEY_RELAY: &str = "relay_api_key";
-
-/// Where sensitive fields were last successfully written (for diagnostics only).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SecretsBackendKind {
-    Keychain,
-    File,
-}
-
-static KEYCHAIN_USABLE: OnceLock<bool> = OnceLock::new();
 
 /// Process-lifetime cache after first full unlock — avoids re-prompting Keychain
 /// on every `load_secrets()` within the same app session.
 static SESSION_CACHE: Mutex<Option<SecretsFile>> = Mutex::new(None);
 
-/// Soft probe: ask the OS store about a never-written account.
+fn store_handle() -> Arc<dyn SecretStore> {
+    default_store()
+}
+
+/// Resolve one sensitive field read from `secrets.json`.
 ///
-/// **Does not** call `set_password` — writing a throwaway entry is what made
-/// macOS ask for Keychain password on every cold start.
-fn probe_keychain() -> bool {
-    let probe_user = "__grok_app_keychain_probe__";
-    let entry = match keyring::Entry::new(KEYRING_SERVICE, probe_user) {
-        Ok(e) => e,
-        Err(e) => {
-            tracing::info!(
-                target: "grok_app::secrets",
-                error = %e,
-                "OS keychain unavailable; using secrets.json fallback"
-            );
-            return false;
+/// - `keychain:v1:` reference → fetch from the OS store (strict mode).
+/// - Plaintext leftover (pre-migration) → passed through only while the store is
+///   healthy; once the ledger recorded `store_unavailable`, fail closed (None)
+///   so callers cannot act on credentials the store can no longer protect.
+///
+/// Never logs secret values.
+fn resolve_field(
+    value: Option<String>,
+    key: &str,
+    store_unavailable: bool,
+    store: &dyn SecretStore,
+) -> Option<String> {
+    let v = value.filter(|s| !s.is_empty())?;
+    if is_reference(&v) {
+        match store.get(NS_PROVIDER, key) {
+            Ok(val) => val.filter(|s| !s.is_empty()),
+            Err(e) => {
+                tracing::warn!(
+                    target: "grok_app::secrets",
+                    field = key,
+                    error = %e,
+                    message_key = e.message_key(),
+                    "failed to resolve secret reference from OS store"
+                );
+                None
+            }
         }
-    };
-    match entry.get_password() {
-        // NoEntry = store is reachable and nothing stored (normal).
-        Err(keyring::Error::NoEntry) => {
-            tracing::info!(
-                target: "grok_app::secrets",
-                "OS keychain available for app secrets (soft probe)"
-            );
-            true
-        }
-        // Leftover probe from older builds — still means keychain works.
-        Ok(_) => {
-            let _ = entry.delete_credential();
-            tracing::info!(
-                target: "grok_app::secrets",
-                "OS keychain available for app secrets"
-            );
-            true
-        }
-        Err(e) => {
-            tracing::info!(
-                target: "grok_app::secrets",
-                error = %e,
-                "OS keychain probe failed; using secrets.json fallback"
-            );
-            false
-        }
-    }
-}
-
-/// Soft probe once and cache. Never logs secret values.
-fn keychain_platform_ok() -> bool {
-    *KEYCHAIN_USABLE.get_or_init(probe_keychain)
-}
-
-/// User opted into OS keychain via settings (default false → file).
-fn prefer_keychain_storage() -> bool {
-    crate::store::load_settings().store_api_keys_in_keychain
-}
-
-/// Actually use keychain for read/write of API keys.
-fn use_keychain_backend() -> bool {
-    prefer_keychain_storage() && keychain_platform_ok()
-}
-
-fn keyring_entry(account: &str) -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| e.to_string())
-}
-
-fn keychain_get(account: &str) -> Option<String> {
-    let entry = keyring_entry(account).ok()?;
-    match entry.get_password() {
-        Ok(s) if !s.is_empty() => Some(s),
-        Ok(_) => None,
-        Err(keyring::Error::NoEntry) => None,
-        Err(e) => {
-            tracing::warn!(
-                target: "grok_app::secrets",
-                account,
-                error = %e,
-                "failed to read secret from OS keychain"
-            );
-            None
-        }
-    }
-}
-
-fn keychain_set(account: &str, value: &str) -> Result<(), String> {
-    if value.is_empty() {
-        return keychain_delete(account);
-    }
-    let entry = keyring_entry(account)?;
-    entry.set_password(value).map_err(|e| e.to_string())
-}
-
-fn keychain_delete(account: &str) -> Result<(), String> {
-    let entry = match keyring_entry(account) {
-        Ok(e) => e,
-        Err(_) => return Ok(()),
-    };
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
+    } else if store_unavailable {
+        tracing::warn!(
+            target: "grok_app::secrets",
+            field = key,
+            message_key = "credentials.storeUnavailable",
+            "OS store unavailable; refusing to use plaintext secret on disk"
+        );
+        None
+    } else {
+        Some(v)
     }
 }
 
@@ -239,88 +172,11 @@ pub fn load_secrets_disk_only() -> SecretsFile {
     read_disk_secrets(&secrets_file())
 }
 
-/// One-shot migration: import plaintext keys from `secrets.json` into the OS keychain
-/// and clear those fields from disk. Safe to call repeatedly.
-///
-/// Only runs when the user has enabled keychain storage.
-/// Returns how many key fields were migrated (0–2). Does not log secret values.
-pub fn migrate_plaintext_keys_to_keychain(disk: &mut SecretsFile) -> usize {
-    if !use_keychain_backend() {
-        return 0;
-    }
-    if !disk_has_plaintext_keys(disk) {
-        return 0;
-    }
-
-    let mut migrated = 0usize;
-    let mut failed = false;
-
-    if non_empty(&disk.official_api_key) {
-        let key = disk.official_api_key.as_deref().unwrap();
-        match keychain_set(KEY_OFFICIAL, key) {
-            Ok(()) => {
-                disk.official_api_key = None;
-                disk.keychain_has_official = true;
-                migrated += 1;
-            }
-            Err(e) => {
-                failed = true;
-                tracing::warn!(
-                    target: "grok_app::secrets",
-                    field = KEY_OFFICIAL,
-                    error = %e,
-                    "failed to migrate secret field to OS keychain; leaving on disk"
-                );
-            }
-        }
-    }
-
-    if non_empty(&disk.relay_api_key) {
-        let key = disk.relay_api_key.as_deref().unwrap();
-        match keychain_set(KEY_RELAY, key) {
-            Ok(()) => {
-                disk.relay_api_key = None;
-                disk.keychain_has_relay = true;
-                migrated += 1;
-            }
-            Err(e) => {
-                failed = true;
-                tracing::warn!(
-                    target: "grok_app::secrets",
-                    field = KEY_RELAY,
-                    error = %e,
-                    "failed to migrate secret field to OS keychain; leaving on disk"
-                );
-            }
-        }
-    }
-
-    if migrated > 0 {
-        let path = secrets_file();
-        if let Err(e) = write_disk_secrets(&path, disk) {
-            tracing::warn!(
-                target: "grok_app::secrets",
-                error = %e,
-                "migrated secrets to keychain but failed to rewrite secrets.json"
-            );
-        } else {
-            tracing::info!(
-                target: "grok_app::secrets",
-                migrated_fields = migrated,
-                partial_failure = failed,
-                "migrated plaintext secrets from secrets.json to OS keychain"
-            );
-        }
-        invalidate_session_cache();
-    }
-
-    migrated
-}
-
 /// Load secrets with values.
 ///
-/// - File mode (default): disk only, never touches Keychain.
-/// - Keychain mode: may unlock OS store once per process (then cached).
+/// Strict mode: `keychain:v1:` references are resolved through the OS store;
+/// plaintext leftovers pass through only until the migration ledger records a
+/// store outage, after which loads fail closed (None) for those fields.
 ///
 /// Use [`load_secrets_disk_only`] when you only need presence / metadata.
 pub fn load_secrets() -> SecretsFile {
@@ -333,234 +189,108 @@ pub fn load_secrets() -> SecretsFile {
 
     let _ = ensure_app_dirs();
     let path = secrets_file();
-    let mut disk = read_disk_secrets(&path);
+    let disk = read_disk_secrets(&path);
+    let store_unavailable = MigrationLedger::is_store_unavailable(&ledger_path());
+    let store = store_handle();
 
-    if !use_keychain_backend() {
-        *SESSION_CACHE.lock() = Some(disk.clone());
-        return disk;
-    }
+    let official = resolve_field(disk.official_api_key.clone(), KEY_OFFICIAL, store_unavailable, store.as_ref());
+    let relay = resolve_field(disk.relay_api_key.clone(), KEY_RELAY, store_unavailable, store.as_ref());
 
-    let _ = migrate_plaintext_keys_to_keychain(&mut disk);
-
-    let official = if disk.keychain_has_official || non_empty(&disk.official_api_key) {
-        keychain_get(KEY_OFFICIAL)
-    } else {
-        None
-    };
-    let relay = if disk.keychain_has_relay || non_empty(&disk.relay_api_key) {
-        keychain_get(KEY_RELAY)
-    } else {
-        None
-    };
-    let from_kc = SecretsFile {
+    let merged = SecretsFile {
         official_api_key: official,
         relay_api_key: relay,
+        relay_base_url: disk.relay_base_url,
+        default_model: disk.default_model,
         keychain_has_official: disk.keychain_has_official,
         keychain_has_relay: disk.keychain_has_relay,
-        relay_base_url: None,
-        default_model: None,
     };
-    let merged = merge_secrets(disk, from_kc);
     *SESSION_CACHE.lock() = Some(merged.clone());
     merged
 }
 
-/// Save secrets. Keychain only when the user setting is on and the platform works.
+/// Save secrets. Strict mode: key material always goes through the OS store;
+/// `secrets.json` only ever receives `keychain:v1:` references. A store outage
+/// blocks the save with an actionable error — never a plaintext fallback.
 pub fn save_secrets(s: &SecretsFile) -> Result<(), String> {
     let _ = ensure_app_dirs();
     let path = secrets_file();
     invalidate_session_cache();
+    let store = store_handle();
 
-    if use_keychain_backend() {
-        let mut disk = strip_keys_for_disk(s);
+    let mut disk = SecretsFile {
+        official_api_key: None,
+        relay_api_key: None,
+        relay_base_url: s.relay_base_url.clone(),
+        default_model: s.default_model.clone(),
+        keychain_has_official: false,
+        keychain_has_relay: false,
+    };
 
-        match &s.official_api_key {
-            Some(k) if !k.is_empty() => {
-                keychain_set(KEY_OFFICIAL, k)?;
-                disk.keychain_has_official = true;
-            }
-            _ => {
-                if s.keychain_has_official || non_empty(&s.official_api_key) {
-                    keychain_delete(KEY_OFFICIAL)?;
-                }
-                disk.keychain_has_official = false;
+    match &s.official_api_key {
+        Some(k) if !k.is_empty() => {
+            store
+                .set(NS_PROVIDER, KEY_OFFICIAL, k)
+                .map_err(|e| e.to_string())?;
+            disk.official_api_key = Some(make_reference(NS_PROVIDER, KEY_OFFICIAL));
+            disk.keychain_has_official = true;
+        }
+        _ => {
+            if s.keychain_has_official || non_empty(&s.official_api_key) {
+                store
+                    .delete(NS_PROVIDER, KEY_OFFICIAL)
+                    .map_err(|e| e.to_string())?;
             }
         }
-        match &s.relay_api_key {
-            Some(k) if !k.is_empty() => {
-                keychain_set(KEY_RELAY, k)?;
-                disk.keychain_has_relay = true;
-            }
-            _ => {
-                if s.keychain_has_relay || non_empty(&s.relay_api_key) {
-                    keychain_delete(KEY_RELAY)?;
-                }
-                disk.keychain_has_relay = false;
+    }
+    match &s.relay_api_key {
+        Some(k) if !k.is_empty() => {
+            store
+                .set(NS_PROVIDER, KEY_RELAY, k)
+                .map_err(|e| e.to_string())?;
+            disk.relay_api_key = Some(make_reference(NS_PROVIDER, KEY_RELAY));
+            disk.keychain_has_relay = true;
+        }
+        _ => {
+            if s.keychain_has_relay || non_empty(&s.relay_api_key) {
+                store
+                    .delete(NS_PROVIDER, KEY_RELAY)
+                    .map_err(|e| e.to_string())?;
             }
         }
-
-        write_disk_secrets(&path, &disk)?;
-        let cached = SecretsFile {
-            official_api_key: s.official_api_key.clone(),
-            relay_api_key: s.relay_api_key.clone(),
-            relay_base_url: disk.relay_base_url.clone(),
-            default_model: disk.default_model.clone(),
-            keychain_has_official: disk.keychain_has_official,
-            keychain_has_relay: disk.keychain_has_relay,
-        };
-        *SESSION_CACHE.lock() = Some(cached);
-        Ok(())
-    } else {
-        // File mode: write full payload; drop any leftover keychain entries best-effort.
-        let mut file = s.clone();
-        if file.keychain_has_official || file.keychain_has_relay {
-            // Pull values if caller only had flags (shouldn't happen after load).
-            if !non_empty(&file.official_api_key) && file.keychain_has_official {
-                file.official_api_key = keychain_get(KEY_OFFICIAL);
-            }
-            if !non_empty(&file.relay_api_key) && file.keychain_has_relay {
-                file.relay_api_key = keychain_get(KEY_RELAY);
-            }
-            if keychain_platform_ok() {
-                let _ = keychain_delete(KEY_OFFICIAL);
-                let _ = keychain_delete(KEY_RELAY);
-            }
-        }
-        file.keychain_has_official = false;
-        file.keychain_has_relay = false;
-        write_disk_secrets(&path, &file)?;
-        *SESSION_CACHE.lock() = Some(file);
-        Ok(())
     }
+
+    write_disk_secrets(&path, &disk)?;
+    let cached = SecretsFile {
+        official_api_key: s.official_api_key.clone(),
+        relay_api_key: s.relay_api_key.clone(),
+        relay_base_url: disk.relay_base_url.clone(),
+        default_model: disk.default_model.clone(),
+        keychain_has_official: disk.keychain_has_official,
+        keychain_has_relay: disk.keychain_has_relay,
+    };
+    *SESSION_CACHE.lock() = Some(cached);
+    Ok(())
 }
 
-/// Backend according to **user setting** (not a live probe). Safe for cold-start UI.
-pub fn configured_backend() -> SecretsBackendKind {
-    if prefer_keychain_storage() {
-        SecretsBackendKind::Keychain
-    } else {
-        SecretsBackendKind::File
-    }
-}
-
-/// Live backend that would be used for the next save/load of key material.
-pub fn active_backend() -> SecretsBackendKind {
-    if use_keychain_backend() {
-        SecretsBackendKind::Keychain
-    } else {
-        SecretsBackendKind::File
-    }
-}
-
-/// Apply settings toggle. Call after `store_api_keys_in_keychain` is saved.
-///
-/// - on → move disk keys into Keychain (may prompt once)
-/// - off → pull keys to disk, clear Keychain (may unlock once)
-pub fn apply_keychain_preference(enabled: bool) -> Result<(), String> {
+/// Full wipe of app secrets (OS store + disk file). Used by reset_app_data.
+pub fn wipe_all_secrets() -> Result<(), String> {
     invalidate_session_cache();
-    let path = secrets_file();
-    let mut disk = read_disk_secrets(&path);
-
-    if enabled {
-        if !keychain_platform_ok() {
-            return Err(
-                "OS keychain is not available; keys stay in secrets.json".into(),
+    let store = store_handle();
+    // Best-effort: a store outage must not block a full app-data reset.
+    for key in [KEY_OFFICIAL, KEY_RELAY] {
+        if let Err(e) = store.delete(NS_PROVIDER, key) {
+            tracing::warn!(
+                target: "grok_app::secrets",
+                field = key,
+                error = %e,
+                "failed to delete secret from OS store during wipe"
             );
         }
-        // Re-read any values already in keychain so we don't drop them.
-        if disk.keychain_has_official && !non_empty(&disk.official_api_key) {
-            disk.official_api_key = keychain_get(KEY_OFFICIAL);
-        }
-        if disk.keychain_has_relay && !non_empty(&disk.relay_api_key) {
-            disk.relay_api_key = keychain_get(KEY_RELAY);
-        }
-
-        let mut meta = strip_keys_for_disk(&disk);
-        let mut official = disk.official_api_key.clone();
-        let mut relay = disk.relay_api_key.clone();
-
-        if non_empty(&official) {
-            keychain_set(KEY_OFFICIAL, official.as_deref().unwrap())?;
-            meta.keychain_has_official = true;
-        }
-        if non_empty(&relay) {
-            keychain_set(KEY_RELAY, relay.as_deref().unwrap())?;
-            meta.keychain_has_relay = true;
-        }
-
-        write_disk_secrets(&path, &meta)?;
-        *SESSION_CACHE.lock() = Some(SecretsFile {
-            official_api_key: official.take(),
-            relay_api_key: relay.take(),
-            relay_base_url: meta.relay_base_url,
-            default_model: meta.default_model,
-            keychain_has_official: meta.keychain_has_official,
-            keychain_has_relay: meta.keychain_has_relay,
-        });
-        tracing::info!(target: "grok_app::secrets", "API keys storage: OS keychain");
-        Ok(())
-    } else {
-        if keychain_platform_ok() {
-            if disk.keychain_has_official || non_empty(&disk.official_api_key) {
-                if let Some(k) = keychain_get(KEY_OFFICIAL) {
-                    disk.official_api_key = Some(k);
-                }
-            }
-            if disk.keychain_has_relay || non_empty(&disk.relay_api_key) {
-                if let Some(k) = keychain_get(KEY_RELAY) {
-                    disk.relay_api_key = Some(k);
-                }
-            }
-            let _ = keychain_delete(KEY_OFFICIAL);
-            let _ = keychain_delete(KEY_RELAY);
-        }
-        disk.keychain_has_official = false;
-        disk.keychain_has_relay = false;
-        write_disk_secrets(&path, &disk)?;
-        *SESSION_CACHE.lock() = Some(disk);
-        tracing::info!(target: "grok_app::secrets", "API keys storage: secrets.json");
-        Ok(())
     }
-}
-
-/// Remove OS keychain entries for app secrets. Safe if entries are missing.
-pub fn clear_keychain_secrets() {
-    invalidate_session_cache();
-    if keychain_platform_ok() {
-        for account in [KEY_OFFICIAL, KEY_RELAY] {
-            if let Err(e) = keychain_delete(account) {
-                tracing::warn!(
-                    target: "grok_app::secrets",
-                    account,
-                    error = %e,
-                    "failed to delete secret from OS keychain"
-                );
-            }
-        }
-    }
-    let path = secrets_file();
-    if path.is_file() {
-        let mut disk = read_disk_secrets(&path);
-        disk.keychain_has_official = false;
-        disk.keychain_has_relay = false;
-        disk.official_api_key = None;
-        disk.relay_api_key = None;
-        let _ = write_disk_secrets(&path, &disk);
-    }
-    tracing::info!(
-        target: "grok_app::secrets",
-        "cleared app secrets from OS keychain"
-    );
-}
-
-/// Full wipe of app secrets (keychain + disk file). Used by reset_app_data.
-pub fn wipe_all_secrets() -> Result<(), String> {
-    clear_keychain_secrets();
     let path = secrets_file();
     if path.is_file() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
-    invalidate_session_cache();
     Ok(())
 }
 
@@ -682,42 +412,6 @@ mod tests {
     }
 
     #[test]
-    fn keychain_roundtrip_when_available() {
-        if !probe_keychain() {
-            return;
-        }
-        let account = format!("test_roundtrip_{}", std::process::id());
-        let entry = keyring::Entry::new(KEYRING_SERVICE, &account).expect("entry");
-        let _ = entry.delete_credential();
-        entry.set_password("unit-test-secret").expect("set");
-        assert_eq!(entry.get_password().unwrap(), "unit-test-secret");
-        entry.delete_credential().expect("delete");
-        assert!(matches!(
-            entry.get_password(),
-            Err(keyring::Error::NoEntry)
-        ));
-    }
-
-    #[test]
-    fn soft_probe_does_not_require_write() {
-        // Soft probe must not create credentials; leftover probe accounts should stay absent.
-        let _ = probe_keychain();
-        if let Ok(entry) =
-            keyring::Entry::new(KEYRING_SERVICE, "__grok_app_keychain_probe__")
-        {
-            // After soft probe, either NoEntry or we cleaned a legacy probe write.
-            match entry.get_password() {
-                Err(keyring::Error::NoEntry) => {}
-                Ok(_) => {
-                    // Legacy leftover is OK; soft probe deletes it when seen.
-                    let _ = entry.delete_credential();
-                }
-                Err(_) => {}
-            }
-        }
-    }
-
-    #[test]
     fn presence_helpers_do_not_need_key_material() {
         let s = SecretsFile {
             keychain_has_official: true,
@@ -729,12 +423,6 @@ mod tests {
         assert!(has_official_key_configured(&s));
         assert!(has_relay_key_configured(&s));
         assert!(!disk_has_plaintext_keys(&s));
-    }
-
-    #[test]
-    fn default_settings_prefer_file_not_keychain() {
-        let s = crate::store::AppSettings::default();
-        assert!(!s.store_api_keys_in_keychain);
     }
 
     #[test]
@@ -757,6 +445,126 @@ mod tests {
         let back = read_disk_secrets(&path);
         assert_eq!(back.official_api_key.as_deref(), Some("sk-file-only"));
         assert_eq!(back.relay_api_key.as_deref(), Some("rk-file"));
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    /// Serialize env/home + global test store mutations (tests run in one process).
+    fn strict_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        GUARD.lock().unwrap()
+    }
+
+    fn strict_test_home(tag: &str) -> PathBuf {
+        let tmp = std::env::temp_dir().join(format!("omp-secrets-strict-{}-{}", tag, std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(&tmp).unwrap();
+        tmp
+    }
+
+    #[test]
+    fn save_then_load_roundtrips_through_store_without_plaintext_on_disk() {
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _g = strict_test_guard();
+        let tmp = strict_test_home("roundtrip");
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
+        let mock = Arc::new(store::MockStore::new());
+        store::install_test_store(mock.clone());
+        invalidate_session_cache();
+
+        let s = SecretsFile {
+            official_api_key: Some("sk-strict-official".into()),
+            relay_api_key: Some("rk-strict-relay".into()),
+            relay_base_url: Some("https://relay.example".into()),
+            default_model: Some("grok-4".into()),
+            ..Default::default()
+        };
+        save_secrets(&s).unwrap();
+
+        // Disk holds references only — never key material.
+        let raw = fs::read_to_string(tmp.join("secrets.json")).unwrap();
+        assert!(!raw.contains("sk-strict-official"));
+        assert!(!raw.contains("rk-strict-relay"));
+        assert!(raw.contains("keychain:v1:provider:official_api_key"));
+        assert!(raw.contains("keychain:v1:provider:relay_api_key"));
+
+        // Load resolves references back through the store.
+        invalidate_session_cache();
+        let loaded = load_secrets();
+        assert_eq!(loaded.official_api_key.as_deref(), Some("sk-strict-official"));
+        assert_eq!(loaded.relay_api_key.as_deref(), Some("rk-strict-relay"));
+        assert_eq!(loaded.relay_base_url.as_deref(), Some("https://relay.example"));
+        assert!(loaded.keychain_has_official && loaded.keychain_has_relay);
+
+        // Clearing a field deletes the store entry (None = cleared semantics).
+        save_secrets(&SecretsFile {
+            keychain_has_official: true,
+            keychain_has_relay: true,
+            relay_base_url: Some("https://relay.example".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(!mock.contains(NS_PROVIDER, KEY_OFFICIAL));
+        assert!(!mock.contains(NS_PROVIDER, KEY_RELAY));
+        invalidate_session_cache();
+        let cleared = load_secrets();
+        assert!(cleared.official_api_key.is_none());
+        assert!(cleared.relay_api_key.is_none());
+
+        store::reset_test_store();
+        invalidate_session_cache();
+        std::env::remove_var("OMP_DESKTOP_HOME");
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn store_unavailable_blocks_save_and_fails_load_closed() {
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _g = strict_test_guard();
+        let tmp = strict_test_home("unavailable");
+        std::env::set_var("OMP_DESKTOP_HOME", &tmp);
+        let mock = Arc::new(store::MockStore::new());
+        store::install_test_store(mock.clone());
+        invalidate_session_cache();
+
+        // Store outage → save is blocked, nothing touches disk or store.
+        mock.set_unavailable(true);
+        let s = SecretsFile {
+            official_api_key: Some("sk-blocked".into()),
+            ..Default::default()
+        };
+        let err = save_secrets(&s).expect_err("save must fail when store is unavailable");
+        assert!(err.contains("credentials.storeUnavailable"));
+        assert!(!tmp.join("secrets.json").is_file());
+        assert!(!mock.contains(NS_PROVIDER, KEY_OFFICIAL));
+
+        // Pre-migration plaintext on disk + recorded store outage → fail closed.
+        mock.set_unavailable(false);
+        write_disk_secrets(
+            &tmp.join("secrets.json"),
+            &SecretsFile {
+                official_api_key: Some("sk-legacy-plain".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut ledger = MigrationLedger::default();
+        ledger.store_unavailable = true;
+        ledger.save(&ledger_path()).unwrap();
+
+        invalidate_session_cache();
+        let loaded = load_secrets();
+        assert!(loaded.official_api_key.is_none());
+
+        // Healthy store + no outage flag → plaintext leftover still readable.
+        ledger.store_unavailable = false;
+        ledger.save(&ledger_path()).unwrap();
+        invalidate_session_cache();
+        let loaded = load_secrets();
+        assert_eq!(loaded.official_api_key.as_deref(), Some("sk-legacy-plain"));
+
+        store::reset_test_store();
+        invalidate_session_cache();
+        std::env::remove_var("OMP_DESKTOP_HOME");
         let _ = fs::remove_dir_all(&tmp);
     }
 }
