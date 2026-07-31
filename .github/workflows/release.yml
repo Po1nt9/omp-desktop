@@ -143,12 +143,29 @@ jobs:
             echo "Updater secrets missing — building without createUpdaterArtifacts"
           fi
 
+      # AC-10.9: channel identity comes from the tag/version suffix.
+      - name: Derive update channel + endpoint
+        id: updchan
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VER="${{ github.ref_name }}"
+          else
+            VER="v$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "channel=$(node scripts/update-channel-lib.mjs channel "$VER")" >> "$GITHUB_OUTPUT"
+          echo "endpoint=$(node scripts/update-channel-lib.mjs endpoint "$GITHUB_REPOSITORY" "$VER")" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$(node scripts/update-channel-lib.mjs prerelease "$VER")" >> "$GITHUB_OUTPUT"
+
       - name: Write release config (updater)
         if: steps.updater.outputs.enabled == 'true'
         shell: bash
         env:
           OMP_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.OMP_DESKTOP_UPDATER_PUBLIC_KEY }}
-          OMP_DESKTOP_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/omp-desktop-latest/latest.json
+          OMP_DESKTOP_UPDATER_ENDPOINT: ${{ steps.updchan.outputs.endpoint }}
+          OMP_DESKTOP_RELEASE_VERSION: ${{ steps.updchan.outputs.version }}
         run: node scripts/build-release-config.mjs
 
       # NOTE: Do NOT pass empty APPLE_* secrets.
@@ -160,7 +177,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OMP_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.OMP_DESKTOP_UPDATER_PUBLIC_KEY }}
-          OMP_DESKTOP_UPDATER_ENDPOINT: https://github.com/${{ github.repository }}/releases/download/omp-desktop-latest/latest.json
+          OMP_DESKTOP_UPDATER_ENDPOINT: ${{ steps.updchan.outputs.endpoint }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
@@ -171,7 +188,7 @@ jobs:
           releaseName: "OMP Desktop v__VERSION__"
           releaseBody: ${{ env.RELEASE_BODY }}
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ steps.updchan.outputs.prerelease }}
           # --config injects pubkey/endpoint + createUpdaterArtifacts.
           # OMP_DESKTOP_UPDATER_* env (above) enables build.rs registration cfg.
           args: ${{ matrix.args }}${{ steps.updater.outputs.enabled == 'true' && ' --config src-tauri/tauri.release.conf.json' || '' }}
@@ -221,8 +238,12 @@ jobs:
           else
             TAG="v$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
           fi
+          CHANNEL="$(node scripts/update-channel-lib.mjs channel "$TAG")"
+          echo "Update channel: $CHANNEL (tag $TAG)"
+          # DUAL_PUBLISH_LEGACY_LATEST: transitional nightly → omp-desktop-latest
+          # dual-publish (AC-10.9 D5). Delete after the first stable release.
           # Fail soft if this tag has no updater archives (partial rebuild).
-          if ! TAG="$TAG" REPO="$GITHUB_REPOSITORY" bash scripts/assemble-updater-manifest.sh; then
+          if ! TAG="$TAG" REPO="$GITHUB_REPOSITORY" CHANNEL="$CHANNEL" DUAL_PUBLISH_LEGACY_LATEST=1 bash scripts/assemble-updater-manifest.sh; then
             echo "::warning::assemble-updater-manifest failed — release installers are still published"
             exit 0
           fi

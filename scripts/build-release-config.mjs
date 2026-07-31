@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { channelFromVersion, endpointFor } from "./update-channel-lib.mjs";
 
 // Write a tauri.release.conf.json with release-only overrides.
 //
@@ -28,11 +29,20 @@ const outputConfigPath = resolve(
 );
 
 const updaterPubkey = process.env.OMP_DESKTOP_UPDATER_PUBLIC_KEY;
-const updaterEndpoint = process.env.OMP_DESKTOP_UPDATER_ENDPOINT;
+// Channel from the release version being built (tag); endpoint precedence:
+// explicit OMP_DESKTOP_UPDATER_ENDPOINT override → channel-derived from repo.
+const releaseVersion = process.env.OMP_DESKTOP_RELEASE_VERSION ?? "";
+const channel = channelFromVersion(releaseVersion);
+const updaterEndpoint =
+  process.env.OMP_DESKTOP_UPDATER_ENDPOINT ??
+  (process.env.GITHUB_REPOSITORY
+    ? endpointFor(process.env.GITHUB_REPOSITORY, channel)
+    : undefined);
 
 const missing = [];
 if (!updaterPubkey) missing.push("OMP_DESKTOP_UPDATER_PUBLIC_KEY");
-if (!updaterEndpoint) missing.push("OMP_DESKTOP_UPDATER_ENDPOINT");
+if (!updaterEndpoint)
+  missing.push("OMP_DESKTOP_UPDATER_ENDPOINT (or GITHUB_REPOSITORY to derive)");
 if (missing.length > 0) {
   console.error(
     `Error: required environment variable(s) missing: ${missing.join(", ")}`,
@@ -59,6 +69,7 @@ const pubkeyPreview =
   updaterPubkey.length > 24
     ? `${updaterPubkey.slice(0, 12)}…${updaterPubkey.slice(-8)}`
     : "(short key)";
+console.log(`Update channel  -> ${channel} (version ${releaseVersion || "unknown"})`);
 console.log(`Updater enabled -> ${updaterEndpoint}`);
 console.log(`Pubkey prefix   -> ${pubkeyPreview}`);
 

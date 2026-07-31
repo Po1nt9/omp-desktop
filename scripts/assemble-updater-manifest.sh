@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Download versioned release assets, map platform archives + .sig files, write
-# latest.json, and clobber-upload to the rolling `omp-desktop-latest` release.
+# the channel manifest, and clobber-upload to the per-channel rolling release
+# (stable → omp-desktop-latest/latest.json, beta → omp-desktop-beta/beta.json,
+# nightly → omp-desktop-nightly/nightly.json; AC-10.9).
 #
 # Usage (CI after all platform builds):
 #   TAG=v0.1.9 REPO=owner/omp-desktop bash scripts/assemble-updater-manifest.sh
 #
-# Optional: PLATFORM_HINTS="darwin-aarch64:OMP-Desktop_0.1.9_aarch64.app.tar.gz,..."
+# Optional: CHANNEL=stable|beta|nightly (default stable), PLATFORM_HINTS=…
 #   Prefer explicit matrix mappings over filename heuristics.
 #
 # Requires: gh, jq. Optional: GH_TOKEN for higher rate limit.
@@ -13,13 +15,34 @@ set -euo pipefail
 
 TAG="${TAG:-}"
 REPO="${REPO:-${GITHUB_REPOSITORY:-}}"
-ROLLING_TAG="${ROLLING_TAG:-omp-desktop-latest}"
+CHANNEL="${CHANNEL:-stable}"
+case "$CHANNEL" in
+  stable)  DEFAULT_ROLLING="omp-desktop-latest";  MANIFEST_NAME="latest.json" ;;
+  beta)    DEFAULT_ROLLING="omp-desktop-beta";    MANIFEST_NAME="beta.json" ;;
+  nightly) DEFAULT_ROLLING="omp-desktop-nightly"; MANIFEST_NAME="nightly.json" ;;
+  *)
+    echo "error: unknown CHANNEL='$CHANNEL' (stable|beta|nightly)" >&2
+    exit 1
+    ;;
+esac
+ROLLING_TAG="${ROLLING_TAG:-$DEFAULT_ROLLING}"
+# Transitional (AC-10.9 D5): nightly also feeds the legacy omp-desktop-latest
+# manifest until the first stable release ships; then delete this flag.
+DUAL_PUBLISH_LEGACY_LATEST="${DUAL_PUBLISH_LEGACY_LATEST:-0}"
 WORK="${WORK:-/tmp/omp-desktop-updater-assets}"
 PLATFORM_HINTS="${PLATFORM_HINTS:-}"
 
 # Resolve the script dir to an absolute path BEFORE any `cd` (we cd into $WORK
 # below; a relative BASH_SOURCE would then fail to resolve sibling scripts).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Dry-run for tests: print derived routing values and exit before any network.
+if [[ "${PRINT_DERIVED:-0}" == "1" ]]; then
+  echo "CHANNEL=$CHANNEL"
+  echo "ROLLING_TAG=$ROLLING_TAG"
+  echo "MANIFEST_NAME=$MANIFEST_NAME"
+  exit 0
+fi
 
 if [[ -z "$TAG" || -z "$REPO" ]]; then
   echo "Usage: TAG=vX.Y.Z REPO=owner/name $0" >&2
@@ -183,29 +206,52 @@ for t in "${TRIPLES[@]}"; do
   echo "  $t"
 done
 
-bash "$SCRIPT_DIR/generate-latest-json.sh" "$VERSION" "${TRIPLES[@]}" > latest.json
-echo "==> latest.json"
-cat latest.json
+bash "$SCRIPT_DIR/generate-latest-json.sh" "$VERSION" "${TRIPLES[@]}" > "$MANIFEST_NAME"
+echo "==> $MANIFEST_NAME"
+cat "$MANIFEST_NAME"
 
 # Ensure rolling release exists.
 if ! gh release view "$ROLLING_TAG" --repo "$REPO" >/dev/null 2>&1; then
   echo "==> Creating rolling release $ROLLING_TAG"
   gh release create "$ROLLING_TAG" \
     --repo "$REPO" \
-    --title "OMP Desktop auto-updater (rolling)" \
-    --notes "Rolling release for the Tauri auto-updater. Prefer versioned vX.Y.Z releases for first-time installs." \
+    --title "OMP Desktop auto-updater (rolling, $CHANNEL)" \
+    --notes "Rolling $CHANNEL feed for the Tauri auto-updater. Prefer versioned vX.Y.Z releases for first-time installs." \
     --latest=false || true
 fi
 
-echo "==> Uploading archives + latest.json to $ROLLING_TAG"
+echo "==> Uploading archives + $MANIFEST_NAME to $ROLLING_TAG"
 declare -A SEEN=()
-for f in "${UPLOAD_FILES[@]}" latest.json; do
+for f in "${UPLOAD_FILES[@]}" "$MANIFEST_NAME"; do
   [[ -n "${SEEN[$f]:-}" ]] && continue
   SEEN[$f]=1
   gh release upload "$ROLLING_TAG" "$f" --repo "$REPO" --clobber
 done
 
-# Also attach latest.json to the versioned release for humans / debugging.
-gh release upload "$TAG" latest.json --repo "$REPO" --clobber || true
+# Also attach the manifest to the versioned release for humans / debugging.
+gh release upload "$TAG" "$MANIFEST_NAME" --repo "$REPO" --clobber || true
+
+# Transitional dual-publish (D5): installed v0.3.x-nightly builds still poll
+# omp-desktop-latest/latest.json. Feed it from nightly tags until the first
+# stable release ships. Manifest URLs keep pointing at the nightly rolling
+# release (public); archives are mirrored so both locations serve. Nightly
+# only — stable/beta must never touch another channel's feed.
+if [[ "$CHANNEL" == "nightly" && "$DUAL_PUBLISH_LEGACY_LATEST" == "1" ]]; then
+  echo "==> Transitional dual-publish: latest.json → omp-desktop-latest"
+  cp "$MANIFEST_NAME" latest.json
+  if ! gh release view "omp-desktop-latest" --repo "$REPO" >/dev/null 2>&1; then
+    gh release create "omp-desktop-latest" \
+      --repo "$REPO" \
+      --title "OMP Desktop auto-updater (rolling, stable)" \
+      --notes "Rolling stable feed for the Tauri auto-updater." \
+      --latest=false || true
+  fi
+  declare -A SEEN_LEGACY=()
+  for f in "${UPLOAD_FILES[@]}" latest.json; do
+    [[ -n "${SEEN_LEGACY[$f]:-}" ]] && continue
+    SEEN_LEGACY[$f]=1
+    gh release upload "omp-desktop-latest" "$f" --repo "$REPO" --clobber
+  done
+fi
 
 echo "==> Done"

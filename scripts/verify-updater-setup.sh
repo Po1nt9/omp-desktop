@@ -86,15 +86,25 @@ else
   note "OMP_DESKTOP_UPDATER_ENDPOINT optional locally; CI sets it for release builds"
 fi
 
-# 5) Optional live latest.json
+# 5) Optional live channel manifest (OMP_DESKTOP_UPDATE_CHANNEL=stable|beta|nightly)
 REPO="${GITHUB_REPOSITORY:-Po1nt9/omp-desktop}"
-LATEST_URL="https://github.com/${REPO}/releases/download/omp-desktop-latest/latest.json"
+CHANNEL="${OMP_DESKTOP_UPDATE_CHANNEL:-stable}"
+case "$CHANNEL" in
+  stable)  ROLLING="omp-desktop-latest";  MANIFEST="latest.json" ;;
+  beta)    ROLLING="omp-desktop-beta";    MANIFEST="beta.json" ;;
+  nightly) ROLLING="omp-desktop-nightly"; MANIFEST="nightly.json" ;;
+  *)
+    echo "unknown OMP_DESKTOP_UPDATE_CHANNEL='$CHANNEL' (stable|beta|nightly)" >&2
+    exit 1
+    ;;
+esac
+LATEST_URL="https://github.com/${REPO}/releases/download/${ROLLING}/${MANIFEST}"
 if [[ $FETCH_LATEST -eq 1 ]]; then
   if command -v curl >/dev/null 2>&1; then
-    code=$(curl -sS -o /tmp/omp-desktop-latest.json -w '%{http_code}' -L "$LATEST_URL" || true)
+    code=$(curl -sS -o /tmp/omp-desktop-${CHANNEL}.json -w '%{http_code}' -L "$LATEST_URL" || true)
     if [[ "$code" == "200" ]]; then
       if command -v python3 >/dev/null 2>&1; then
-        if python3 -c 'import json,sys; json.load(open("/tmp/omp-desktop-latest.json"))' 2>/dev/null; then
+        if python3 -c 'import json,sys; json.load(open("/tmp/omp-desktop-${CHANNEL}.json"))' 2>/dev/null; then
           pass "latest.json fetchable and valid JSON ($LATEST_URL)"
         else
           fail "latest.json HTTP 200 but not valid JSON"
