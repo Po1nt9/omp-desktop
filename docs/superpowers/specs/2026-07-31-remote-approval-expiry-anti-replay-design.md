@@ -79,7 +79,7 @@ impl ReplayGuard {
 | 渠道 | timestamp | nonce | 说明 |
 |---|---|---|---|
 | wecom（webhook） | query `timestamp` | query `nonce` | `parse_wecom_sig`（wecom.rs:369-390）已解析，接进 IncomingMessage |
-| LINE（webhook） | 无 | `X-Line-Signature` 头 | 签名 = HMAC(body)；同 body 重放 → 同签名 → nonce 缓存拦精确重放（无 ts 无法做 freshness，文档化） |
+| LINE（webhook） | 无 | `X-Line-Signature` 头 + 每事件 `replyToken`（`"{sig}:{reply_token}"`） | 签名 = HMAC(body)；同一 POST 可含多事件（共享签名），故 nonce 必须含事件级判别符；重放 POST → 同 sig+token 对 → 缓存拦截（无 ts 无法做 freshness，文档化） |
 | generic | 无 | 无 | 放行（v1 不伪造能力） |
 | feishu/telegram/discord/slack/dingtalk/qq/qqbot/matrix/weixin/weibo/wps | 无 | 无 | WS/长轮询，平台认证传输 + dedup 覆盖 |
 
