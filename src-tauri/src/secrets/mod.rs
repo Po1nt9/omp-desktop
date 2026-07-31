@@ -24,6 +24,9 @@ use parking_lot::Mutex;
 use crate::paths::{ensure_app_dirs, secrets_file};
 use crate::store::SecretsFile;
 
+pub mod migration;
+pub mod store;
+
 /// Reverse-DNS service id shared with app data layout (`com.omp-desktop.omp-desktop`).
 const KEYRING_SERVICE: &str = "com.omp-desktop.omp-desktop";
 
