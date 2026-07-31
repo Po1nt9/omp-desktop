@@ -1370,6 +1370,16 @@ impl AcpClient {
     }
 }
 
+/// `AcpClient` doubles as the v1 transport: advertised
+/// `_omp/desktop/v1/<method>` calls are plain JSON-RPC requests over the
+/// same session pipe, so dispatch is generic forwarding to `request()`.
+#[async_trait::async_trait]
+impl crate::omp_desktop_v1::transport::V1Transport for AcpClient {
+    async fn dispatch_v1(&self, full_method: &str, params: Value) -> Result<Value, String> {
+        self.request(full_method, params).await
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PermissionOutcome {
     Selected { option_id: String },
