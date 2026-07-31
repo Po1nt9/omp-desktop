@@ -150,6 +150,23 @@ pub fn recover_session_journal(app_session_id: &str) -> Option<RecoveryReport> {
     }
 }
 
+/// Write-ahead TurnStart (design D1): append the boundary AND persist the
+/// journal immediately, so a crash mid-turn leaves a dangling TurnStart on
+/// disk that recovery can detect. Without this, the journal only reflects
+/// the last clean TurnEnd save and crash-vs-clean-exit is indistinguishable.
+/// Best-effort persistence — a save failure only loses crash detectability,
+/// never blocks the turn. Returns the new event's stable id.
+pub fn append_turn_start_durable(journal: &mut EventJournal) -> String {
+    let id = journal.append(EventKind::TurnStart, serde_json::json!({}));
+    if let Err(err) = journal.save_to(&EventJournal::standard_path(journal.session_id())) {
+        tracing::warn!(
+            "event journal write-ahead save failed for {}: {err}",
+            journal.session_id()
+        );
+    }
+    id
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,5 +351,24 @@ mod tests {
         j.save_to(&EventJournal::standard_path(sid)).unwrap();
         assert_eq!(recover_session_journal(sid), Some(RecoveryReport::Clean));
         assert!(crate::store::load_messages(sid).is_empty());
+    }
+
+    // --- append_turn_start_durable ---
+
+    #[test]
+    fn append_turn_start_durable_persists_immediately() {
+        let (_m, _e, _dir) = test_home("wal");
+        let sid = "sess-wal";
+        let mut j = EventJournal::new(sid.into());
+
+        let event_id = append_turn_start_durable(&mut j);
+        assert!(event_id.starts_with("evt_"));
+
+        // The TurnStart is on disk WITHOUT waiting for TurnEnd save — this is
+        // the write-ahead property that makes mid-turn crashes detectable.
+        let on_disk = EventJournal::load_from(&EventJournal::standard_path(sid)).unwrap();
+        assert_eq!(on_disk.events().len(), 1);
+        assert_eq!(on_disk.events()[0].kind, EventKind::TurnStart);
+        assert_eq!(on_disk.events()[0].id, event_id);
     }
 }

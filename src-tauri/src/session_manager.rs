@@ -4599,11 +4599,12 @@ impl SessionManager {
             s.provider_retry_attempt = 0;
             s.provider_retry_aborted = false;
             s.tools_this_turn = 0;
-            // Plan 3 Task 5: record TurnStart in the event journal so the
-            // boundary is durable for crash-replay. Best-effort — a missing
-            // journal (mock / pre-spawn shell) just skips the append.
+            // Plan 3 Task 5 + AC-1.10 D1: record TurnStart in the event
+            // journal AND write-ahead persist it, so a mid-turn crash leaves
+            // a dangling boundary on disk for recovery to detect. Best-effort
+            // — a missing journal (mock / pre-spawn shell) skips the append.
             if let Some(journal) = s.event_journal.as_mut() {
-                journal.append(EventKind::TurnStart, serde_json::json!({}));
+                crate::event_journal::recovery::append_turn_start_durable(journal);
             }
 
             let mut agent_prompt = text.clone();
