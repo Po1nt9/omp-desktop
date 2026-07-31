@@ -10,6 +10,18 @@ import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+const PLACEHOLDER_RE = /\{(\w+)\}/g;
+
+/**
+ * Sorted unique `{var}` placeholder names in a message string. Same regex
+ * shape as the frontend `interpolate()` (src/i18n/index.ts).
+ */
+export function extractPlaceholders(text) {
+  const set = new Set();
+  for (const m of text.matchAll(PLACEHOLDER_RE)) set.add(m[1]);
+  return [...set].sort();
+}
+
 function transpileTs(filePath) {
   const source = fs.readFileSync(filePath, "utf8");
   return ts.transpileModule(source, {
@@ -68,6 +80,13 @@ export function checkCatalog(messages) {
     return violations;
   }
 
+  const enTable = messages.en ?? {};
+  const enPlaceholders = new Map();
+  for (const k of enKeys) {
+    const v = enTable[k];
+    if (typeof v === "string") enPlaceholders.set(k, extractPlaceholders(v));
+  }
+
   for (const loc of locales) {
     const table = messages[loc];
     if (!table || typeof table !== "object") {
@@ -87,6 +106,17 @@ export function checkCatalog(messages) {
         violations.push(`${loc}.${k}: value is not a string (got ${typeof v})`);
       } else if (v.trim().length === 0) {
         violations.push(`${loc}.${k}: value is empty or whitespace-only`);
+      } else if (loc !== "en" && enPlaceholders.has(k)) {
+        const want = enPlaceholders.get(k);
+        const got = extractPlaceholders(v);
+        const missing = want.filter((p) => !got.includes(p));
+        const extra = got.filter((p) => !want.includes(p));
+        if (missing.length || extra.length) {
+          const parts = [];
+          if (missing.length) parts.push(`missing: ${missing.join(", ")}`);
+          if (extra.length) parts.push(`extra: ${extra.join(", ")}`);
+          violations.push(`${loc}.${k}: placeholder mismatch (${parts.join("; ")})`);
+        }
       }
     }
 

@@ -41,9 +41,11 @@ t(locale, "sessions.deleteConfirm", { name })
 ```
 
 **Honest boundary:** no ICU MessageFormat — no plural/select rules today.
-Design §12's ICU parameter/type validation is roadmap; the current gate
-checks key parity, value types, and emptiness, not ICU correctness. Write
-copy that works without plurals (e.g. `"{count} item(s)"`).
+Design §12's ICU parameter/type validation is roadmap; since 2026-07-31 the
+gate enforces `{var}` placeholder-set parity across locales (AC-3.4) — the
+complete validation surface for this codebase — but there is still no ICU
+syntax to check. Write copy that works without plurals (e.g.
+`"{count} item(s)"`).
 
 ## 4. Runtime-visible content (envelope)
 
@@ -67,7 +69,9 @@ pnpm check:i18n
 ```
 
 Validates, across all three locales: key parity (missing/extra), value types,
-non-empty values. It is part of 1.0 acceptance (AC-2.5 / AC-3.1–3.3).
+non-empty values, and `{var}` placeholder-set parity (AC-3.4). It is part of
+1.0 acceptance (AC-2.5 / AC-3.1–3.4). Gate-script unit tests:
+`node --test scripts/check-i18n-completeness.test.mjs`.
 
 ## 7. File index
 
