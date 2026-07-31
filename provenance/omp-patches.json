@@ -21,14 +21,21 @@
       "branch": "desktop-v1-protocol",
       "description": "Plan 4: wire v1 handlers to real OMP resources (MCP, diagnostics, credentials, skills, config) plus negotiate_capability in Rust host",
       "plan": "2026-07-29-plan-4-config-provider-mcp-skills-credentials",
-      "commit": "db4dca7cd"
+      "commit": "db4dca7cdf89f24baf0a52df872101bfb7e42189"
     },
     {
       "id": "plan-5-todo-subagent-branch-rewind-attachments-diagnostics",
       "branch": "desktop-v1-protocol",
       "description": "Plan 5: add todo.list, subagents.status/setEnabled, sessions.fork/rewindPoints/rewind/resolveMedia, diagnostics.exportBundle v1 methods; replace queue/steer stubs with real backing",
       "plan": "2026-07-29-plan-5-todo-subagent-branch-rewind-attachments-diagnostics",
-      "commit": "a2eb2070b"
+      "commit": "a2eb2070baaa984256b4a4d2f4c6513d08515f71"
+    },
+    {
+      "id": "plan-7-cursor-provider-removal",
+      "branch": "desktop-v1-protocol",
+      "description": "Fork decoupling: remove cursor provider (non-OMP provider cleanup during Plan 7 Runtime Bridge work)",
+      "plan": "2026-07-29-plan-7-remote-hub",
+      "commit": "64db4c38a1b570efc8a2085e65d86e3ae23e4ef2"
     }
   ]
 }

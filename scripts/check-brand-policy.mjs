@@ -63,7 +63,15 @@ export function scanText(file, text) {
   }
   if (userVisiblePathPatterns.some((pattern) => pattern.test(normalizedFile))) {
     const pattern = new RegExp(lowercaseBrand.source, lowercaseBrand.flags);
+    // Master design §2.4 item 26: command/executable/env-var/path/protocol/identifier
+    // technical tokens may use lowercase. Inline-code spans (`` `omp` ``) in
+    // user-visible markdown are technical identifiers (CLI binary names, etc.),
+    // not product brand — exclude them from the lowercase-brand rule.
+    const codeSpans = [];
+    for (const m of text.matchAll(/`[^`\n]*`/g)) codeSpans.push([m.index, m.index + m[0].length]);
+    const inCodeSpan = (index, length) => codeSpans.some(([s, e]) => index >= s && index + length <= e);
     for (const match of text.matchAll(pattern)) {
+      if (inCodeSpan(match.index, match[0].length)) continue;
       violations.push({ file: normalizedFile, rule: "lowercase-user-visible-omp", match: match[0], index: match.index });
     }
   }

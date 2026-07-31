@@ -45,6 +45,10 @@ export const wholeFileAllowlist = new Set([
   "docs/superpowers/plans/2026-07-29-plan-8-channels.md",
   "docs/superpowers/plans/2026-07-29-plan-9-os-packaging.md",
   "docs/superpowers/plans/2026-07-29-plan-10-1.0-acceptance.md",
+  "docs/superpowers/plans/2026-07-31-plan-10-phase-1-acceptance-prep.md",
+  "docs/release/1.0-acceptance-matrix.md",
+  "docs/release/security-audit-checklist.md",
+  "docs/release/test-coverage-audit.md",
 ]);
 
 export const directoryExclusions = [
