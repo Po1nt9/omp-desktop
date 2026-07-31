@@ -58,12 +58,44 @@ pub fn parse_semver(raw: &str) -> Option<(u64, u64, u64)> {
     Some((major, minor, patch))
 }
 
-/// True when `remote` is a higher semver than `current`.
+/// Full semver parse (prerelease-aware) for update comparison.
+fn parse_full_semver(raw: &str) -> Option<semver::Version> {
+    let s = raw.trim().trim_start_matches(['v', 'V']);
+    semver::Version::parse(s).ok()
+}
+
+/// True when `remote` is a higher semver than `current` (prerelease-aware:
+/// `0.3.1-nightly.20260731` > `0.3.1-nightly.20260730`, `1.0.0` >
+/// `1.0.0-nightly.1`). Unparseable input → false (never offer a bogus update).
 pub fn is_remote_newer(current: &str, remote: &str) -> bool {
-    match (parse_semver(current), parse_semver(remote)) {
+    match (parse_full_semver(current), parse_full_semver(remote)) {
         (Some(a), Some(b)) => b > a,
         _ => false,
     }
+}
+
+/// Pick the newest release belonging to `channel` from a `/releases` list
+/// payload (drafts excluded). Channel membership is defined by the tag's
+/// prerelease segment via [`crate::update_channel::UpdateChannel::owns_tag`];
+/// ordering is semver, not list position (AC-10.9, D6).
+pub fn select_release_for_channel<'a>(
+    releases: &'a [Value],
+    channel: crate::update_channel::UpdateChannel,
+) -> Option<&'a Value> {
+    releases
+        .iter()
+        .filter(|r| r.get("draft").and_then(|d| d.as_bool()) != Some(true))
+        .filter(|r| {
+            r.get("tag_name")
+                .and_then(|t| t.as_str())
+                .map(|t| channel.owns_tag(t))
+                .unwrap_or(false)
+        })
+        .max_by(|a, b| {
+            let ta = a.get("tag_name").and_then(|t| t.as_str()).unwrap_or("");
+            let tb = b.get("tag_name").and_then(|t| t.as_str()).unwrap_or("");
+            parse_full_semver(ta).cmp(&parse_full_semver(tb))
+        })
 }
 
 fn pick_platform_asset(assets: Option<&Vec<Value>>) -> (Option<String>, Option<String>) {
@@ -390,9 +422,16 @@ async fn fetch_via_html_redirect(
     ))
 }
 
-/// Query GitHub for the latest release and compare to this build.
+/// Query GitHub for the latest release *on this build's channel* and compare.
+///
+/// Stable keeps `/releases/latest` + the HTML redirect fallback. Beta/nightly
+/// list recent releases and pick the newest tag their channel owns — the
+/// `/latest` endpoints are stable-only by GitHub semantics, and the HTML
+/// redirect resolves to the newest stable tag (wrong channel), so non-stable
+/// channels skip the HTML fallback and surface API errors directly (AC-10.9).
 pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
     let current = env!("CARGO_PKG_VERSION");
+    let channel = crate::update_channel::UpdateChannel::from_version(current);
     let api_url = std::env::var("GROK_APP_RELEASES_URL")
         .unwrap_or_else(|_| DEFAULT_RELEASES_API_URL.into());
     let html_url = std::env::var("GROK_APP_RELEASES_HTML_URL")
@@ -410,15 +449,42 @@ pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
     );
     let client = http_client(&ua)?;
 
-    match fetch_via_api(&client, &api_url).await {
-        Ok(v) => parse_github_release(current, &v),
-        Err(api_err) => {
-            tracing::warn!(error = %api_err, "app update API failed; trying HTML redirect fallback");
-            match fetch_via_html_redirect(&client, &html_url, current).await {
-                Ok(check) => Ok(check),
-                Err(fallback_err) => Err(format!("{api_err} | {fallback_err}")),
+    if channel == crate::update_channel::UpdateChannel::Stable {
+        return match fetch_via_api(&client, &api_url).await {
+            Ok(v) => parse_github_release(current, &v),
+            Err(api_err) => {
+                tracing::warn!(error = %api_err, "app update API failed; trying HTML redirect fallback");
+                match fetch_via_html_redirect(&client, &html_url, current).await {
+                    Ok(check) => Ok(check),
+                    Err(fallback_err) => Err(format!("{api_err} | {fallback_err}")),
+                }
             }
-        }
+        };
+    }
+
+    let list_url = format!(
+        "{}?per_page=30",
+        api_url.strip_suffix("/latest").unwrap_or(&api_url)
+    );
+    let v = fetch_via_api(&client, &list_url).await?;
+    let empty = Vec::new();
+    let releases = v.as_array().unwrap_or(&empty);
+    match select_release_for_channel(releases, channel) {
+        Some(release) => parse_github_release(current, release),
+        // No release published on this channel yet — report up-to-date,
+        // pointing at the releases page (spec §5: never error-pop for this).
+        None => Ok(AppUpdateCheck {
+            current_version: current.to_string(),
+            latest_version: current.to_string(),
+            update_available: false,
+            release_name: None,
+            html_url: DEFAULT_RELEASES_PAGE.to_string(),
+            published_at: None,
+            body: None,
+            asset_names: vec![],
+            download_url: None,
+            download_name: None,
+        }),
     }
 }
 
@@ -426,6 +492,58 @@ pub async fn check_app_update() -> Result<AppUpdateCheck, String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn is_remote_newer_prerelease_aware() {
+        // Channel-internal ordering (the old tuple parser called these equal).
+        assert!(is_remote_newer(
+            "0.3.1-nightly.20260730",
+            "0.3.1-nightly.20260731"
+        ));
+        assert!(is_remote_newer("1.1.0-beta.1", "v1.1.0-beta.2"));
+        // Cross-channel semver truth: stable outranks same-version prerelease.
+        assert!(is_remote_newer("1.0.0-nightly.20260801", "1.0.0"));
+        assert!(!is_remote_newer("1.0.0", "1.0.0-nightly.20260801"));
+        // Same version on the same channel → no update.
+        assert!(!is_remote_newer("0.3.1-nightly", "v0.3.1-nightly"));
+    }
+
+    #[test]
+    fn select_release_for_channel_picks_newest_owned_tag() {
+        let releases = json!([
+            {"tag_name": "v1.0.0", "draft": false},
+            {"tag_name": "v1.1.0-nightly.20260801", "draft": false},
+            {"tag_name": "v1.1.0-nightly.20260730", "draft": false},
+            {"tag_name": "v1.1.0-beta.1", "draft": false},
+            {"tag_name": "v9.9.9-nightly.draft", "draft": true}
+        ]);
+        let arr = releases.as_array().unwrap();
+        use crate::update_channel::UpdateChannel::*;
+        let n = select_release_for_channel(arr, Nightly).unwrap();
+        assert_eq!(
+            n.get("tag_name").and_then(|t| t.as_str()),
+            Some("v1.1.0-nightly.20260801")
+        );
+        let b = select_release_for_channel(arr, Beta).unwrap();
+        assert_eq!(
+            b.get("tag_name").and_then(|t| t.as_str()),
+            Some("v1.1.0-beta.1")
+        );
+        let s = select_release_for_channel(arr, Stable).unwrap();
+        assert_eq!(s.get("tag_name").and_then(|t| t.as_str()), Some("v1.0.0"));
+    }
+
+    #[test]
+    fn select_release_for_channel_none_when_no_owned_tag() {
+        let releases = json!([{"tag_name": "v1.0.0"}]);
+        let arr = releases.as_array().unwrap();
+        assert!(
+            select_release_for_channel(arr, crate::update_channel::UpdateChannel::Nightly).is_none()
+        );
+        assert!(
+            select_release_for_channel(&[], crate::update_channel::UpdateChannel::Stable).is_none()
+        );
+    }
 
     #[test]
     fn parse_semver_strips_v_and_prerelease() {
