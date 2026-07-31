@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use crate::acp_client::{AcpClient, AcpEvent, PromptBlock, SpawnOptions, StreamKind};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use tracing::Instrument;
 
 #[derive(Clone)]
 struct PendingPick {
@@ -1014,39 +1015,46 @@ impl Engine {
         let drained = Arc::new(tokio::sync::Notify::new());
         let buf_clone = text_buf.clone();
         let drained_clone = drained.clone();
-        tokio::spawn(async move {
-            while let Some(ev) = events.recv().await {
-                if let AcpEvent::Stream {
-                    kind: StreamKind::Assistant,
-                    text,
-                    done,
-                    ..
-                } = ev
-                {
-                    // Accumulate any text from this chunk (the terminal
-                    // marker carries empty text, so this is a no-op then).
-                    buf_clone.lock().push_str(&text);
-                    if done {
-                        // Drain barrier: every chunk sent before this marker
-                        // has now been accumulated. Unblocks the turn that is
-                        // `await`ing `notified()` before reading `text_buf`.
-                        //
-                        // Use `notify_one` (not `notify_waiters`): the turn
-                        // can only register its waiter AFTER `prompt()` returns
-                        // (the marker is enqueued inside `prompt()`), and the
-                        // collector may process this marker before the turn is
-                        // rescheduled. `notify_one` stores a single permit when
-                        // there is no waiter yet, so the later `notified()`
-                        // resolves immediately instead of hanging. The permit
-                        // is always consumed by the originating turn, and a
-                        // failed `prompt()` sends no terminal marker, so no
-                        // stray permit leaks across turns.
-                        drained_clone.notify_one();
+        // AC-1.13: inherit the caller's span so collector logs keep the
+        // message's trace_id (Span::current() at spawn time, inside the
+        // already-instrumented handle future; none when spawned outside
+        // a message context — a no-op then).
+        tokio::spawn(
+            async move {
+                while let Some(ev) = events.recv().await {
+                    if let AcpEvent::Stream {
+                        kind: StreamKind::Assistant,
+                        text,
+                        done,
+                        ..
+                    } = ev
+                    {
+                        // Accumulate any text from this chunk (the terminal
+                        // marker carries empty text, so this is a no-op then).
+                        buf_clone.lock().push_str(&text);
+                        if done {
+                            // Drain barrier: every chunk sent before this marker
+                            // has now been accumulated. Unblocks the turn that is
+                            // `await`ing `notified()` before reading `text_buf`.
+                            //
+                            // Use `notify_one` (not `notify_waiters`): the turn
+                            // can only register its waiter AFTER `prompt()` returns
+                            // (the marker is enqueued inside `prompt()`), and the
+                            // collector may process this marker before the turn is
+                            // rescheduled. `notify_one` stores a single permit when
+                            // there is no waiter yet, so the later `notified()`
+                            // resolves immediately instead of hanging. The permit
+                            // is always consumed by the originating turn, and a
+                            // failed `prompt()` sends no terminal marker, so no
+                            // stray permit leaks across turns.
+                            drained_clone.notify_one();
+                        }
                     }
                 }
+                tracing::info!("remote_im: runtime event collector exited");
             }
-            tracing::info!("remote_im: runtime event collector exited");
-        });
+            .instrument(tracing::Span::current()),
+        );
 
         let entry = Arc::new(RuntimeEntry {
             acp,
@@ -1422,6 +1430,54 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(3), engine.handle(msg))
             .await
             .expect("handle(/p) deadlocked on pending mutex re-entry");
+    }
+
+    /// AC-1.13: logs emitted by Engine::handle — including anything the
+    /// runtime event collector logs — must carry the message's trace_id
+    /// when the caller (runtime pump) instrumented the handle future.
+    ///
+    /// Uses the process-wide capture layer (not a scoped subscriber):
+    /// "handle begin" is a callsite shared with other tests, and scoped
+    /// installs lose the callsite-interest cache race under parallelism.
+    #[tokio::test(flavor = "current_thread")]
+    async fn engine_handle_logs_carry_trace_id() {
+        let events = crate::trace::test_capture::global_events();
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let msg = IncomingMessage {
+            channel: "weixin".into(),
+            instance_id: "test-trace".into(),
+            message_id: "m-trace".into(),
+            chat_id: "peer@im.wechat".into(),
+            chat_type: "p2p".into(),
+            sender_id: "peer@im.wechat".into(),
+            content: "inspect this repository".into(),
+            mentioned_bot: true,
+            attachments: vec![],
+            timestamp: None,
+            nonce: None,
+        };
+        let span = crate::trace::remote_msg_span("tid-eng", &msg.channel, &msg.message_id);
+        // Fail-closed path (no Runtime) still exercises handle's log lines.
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            engine.handle(msg).instrument(span),
+        )
+        .await
+        .expect("handle timed out");
+        let captured = events.lock().clone();
+        let ours: Vec<_> = captured
+            .iter()
+            .filter(|e| e.trace_ids.iter().any(|t| t == "tid-eng"))
+            .collect();
+        assert!(
+            !ours.is_empty(),
+            "no handle logs carried tid-eng (captured: {captured:?})"
+        );
+        assert!(
+            ours.iter().any(|e| e.message.contains("handle begin")),
+            "handle begin log missing trace context (ours: {ours:?})"
+        );
     }
 
     /// Plan 1 fail-closed: every remote Agent turn must surface

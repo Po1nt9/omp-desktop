@@ -48,6 +48,9 @@ pub(crate) mod test_capture {
     #[derive(Clone, Default)]
     pub(crate) struct CaptureLayer {
         events: Arc<Mutex<Vec<Captured>>>,
+        /// Global mode: only record events inside a traced span, so a
+        /// process-wide install ignores unrelated tests' noise.
+        traced_only: bool,
     }
 
     impl CaptureLayer {
@@ -116,6 +119,9 @@ pub(crate) mod test_capture {
                     }
                 }
             }
+            if self.traced_only && trace_ids.is_empty() {
+                return;
+            }
             self.events.lock().push(Captured {
                 message: v.message.unwrap_or_default(),
                 trace_ids,
@@ -126,6 +132,32 @@ pub(crate) mod test_capture {
     /// Subscriber = registry + this layer (no fmt, no filter).
     pub(crate) fn subscriber(layer: CaptureLayer) -> impl Subscriber {
         tracing_subscriber::registry().with(layer)
+    }
+
+    /// Process-wide capture for tests that exercise *shared* callsites
+    /// (e.g. `Engine::handle` logs, also emitted by other tests).
+    ///
+    /// Why not scoped `set_default` there: tracing caches each callsite's
+    /// subscriber interest process-wide, and a concurrent test emitting the
+    /// same callsite with no subscriber can bake `Interest::never()` into
+    /// that cache — racing with (and starving) a scoped install. A global
+    /// default participates in the interest union deterministically, and
+    /// `traced_only` keeps foreign no-span events out of the buffer.
+    pub(crate) fn global_events() -> Arc<Mutex<Vec<Captured>>> {
+        static GLOBAL: std::sync::OnceLock<Arc<Mutex<Vec<Captured>>>> = std::sync::OnceLock::new();
+        GLOBAL
+            .get_or_init(|| {
+                let events = Arc::new(Mutex::new(Vec::new()));
+                let layer = CaptureLayer {
+                    events: events.clone(),
+                    traced_only: true,
+                };
+                // Err means another global default exists (none in this
+                // codebase); events still accumulate via the shared Arc.
+                let _ = tracing::subscriber::set_global_default(subscriber(layer));
+                events
+            })
+            .clone()
     }
 }
 

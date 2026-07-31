@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
+use tracing::Instrument;
 
 pub struct RuntimeHandle {
     cancel_tx: watch::Sender<bool>,
@@ -38,6 +39,17 @@ impl RuntimeHandle {
         // Do NOT clear outbound here: in-flight handle tasks may still reply.
         // A subsequent start_runtime builds a fresh OutboundRouter.
     }
+}
+
+/// AC-1.13 birth point: one inbound channel message = one trace unit.
+/// Called once per message at the pump's mpsc convergence point, so
+/// every channel (weixin/wecom/line/…) is covered without per-channel code.
+fn pump_span_for(msg: &IncomingMessage) -> tracing::Span {
+    crate::trace::remote_msg_span(
+        &crate::trace::new_trace_id(),
+        &msg.channel,
+        &msg.message_id,
+    )
 }
 
 pub async fn start_runtime(
@@ -118,15 +130,20 @@ pub async fn start_runtime(
     let pump = tokio::spawn(async move {
         tracing::info!("remote_im: message pump started");
         while let Some(msg) = msg_rx.recv().await {
+            // AC-1.13: birth one trace_id per inbound message; both the
+            // inline (quick) and detached branches carry it (spec §4.2).
+            let span = pump_span_for(&msg);
             // Log metadata only — never the prompt content (SA-L.1 / AC-8.8).
-            tracing::info!(
-                channel = %msg.channel,
-                instance = %msg.instance_id,
-                chat = %msg.chat_id,
-                sender = %msg.sender_id,
-                content_len = msg.content.len(),
-                "remote_im: engine recv"
-            );
+            span.in_scope(|| {
+                tracing::info!(
+                    channel = %msg.channel,
+                    instance = %msg.instance_id,
+                    chat = %msg.chat_id,
+                    sender = %msg.sender_id,
+                    content_len = msg.content.len(),
+                    "remote_im: engine recv"
+                );
+            });
             let e = eng.clone();
             let trimmed = msg.content.trim();
             // Control-plane messages are awaited inline (must not be dropped).
@@ -136,11 +153,14 @@ pub async fn start_runtime(
                 || trimmed == "0"
                 || trimmed.eq_ignore_ascii_case("cancel");
             if quick {
-                e.handle(msg).await;
+                e.handle(msg).instrument(span).await;
             } else {
-                tokio::spawn(async move {
-                    e.handle(msg).await;
-                });
+                tokio::spawn(
+                    async move {
+                        e.handle(msg).await;
+                    }
+                    .instrument(span),
+                );
             }
         }
         tracing::warn!("remote_im: message pump exited (all senders dropped)");
@@ -193,5 +213,42 @@ mod tests {
         assert!(h.engine().approval_expires_at().is_some());
         h.engine().revoke_approval();
         assert!(!h.engine().approval_active());
+    }
+
+    fn sample_msg(message_id: &str) -> IncomingMessage {
+        IncomingMessage {
+            channel: "weixin".into(),
+            instance_id: "weixin-default".into(),
+            message_id: message_id.into(),
+            chat_id: "peer@im.wechat".into(),
+            chat_type: "p2p".into(),
+            sender_id: "peer@im.wechat".into(),
+            content: "hello".into(),
+            mentioned_bot: true,
+            attachments: vec![],
+            timestamp: None,
+            nonce: None,
+        }
+    }
+
+    /// AC-1.13: the pump births a distinct trace_id per inbound message.
+    #[test]
+    fn runtime_pump_births_trace_per_message() {
+        use crate::trace::test_capture::{subscriber, CaptureLayer};
+
+        let layer = CaptureLayer::default();
+        let handle = layer.clone();
+        tracing::subscriber::with_default(subscriber(layer), || {
+            pump_span_for(&sample_msg("m1")).in_scope(|| tracing::info!("e1"));
+            pump_span_for(&sample_msg("m2")).in_scope(|| tracing::info!("e2"));
+        });
+        let events = handle.events();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].trace_ids.len(), 1);
+        assert_eq!(events[1].trace_ids.len(), 1);
+        assert_ne!(
+            events[0].trace_ids[0], events[1].trace_ids[0],
+            "each inbound message must birth a distinct trace_id"
+        );
     }
 }
