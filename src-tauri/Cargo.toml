@@ -7,6 +7,11 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/Po1nt9/omp-desktop"
 homepage = "https://github.com/Po1nt9/omp-desktop"
+# Multiple bin targets (src/main.rs app + src/bin/mock_acp_runtime.rs test
+# harness). Tauri's bundler picks the main binary by matching the package
+# name or `default-run`; without this, an ambiguous bin list made it bundle
+# the mock harness as the app executable (release blocker, found 2026-07-31).
+default-run = "omp-desktop"
 
 [lib]
 name = "omp_desktop_lib"
