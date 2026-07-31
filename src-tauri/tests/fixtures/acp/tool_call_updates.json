@@ -1,0 +1,51 @@
+{
+  "_comment": "tool_call lifecycle session/update samples for the mock Runtime E2E (AC-2.9 tool leg). Flat update fields locked by decode_session_update (acp_client.rs).",
+  "inbound": [
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "agent-sess-1",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call-mock-1",
+          "title": "Write hello.txt",
+          "kind": "write",
+          "status": "pending"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "agent-sess-1",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call-mock-1",
+          "title": "Write hello.txt",
+          "kind": "write",
+          "status": "running"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "agent-sess-1",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call-mock-1",
+          "title": "Write hello.txt",
+          "kind": "write",
+          "status": "completed"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "toolCallId": "call-mock-1",
+    "statuses": ["pending", "running", "completed"]
+  }
+}

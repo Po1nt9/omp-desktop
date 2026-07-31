@@ -18,6 +18,7 @@ use std::io::{BufRead, BufReader, Write};
 const HANDSHAKE: &str = include_str!("../../tests/fixtures/acp/handshake_initialize.json");
 const STREAM: &str = include_str!("../../tests/fixtures/acp/stream_chunks.json");
 const PERMISSION: &str = include_str!("../../tests/fixtures/acp/permission_request.json");
+const TOOLCALL: &str = include_str!("../../tests/fixtures/acp/tool_call_updates.json");
 
 fn fixture(raw: &str) -> Value {
     serde_json::from_str(raw).expect("fixture parses")
@@ -108,6 +109,7 @@ fn main() {
     let handshake = fixture(HANDSHAKE);
     let stream = fixture(STREAM);
     let permission = fixture(PERMISSION);
+    let toolcall = fixture(TOOLCALL);
     let mut next_agent_rpc_id: u64 = 9000;
     let session_id = String::from("mock-sess-1");
 
@@ -158,7 +160,23 @@ fn main() {
                             &result_frame(&id, stream["sessionPromptResult"].clone()),
                         );
                     }
-                    // toolcall/hang scenarios added by later tasks; default = happy.
+                    "toolcall" => {
+                        send_updates(
+                            &mut out,
+                            &session_id,
+                            stream["inbound"].as_array().expect("stream inbound array"),
+                        );
+                        send_updates(
+                            &mut out,
+                            &session_id,
+                            toolcall["inbound"].as_array().expect("toolcall inbound array"),
+                        );
+                        write_frame(
+                            &mut out,
+                            &result_frame(&id, stream["sessionPromptResult"].clone()),
+                        );
+                    }
+                    // hang scenario added by a later task; default = happy.
                     _ => {
                         send_updates(
                             &mut out,

@@ -135,3 +135,42 @@ async fn e2e_mock_permission_gate_turn() {
     assert_eq!(joined_assistant(&rest), "Hello world.");
     client.kill().await;
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_mock_tool_call_lifecycle() {
+    let (client, mut rx) = spawn_mock();
+    client
+        .initialize_and_new_session()
+        .await
+        .expect("initialize + session/new against mock");
+
+    client
+        .prompt("scenario:toolcall\nwrite hello.txt")
+        .await
+        .expect("prompt rpc");
+    let events = collect_until(&mut rx, |e| matches!(e, AcpEvent::PromptComplete { .. })).await;
+
+    let statuses: Vec<&str> = events
+        .iter()
+        .filter_map(|e| match e {
+            AcpEvent::ToolCall { tool_call_id, status, .. } if tool_call_id == "call-mock-1" => {
+                Some(status.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        statuses,
+        vec!["pending", "running", "completed"],
+        "tool_call lifecycle mismatch in {events:?}"
+    );
+    assert!(
+        events.iter().any(|e| matches!(
+            e,
+            AcpEvent::ToolCall { kind, title, .. } if kind == "write" && title == "Write hello.txt"
+        )),
+        "tool_call kind/title missing in {events:?}"
+    );
+    assert_eq!(joined_assistant(&events), "Hello world.");
+    client.kill().await;
+}
