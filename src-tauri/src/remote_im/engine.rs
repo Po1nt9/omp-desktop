@@ -1646,6 +1646,48 @@ mod tests {
         );
     }
 
+    /// AC-2.9 Hub leg: a full remote-IM turn (inbound message → spawned
+    /// Runtime → aggregated reply text) against the scriptable mock Runtime.
+    /// This is the "true prompt→reply happy path" that
+    /// `spawn_lock_reclaimed_after_failed_spawn` documented as needing a real
+    /// spawned process.
+    #[tokio::test(flavor = "current_thread")]
+    async fn engine_full_turn_against_mock_runtime() {
+        let engine = Engine::new_ephemeral_with_binary(
+            OutboundRouter::new(),
+            crate::e2e_runtime::mock_runtime_path(),
+        );
+        let msg = IncomingMessage {
+            channel: "telegram".into(),
+            instance_id: "e2e-1".into(),
+            message_id: "e2e-m1".into(),
+            chat_id: "c1".into(),
+            chat_type: "p2p".into(),
+            sender_id: "u1".into(),
+            content: "hi".into(),
+            mentioned_bot: true,
+            attachments: vec![],
+            timestamp: None,
+            nonce: None,
+        };
+        let wd = std::env::temp_dir().join(format!("omp-e2e-engine-{}", std::process::id()));
+        std::fs::create_dir_all(&wd).expect("create e2e work dir");
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            engine.run_agent_turn(&msg, "e2e-scope", wd.to_str().expect("utf8 work dir"), "hi"),
+        )
+        .await
+        .expect("engine turn timed out");
+        assert!(result.error.is_none(), "turn error: {:?}", result.error);
+        assert!(
+            result.text.contains("Hello world."),
+            "unexpected reply text: {:?}",
+            result.text
+        );
+        // Dropping the engine drops the pooled AcpClient; its stdin closes
+        // and the mock exits on EOF (no orphan processes).
+    }
+
     /// spawn_locks eviction: when `get_or_spawn_runtime` fails (binary path
     /// points at a non-executable / missing file → spawn error), the
     /// `spawn_locks` entry acquired for that work_dir must still be reclaimed
