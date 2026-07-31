@@ -114,4 +114,25 @@ mod host_permission_e2e {
             "",
         ));
     }
+    #[test]
+    fn ac15_subagent_spawn_gate_denies_even_under_yolo() {
+        use crate::agent_subagents::subagent_spawn_gate_denies;
+        // Under AlwaysApprove a spawn request would otherwise be auto-allowed…
+        let cache = SessionAllowCache::default();
+        let would_auto = may_auto_allow(
+            PermissionPolicy::AlwaysApprove,
+            &cache,
+            "spawn_subagent:",
+            None,
+            "",
+            "spawn_subagent",
+            "",
+        );
+        assert!(would_auto, "yolo auto-allows without the gate");
+        // …but the AC-1.5 kill-switch gate overrides it when disabled.
+        assert!(subagent_spawn_gate_denies("spawn_subagent", false));
+        assert!(!subagent_spawn_gate_denies("spawn_subagent", true));
+        // Non-spawn tools are never gate-denied.
+        assert!(!subagent_spawn_gate_denies("write", false));
+    }
 }

@@ -220,7 +220,10 @@ struct LiveSession {
     project_path: Option<String>,
     allow_cache: SessionAllowCache,
     policy: PermissionPolicy,
-    /// Last provider retry attempt observed this turn (0 = none).
+    /// AC-1.5: subagent kill-switch snapshot at connect/respawn. The
+    /// PermissionRequest gate denies subagent-spawn tool calls when false —
+    /// even under AlwaysApprove (defense in depth beyond TOML/CLI flags).
+    subagents_enabled: bool,
     provider_retry_attempt: u32,
     /// Host already aborted this turn after max retries (avoid double cancel).
     provider_retry_aborted: bool,
@@ -288,6 +291,8 @@ struct ParkedAgent {
     product_mode: Option<String>,
     project_path: Option<String>,
     policy: PermissionPolicy,
+    /// AC-1.5: kill-switch snapshot must survive park/unpark cycles.
+    subagents_enabled: bool,
     needs_history_bootstrap: bool,
     backend: String,
 }
@@ -1686,6 +1691,7 @@ impl SessionManager {
                     product_mode: s.product_mode.clone(),
                     project_path: s.project_path.clone(),
                     policy: s.policy,
+                    subagents_enabled: s.subagents_enabled,
                     needs_history_bootstrap: s.needs_history_bootstrap,
                     backend: s.backend.clone(),
                 };
@@ -1769,6 +1775,7 @@ impl SessionManager {
             product_mode: s.product_mode.clone(),
             project_path: s.project_path.clone(),
             policy: s.policy,
+            subagents_enabled: s.subagents_enabled,
             needs_history_bootstrap: s.needs_history_bootstrap,
             backend: s.backend.clone(),
         };
@@ -1813,6 +1820,7 @@ impl SessionManager {
             project_path: parked.project_path,
             allow_cache: SessionAllowCache::default(),
             policy: parked.policy,
+            subagents_enabled: parked.subagents_enabled,
             provider_retry_attempt: 0,
             provider_retry_aborted: false,
             needs_history_bootstrap: parked.needs_history_bootstrap,
@@ -2563,6 +2571,7 @@ impl SessionManager {
                 project_path: project_path.clone(),
                 allow_cache: SessionAllowCache::default(),
                 policy,
+                subagents_enabled: settings.subagents_enabled,
                 provider_retry_attempt: 0,
                 provider_retry_aborted: false,
                 needs_history_bootstrap: false,
@@ -2978,6 +2987,7 @@ impl SessionManager {
             project_path: p.project_path,
             allow_cache: SessionAllowCache::default(),
             policy: p.policy,
+            subagents_enabled: p.subagents_enabled,
             provider_retry_attempt: 0,
             provider_retry_aborted: false,
             needs_history_bootstrap: p.needs_history_bootstrap,
@@ -3294,16 +3304,31 @@ impl SessionManager {
                             .project_path
                             .as_ref()
                             .map(std::path::PathBuf::from);
-                        let auto = may_auto_allow(
-                            s.policy,
-                            &s.allow_cache,
-                            &sk,
-                            root.as_deref(),
-                            &path_target,
+                        // AC-1.5: subagent-spawn kill switch — even a yolo
+                        // parent must not auto-allow spawning when subagents
+                        // are disabled. Gate wins over may_auto_allow.
+                        let subagent_gate = crate::agent_subagents::subagent_spawn_gate_denies(
                             &tool_name,
-                            &shell_command,
+                            s.subagents_enabled,
                         );
-                        let auto_deny = !auto && may_auto_deny(s.policy);
+                        if subagent_gate {
+                            tracing::warn!(
+                                target: "permission",
+                                tool = %tool_name,
+                                "subagent-spawn permission denied: subagents disabled"
+                            );
+                        }
+                        let auto = !subagent_gate
+                            && may_auto_allow(
+                                s.policy,
+                                &s.allow_cache,
+                                &sk,
+                                root.as_deref(),
+                                &path_target,
+                                &tool_name,
+                                &shell_command,
+                            );
+                        let auto_deny = subagent_gate || (!auto && may_auto_deny(s.policy));
                         (
                             auto,
                             auto_deny,
@@ -5624,6 +5649,7 @@ mod session_routing_tests {
             project_path: None,
             allow_cache: SessionAllowCache::default(),
             policy: PermissionPolicy::default(),
+            subagents_enabled: true,
             provider_retry_attempt: 0,
             provider_retry_aborted: false,
             needs_history_bootstrap: false,
@@ -5645,6 +5671,14 @@ mod session_routing_tests {
             last_tool_heartbeat_emit: None,
             event_journal: None,
         }
+    }
+
+    #[test]
+    fn ac15_live_session_snapshots_subagents_enabled() {
+        // Compile-level guarantee: LiveSession carries the kill-switch
+        // snapshot used by the PermissionRequest gate.
+        let s = sample_live_for_empty_run("body", "", 0, "agent");
+        assert!(s.subagents_enabled, "test fixtures default to enabled");
     }
 
     #[test]
@@ -5783,6 +5817,7 @@ mod session_routing_tests {
             project_path: None,
             allow_cache: SessionAllowCache::default(),
             policy: PermissionPolicy::default(),
+            subagents_enabled: true,
             provider_retry_attempt: 0,
             provider_retry_aborted: false,
             needs_history_bootstrap: false,
@@ -5879,6 +5914,7 @@ mod session_routing_tests {
             project_path: None,
             allow_cache: SessionAllowCache::default(),
             policy: PermissionPolicy::default(),
+            subagents_enabled: true,
             provider_retry_attempt: 0,
             provider_retry_aborted: false,
             needs_history_bootstrap: false,
