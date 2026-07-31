@@ -12,7 +12,7 @@
 | Suite | Count | How to Run | Coverage Scope |
 |---|---|---|---|
 | Frontend (vitest) | 94 files / 831 tests (830 pass + 1 flaky) | `pnpm test` | React components, Tauri command mocks, fail-closed behavior, UI logic, hooks, i18n rendering, code language detection, end-of-turn detection, project path handling, voice audio, redaction, runtime availability, file preview |
-| Rust (cargo test) | 443 tests (443 pass + 1 ignored) | `cargo test --manifest-path src-tauri/Cargo.toml` | See module breakdown below. +3 wecom signature tests, +1 permission delete test added in Phase 2; +2 v1 mock-transport contract tests added with transport injection (2026-07-31); +18 §8.2 credential migration/strict-mode tests (16 migration incl. startup integration, 2 strict secrets, 4 remote_im config, −3 retired plaintext-fallback tests, −1 net remote_im dedup) (2026-07-31 evening). |
+| Rust (cargo test) | 453 tests (453 pass + 1 ignored) | `cargo test --manifest-path src-tauri/Cargo.toml` | See module breakdown below. +3 wecom signature tests, +1 permission delete test added in Phase 2; +2 v1 mock-transport contract tests added with transport injection (2026-07-31); +18 §8.2 credential migration/strict-mode tests (16 migration incl. startup integration, 2 strict secrets, 4 remote_im config, −3 retired plaintext-fallback tests, −1 net remote_im dedup) (2026-07-31 evening); +10 event-journal recovery tests (assess/close/idempotent marker/corrupt quarantine/write-ahead, AC-1.10) (2026-07-31 evening). |
 | Brand policy | 9 tests | `node scripts/check-brand-policy.mjs` (+ `.test.mjs`) | Brand scan rules: lowercase brand detection, Grok/xAI coupling residue, Runtime brand normalization, allowlist scoping. Code-span exemption added for `omp` CLI binary names. |
 | i18n completeness | 5 tests | `node scripts/check-i18n-completeness.mjs` (+ `.test.mjs`) | Three-locale (en/zh-CN/zh-TW) key coverage, ICU parameter/type validation, empty value detection, hardcoded string detection |
 | Legal baseline | tests | `node scripts/check-legal-baseline.mjs` (+ `.test.mjs`) | MIT license attribution (RongleCat, OMP/Pi authors), NOTICE files, font/font-highlight.js attributions |
@@ -34,7 +34,7 @@
 | `mirror` | 12 | Auth mirror |
 | `stream_stall` | 11 | Stream stall detection |
 | `secrets` | 29 | SecretStore (Keychain/Credential Manager/Secret Service) + MockStore fault injection, 6-step §8.2 migration engine (16 tests incl. startup integration), strict-mode save/load |
-| `event_journal` | 11 | Event journal persistence, commit points, standard path format |
+| `event_journal` | 21 | Event journal persistence, commit points, standard path format + recovery (assess/close/marker/quarantine/write-ahead) |
 | `acp_golden_test` | 9 | ACP golden file contract tests |
 | `permission_rules` | 8 | Permission rule evaluation |
 | `journal_throttle` | 8 | Journal write throttling |
@@ -54,7 +54,7 @@
 | TC-M.4 | §4 Brand scan zero violations | `check-brand-policy.mjs` (9 tests) — scan + allowlist | Allowlist functional regression (xAI Provider, Grok models display correctly) | — |
 | TC-M.5 | §5 Active Directory discovery CLI parity | — | Desktop vs CLI discovery comparison across 3 OS | No automated parity test |
 | TC-M.6 | §6 Credential migration all-pass | `secrets` (29, incl. 16-test migration suite covering all §18.2.6 scenarios + startup integration), `mirror` (12) — keychain roundtrip, migration steps, strict-mode fail-closed | Artifact plaintext scan (AC-6.8) | AC-6.4 store-unavailable now automated via MockStore fault injection; AC-6.8 still needs built-binary grep |
-| TC-M.7 | §7 Crash recovery no auto-replay | `event_journal` (11), `journal_throttle` (8) — journal persistence, commit points | Manual crash injection: kill sidecar mid-turn → restart → verify no replay | No automated crash recovery test |
+| TC-M.7 | §7 Crash recovery no auto-replay | `event_journal` (21, incl. 10 recovery tests: assess/close/idempotent marker/corrupt quarantine/write-ahead), `journal_throttle` (8) — journal persistence, commit points, recovery wiring | Manual crash injection: kill sidecar mid-turn → restart → verify no replay | Manual crash injection only (AC-7.1) |
 | TC-M.8 | §8 Remote channel acceptance | `remote_im` (62) — dedup, rate limiter, protocol start, weixin flow, catalog, media, bridge, config, validation | Real platform smoke tests on ≥1 OS per channel | No real-platform smoke automation; applicability items (edit/button/group/channel/thread) mostly manual |
 | TC-M.9 | §9 Workspace routing + tool containment | `path_scope`, `fs_browser` (19) — path canonicalization, scope enforcement | OMP canonical path + shell containment + MCP/subagent inheritance verification | Depends on Runtime capabilities; no automated containment test |
 | TC-M.10 | §10 Install/sign/upgrade/rollback/SBOM | release.yml CI (4 targets build + SHA256SUMS + updater manifest) | Manual install/upgrade/rollback per OS (5 platform variants) | No automated install/upgrade test |
@@ -77,7 +77,7 @@ These gaps correspond to acceptance matrix items that cannot reach `PASS` withou
 | ~~**6-step credential migration suite**~~ | AC-6.1/6.2/6.5/6.6/6.7, AC-2.10 | ~~**High**~~ **Resolved 2026-07-31** | §8.2 implemented per `docs/superpowers/plans/2026-07-31-credential-migration.md`: `SecretStore` trait + generic `Migrator` (dry-run/copy/readback/reference-commit/cleanup/rollback-tombstone) + `SecretsJsonSource`/`ChannelSecretsSource` adapters + idempotent startup auto-migration. 16-test migration suite green; strict mode removed the plaintext fallback (AC-6.4) and the keychain toggle. |
 | **Subagent policy inheritance** | AC-1.5 | **High** | `agent_subagents.rs` only syncs on/off; no permission/policy/MCP inheritance in Desktop. |
 | **Host+Hub trace correlation** | AC-1.13 | **High** | grep "trace_id/correlation/span/otel" = zero matches. Mandatory Host+Hub scope is absent. |
-| **Event-journal recovery wiring** | AC-1.10 | **High** | `replay_from`/`load_from` have no production call sites — recovery path not wired to session reconnect. |
+| ~~**Event-journal recovery wiring**~~ | AC-1.10 | ~~**High**~~ **Resolved 2026-07-31** | Recovery wired into session connect per `docs/superpowers/plans/2026-07-31-event-journal-recovery.md`: TurnStart write-ahead (durable dangling boundary on crash), `recover_session_journal` at connect (load → `replay_from` assess → honest close → save), idempotent `turn_interrupted` marker, journal continuity across restarts. 10 recovery tests green. |
 | Automated crash recovery test | AC-7.1 | **High** | Kill sidecar mid-turn, restart, assert: no auto-replay, turn marked `unknown/interrupted`. Currently no auto-replay by absence-of-code, not asserted. |
 | **Remote approval expiry + anti-replay** | AC-8.4 | **High** | No approval/expiry/nonce/replay infrastructure in remote_im; `allow_remote_yolo` is a bare boolean. |
 | **Single update channel** | AC-10.9 | **Medium** | Only silent/github_manual exist; no stable/beta/nightly isolation. |
