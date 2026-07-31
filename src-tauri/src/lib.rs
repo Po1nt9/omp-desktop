@@ -31,6 +31,8 @@ mod stream_emit;
 mod stream_stall;
 mod tool_heartbeat;
 mod trace;
+#[cfg(test)]
+mod e2e_runtime;
 mod turn_complete;
 mod store_lock;
 mod permission;
