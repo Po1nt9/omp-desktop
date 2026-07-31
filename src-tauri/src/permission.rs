@@ -75,6 +75,15 @@ pub fn is_edit_tool(tool_name: &str) -> bool {
         || t.contains("replace")
 }
 
+/// Destructive deletion tools. These are carved out of `AcceptEdits`
+/// auto-approval (§17.3): delete is an independent high-risk gate that must
+/// be approved on its own, never inherited from an edit/move decision.
+pub fn is_delete_tool(tool_name: &str) -> bool {
+    let t = tool_name.to_lowercase();
+    matches!(t.as_str(), "delete_file" | "deletefile" | "rm" | "remove")
+        || t.contains("delete")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionRequest {
@@ -478,6 +487,13 @@ pub fn may_auto_allow(
     }
 
     if matches!(policy, PermissionPolicy::AcceptEdits) && is_edit_tool(tool_name) {
+        // §17.3: ACP delete is a distinct high-risk gate — it must NOT inherit
+        // edit/move approval. `is_edit_tool` classifies delete_file as an edit
+        // (correct for tool-grouping), so we carve it out here: AcceptEdits
+        // auto-approves content edits, never deletions.
+        if is_delete_tool(tool_name) {
+            return false;
+        }
         return true;
     }
 
@@ -753,6 +769,56 @@ mod tests {
             "ls",
             "run_terminal_command",
             "ls -la",
+        ));
+    }
+
+    #[test]
+    fn accept_edits_does_not_auto_allow_delete_tools() {
+        // §17.3: delete is an independent high-risk gate; it must not inherit
+        // edit/move approval, even though is_edit_tool classifies delete_file
+        // as an edit for tool-grouping purposes.
+        let c = SessionAllowCache::default();
+        let root = std::env::temp_dir().join("grok-app-perm-delete");
+        let _ = std::fs::create_dir_all(&root);
+        let inside = root.join("f.txt");
+        let _ = std::fs::write(&inside, "x");
+        assert!(!may_auto_allow(
+            PermissionPolicy::AcceptEdits,
+            &c,
+            "delete_file:x",
+            Some(&root),
+            &inside.to_string_lossy(),
+            "delete_file",
+            "",
+        ));
+        assert!(!may_auto_allow(
+            PermissionPolicy::AcceptEdits,
+            &c,
+            "rm:x",
+            Some(&root),
+            &inside.to_string_lossy(),
+            "rm",
+            "",
+        ));
+        // sanity: a plain edit tool still auto-allows under AcceptEdits
+        assert!(may_auto_allow(
+            PermissionPolicy::AcceptEdits,
+            &c,
+            "write:x",
+            Some(&root),
+            &inside.to_string_lossy(),
+            "write",
+            "",
+        ));
+        // and AlwaysApprove still wins for delete (YOLO bypasses the carve-out)
+        assert!(may_auto_allow(
+            PermissionPolicy::AlwaysApprove,
+            &c,
+            "delete_file:x",
+            Some(&root),
+            &inside.to_string_lossy(),
+            "delete_file",
+            "",
         ));
     }
 

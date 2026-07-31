@@ -113,14 +113,13 @@ pub async fn start_runtime(
     let pump = tokio::spawn(async move {
         tracing::info!("remote_im: message pump started");
         while let Some(msg) = msg_rx.recv().await {
-            let preview: String = msg.content.chars().take(40).collect();
+            // Log metadata only — never the prompt content (SA-L.1 / AC-8.8).
             tracing::info!(
                 channel = %msg.channel,
                 instance = %msg.instance_id,
                 chat = %msg.chat_id,
                 sender = %msg.sender_id,
                 content_len = msg.content.len(),
-                preview = %preview,
                 "remote_im: engine recv"
             );
             let e = eng.clone();

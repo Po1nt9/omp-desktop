@@ -170,13 +170,33 @@ async fn run_webhook(
     let path = secret_or_opt(&inst.secrets, &inst.options, "callback_path")
         .unwrap_or_else(|| "/wecom/callback".into());
 
-    tracing::info!(instance = %inst.id, port, %path, "wecom webhook server starting");
+    // Default loopback; opt-in LAN bind only with allow_external=true.
+    // Mirrors line.rs — a public ingress requires the user to explicitly
+    // set allow_external (plus a reverse proxy / tunnel in front).
+    let allow_external = inst
+        .options
+        .get("allow_external")
+        .or_else(|| inst.options.get("allowExternal"))
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false);
+    let bind_ip = if allow_external {
+        [0, 0, 0, 0]
+    } else {
+        [127, 0, 0, 1]
+    };
+    // WeCom callback token — when configured, inbound POSTs MUST carry a valid
+    // msg_signature (SHA1 over sorted(token, timestamp, nonce, encrypt)).
+    let cb_token = secret_or_opt(&inst.secrets, &inst.options, "callback_token");
+
+    tracing::info!(instance = %inst.id, port, %path, allow_external, "wecom webhook server starting");
 
     // Bind first so the connector is reachable even if remote gettoken is slow.
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from((bind_ip, port));
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .map_err(|e| format!("wecom bind: {e}"))?;
+    // Clear prior bind errors once the listener is up.
+    let _ = super::super::config::set_instance_last_error(&inst.id, None);
 
     // Best-effort corp credential check in background (must not block listen).
     let corp_id = secret_or_opt(&inst.secrets, &inst.options, "corp_id");
@@ -207,6 +227,7 @@ async fn run_webhook(
                 let tx = tx.clone();
                 let inst = inst.clone();
                 let path = path.clone();
+                let cb_token = cb_token.clone();
                 tokio::spawn(async move {
                     use tokio::io::{AsyncReadExt, AsyncWriteExt};
                     let mut buf = vec![0u8; 65536];
@@ -234,6 +255,17 @@ async fn run_webhook(
                     if !req.contains(path.as_str()) {
                         let _ = socket.write_all(b"HTTP/1.1 404\r\n\r\n").await;
                         return;
+                    }
+                    // When a callback token is configured, require a valid
+                    // msg_signature so attackers cannot POST forged messages.
+                    if let Some(token) = cb_token.as_deref() {
+                        let (sig, ts, nonce) = parse_wecom_sig(&req);
+                        let encrypt = wecom_encrypt_field(body);
+                        if !wecom_signature_ok(token, sig.as_deref(), ts.as_deref(), nonce.as_deref(), encrypt.as_deref()) {
+                            tracing::warn!(instance = %inst.id, "wecom: bad or missing msg_signature");
+                            let _ = socket.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n").await;
+                            return;
+                        }
                     }
                     // JSON or XML simplified — try JSON
                     if let Ok(v) = serde_json::from_str::<Value>(body) {
@@ -330,4 +362,158 @@ pub async fn send_text(
 
 pub fn protocol_name() -> &'static str {
     "wecom-ws-or-webhook"
+}
+
+/// Extract `(msg_signature, timestamp, nonce)` from the query string of the
+/// request line. WeCom appends `?msg_signature=..&timestamp=..&nonce=..`.
+fn parse_wecom_sig(req: &str) -> (Option<String>, Option<String>, Option<String>) {
+    let query = req
+        .lines()
+        .next()
+        .and_then(|l| l.split_whitespace().nth(1))
+        .and_then(|path| path.split_once('?').map(|(_, q)| q))
+        .unwrap_or("");
+    let mut sig = None;
+    let mut ts = None;
+    let mut nonce = None;
+    for pair in query.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            match k {
+                "msg_signature" => sig = Some(decode_query_value(v)),
+                "timestamp" => ts = Some(decode_query_value(v)),
+                "nonce" => nonce = Some(decode_query_value(v)),
+                _ => {}
+            }
+        }
+    }
+    (sig, ts, nonce)
+}
+
+fn decode_query_value(v: &str) -> String {
+    // Minimal URL-decode for the signature chars WeCom uses (%2F, %2B, %3D).
+    v.replace("%2F", "/")
+        .replace("%2f", "/")
+        .replace("%2B", "+")
+        .replace("%2b", "+")
+        .replace("%3D", "=")
+        .replace("%3d", "=")
+}
+
+/// Pull the `<Encrypt><![CDATA[...]]></Encrypt>` field out of the (possibly
+/// XML) body. Absent for plaintext-mode callbacks; signature then uses "" .
+fn wecom_encrypt_field(body: &str) -> Option<String> {
+    body.split("<Encrypt><![CDATA[")
+        .nth(1)
+        .and_then(|rest| rest.split("]]></Encrypt>").next())
+        .map(|s| s.to_string())
+}
+
+/// WeCom callback signature = `SHA1` of the sorted-then-joined
+/// `[token, timestamp, nonce, encrypt]` values (empty `encrypt` omitted).
+fn wecom_signature_ok(
+    token: &str,
+    sig: Option<&str>,
+    timestamp: Option<&str>,
+    nonce: Option<&str>,
+    encrypt: Option<&str>,
+) -> bool {
+    use sha1::{Digest, Sha1};
+    let Some(sig) = sig.filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    let (Some(ts), Some(nonce)) = (timestamp, nonce) else {
+        return false;
+    };
+    let mut parts: Vec<&str> = vec![token, ts, nonce];
+    if let Some(e) = encrypt.filter(|e| !e.is_empty()) {
+        parts.push(e);
+    }
+    parts.sort_unstable();
+    let joined = parts.join("");
+    let digest = {
+        let mut hasher = Sha1::new();
+        hasher.update(joined.as_bytes());
+        hex::encode(hasher.finalize())
+    };
+    const_time_eq(&digest, sig)
+}
+
+fn const_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.as_bytes().iter().zip(b.as_bytes().iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wecom_signature_accepts_valid_and_rejects_bad() {
+        // Reference vector: token, timestamp, nonce, encrypt from WeCom docs sample.
+        let token = "QDG6eK";
+        let timestamp = "1409659588";
+        let nonce = "1372623149";
+        let encrypt = "RypEvHKD8QQKFhvQ6QleEB4J58tiPdvo+rtK1I9qca6aM/wvqnLSL5nPuPR7+LtX/vwCAS/+wuxAqYAc5LhYwrn7arNWsIYNq+UcOTVn5Yb0mtqFxW++wIRp8HicreOh/OH4Ywef0enbvc/KDZgW9l7cmZPr2UXQ45Zc+v0xYv6c7Gau2g==";
+        let parts = {
+            let mut p = vec![token, timestamp, nonce, encrypt];
+            p.sort_unstable();
+            p.join("")
+        };
+        use sha1::{Digest, Sha1};
+        let good_sig = hex::encode(Sha1::digest(parts.as_bytes()));
+
+        assert!(wecom_signature_ok(
+            token,
+            Some(&good_sig),
+            Some(timestamp),
+            Some(nonce),
+            Some(encrypt),
+        ));
+        // tampered signature rejected
+        assert!(!wecom_signature_ok(
+            token,
+            Some("deadbeef"),
+            Some(timestamp),
+            Some(nonce),
+            Some(encrypt),
+        ));
+        // missing signature rejected
+        assert!(!wecom_signature_ok(
+            token,
+            None,
+            Some(timestamp),
+            Some(nonce),
+            Some(encrypt),
+        ));
+        // missing timestamp/nonce rejected
+        assert!(!wecom_signature_ok(
+            token,
+            Some(&good_sig),
+            None,
+            Some(nonce),
+            Some(encrypt),
+        ));
+    }
+
+    #[test]
+    fn parse_wecom_sig_reads_query_params() {
+        let req = "POST /wecom/callback?msg_signature=5c%2Bd%3D&timestamp=1409659588&nonce=1372623149 HTTP/1.1\r\nHost: localhost\r\n\r\nbody";
+        let (sig, ts, nonce) = parse_wecom_sig(req);
+        assert_eq!(sig.as_deref(), Some("5c+d="));
+        assert_eq!(ts.as_deref(), Some("1409659588"));
+        assert_eq!(nonce.as_deref(), Some("1372623149"));
+    }
+
+    #[test]
+    fn wecom_encrypt_field_extracts_cdata() {
+        let body = "<xml><ToUserName>ww</ToUserName><Encrypt><![CDATA[ABC123]]></Encrypt></xml>";
+        assert_eq!(wecom_encrypt_field(body).as_deref(), Some("ABC123"));
+        assert!(wecom_encrypt_field("plain json").is_none());
+    }
 }

@@ -26,7 +26,6 @@ pub async fn run(
 
     tracing::info!(
         instance = %inst.id,
-        app_id = %app_id,
         domain = %domain,
         "feishu connector starting (Rust WS)"
     );
