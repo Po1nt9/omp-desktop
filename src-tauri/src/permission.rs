@@ -538,6 +538,40 @@ pub fn effective_permission_policy(
     }
 }
 
+/// Permissiveness ladder for AC-1.5 clamping. Higher rank = more permissive.
+/// `AllowOnce` is a single-decision grant, not a session policy — it
+/// participates at `Ask` level.
+fn permissiveness_rank(p: PermissionPolicy) -> u8 {
+    match p {
+        PermissionPolicy::Deny => 0,
+        PermissionPolicy::DontAsk => 1,
+        PermissionPolicy::Ask => 2,
+        PermissionPolicy::AllowOnce => 2,
+        PermissionPolicy::AcceptEdits => 3,
+        PermissionPolicy::AllowForSession => 4,
+        PermissionPolicy::AlwaysApprove => 5,
+    }
+}
+
+/// AC-1.5: subagent effective policy = the narrower of the parent policy and
+/// the configured subagent ceiling (design L226: 不得比 parent 扩权).
+/// `None` → inherit the parent unchanged (neither widened nor narrowed).
+pub fn subagent_effective_policy(
+    parent: PermissionPolicy,
+    configured: Option<PermissionPolicy>,
+) -> PermissionPolicy {
+    match configured {
+        None => parent,
+        Some(c) => {
+            if permissiveness_rank(c) < permissiveness_rank(parent) {
+                c
+            } else {
+                parent
+            }
+        }
+    }
+}
+
 /// Pick optionId from ACP permission options by preferred kind.
 pub fn pick_option_id(options: &serde_json::Value, prefer: &str) -> Option<String> {
     let arr = options.as_array()?;
@@ -967,5 +1001,111 @@ mod tests {
             }
         });
         assert_eq!(extract_path_target(&raw), "/Users/me/proj/a.txt");
+    }
+
+    // ── AC-1.5: subagent policy clamp ────────────────────────────────────
+
+    #[test]
+    fn subagent_inherits_parent_when_unconfigured() {
+        for p in [
+            PermissionPolicy::Ask,
+            PermissionPolicy::AllowOnce,
+            PermissionPolicy::AllowForSession,
+            PermissionPolicy::DontAsk,
+            PermissionPolicy::AcceptEdits,
+            PermissionPolicy::Deny,
+            PermissionPolicy::AlwaysApprove,
+        ] {
+            assert_eq!(
+                subagent_effective_policy(p, None),
+                p,
+                "unconfigured subagent must inherit parent unchanged"
+            );
+        }
+    }
+
+    #[test]
+    fn subagent_clamp_never_wider_than_parent() {
+        let all = [
+            PermissionPolicy::Ask,
+            PermissionPolicy::AllowOnce,
+            PermissionPolicy::AllowForSession,
+            PermissionPolicy::DontAsk,
+            PermissionPolicy::AcceptEdits,
+            PermissionPolicy::Deny,
+            PermissionPolicy::AlwaysApprove,
+        ];
+        for p in all {
+            for c in all {
+                let eff = subagent_effective_policy(p, Some(c));
+                assert!(
+                    permissiveness_rank(eff) <= permissiveness_rank(p),
+                    "parent={p:?} configured={c:?} → {eff:?} widens beyond parent"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn subagent_clamp_picks_narrower_of_the_two() {
+        // Configured wider than parent → parent wins (narrowed to parent).
+        assert_eq!(
+            subagent_effective_policy(
+                PermissionPolicy::Ask,
+                Some(PermissionPolicy::AcceptEdits)
+            ),
+            PermissionPolicy::Ask
+        );
+        assert_eq!(
+            subagent_effective_policy(
+                PermissionPolicy::AcceptEdits,
+                Some(PermissionPolicy::AlwaysApprove)
+            ),
+            PermissionPolicy::AcceptEdits
+        );
+        // Configured narrower than parent → configured wins.
+        assert_eq!(
+            subagent_effective_policy(
+                PermissionPolicy::AlwaysApprove,
+                Some(PermissionPolicy::AllowForSession)
+            ),
+            PermissionPolicy::AllowForSession
+        );
+        assert_eq!(
+            subagent_effective_policy(
+                PermissionPolicy::AllowForSession,
+                Some(PermissionPolicy::Ask)
+            ),
+            PermissionPolicy::Ask
+        );
+        // Equal → unchanged.
+        assert_eq!(
+            subagent_effective_policy(
+                PermissionPolicy::AcceptEdits,
+                Some(PermissionPolicy::AcceptEdits)
+            ),
+            PermissionPolicy::AcceptEdits
+        );
+    }
+
+    #[test]
+    fn subagent_clamp_treats_allow_once_as_ask() {
+        // AllowOnce is a single-decision grant, not a session policy.
+        assert_eq!(
+            subagent_effective_policy(
+                PermissionPolicy::AllowOnce,
+                Some(PermissionPolicy::AcceptEdits)
+            ),
+            PermissionPolicy::AllowOnce,
+            "AllowOnce parent caps at Ask-level permissiveness"
+        );
+        assert_eq!(
+            subagent_effective_policy(
+                PermissionPolicy::AllowForSession,
+                Some(PermissionPolicy::AllowOnce)
+            ),
+            PermissionPolicy::AllowOnce,
+            "AllowOnce configured narrows to Ask-level"
+        );
     }
 }
