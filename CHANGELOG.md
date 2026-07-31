@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GitHub prereleases. Settings → About shows the build's channel.
   更新渠道（stable/beta/nightly）隔离：渠道身份随构建固定，CI 按渠道发布
   滚动 manifest，关于页显示当前渠道。
+- **Credential management guide:** new `docs/credential-management.md`
+  documents where credentials live (OS secure store only — strict mode, no
+  plaintext fallback), the `keychain:v1:` on-disk reference format, the
+  six-step startup migration, and operator recipes (AC-12.3).
+  新增凭据管理指南：凭据仅存系统安全存储（严格模式，无明文 fallback），
+  记录 keychain:v1: 引用格式与六步启动迁移（AC-12.3）。
 
 ### Known Limitations / 已知限制
 

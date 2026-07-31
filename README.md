@@ -172,6 +172,7 @@ OMP Desktop 基于 MIT 许可证的上游源码适配：
 | 贡献指南 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
 | 行为准则 | [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) |
 | 安全披露 | [`SECURITY.md`](./SECURITY.md) |
+| 凭据管理 | [`docs/credential-management.md`](./docs/credential-management.md) |
 | 上游历史 | [`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) |
 
 ## 贡献

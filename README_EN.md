@@ -179,6 +179,7 @@ Those files do not describe the current OMP Desktop product.
 | Contributing | [`CONTRIBUTING.md`](./CONTRIBUTING.md) |
 | Code of conduct | [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) |
 | Security | [`SECURITY.md`](./SECURITY.md) |
+| Credential management | [`docs/credential-management.md`](./docs/credential-management.md) |
 | Upstream history | [`docs/upstream-history/grok-app/`](./docs/upstream-history/grok-app/) |
 
 ## Contributing
