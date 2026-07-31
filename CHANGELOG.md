@@ -76,6 +76,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   全坏）——为多 bin 项目补上 `default-run` 后重建并逐平台验证主程序
   正确；同时对 3 平台产物完成密钥模式扫描（AC-6.8，无任何明文密钥）；
   矩阵翻转至 58/12/87/1。
+- **Install/upgrade/rollback acceptance on 3 platforms (AC-10.1/10.4/10.5):**
+  the rebuilt artifacts were exercised end-to-end — macOS ARM64 in a real
+  Aqua GUI session (DMG install → in-app update → version-pinned rollback,
+  cold start 0.10s / RSS 39MB), Linux x64 via amd64 Docker + Xvfb
+  (AppImage/deb/rpm install paths, 0.72s / 227MB — the RSS overshoot is an
+  emulation artifact flagged for bare-metal re-check), and Linux ARM64 on a
+  native aarch64 VM (binary install, 0.28s / 187MB; no packaged installer —
+  release.yml has no aarch64-linux target). AC-10.7 SHA256 evidence refreshed
+  for all 8 rebuilt artifacts. Matrix now 61/12/84/1; acceptance execution
+  closed 2026-07-31 with the remaining BLOCKED items (Windows x64 / macOS
+  Intel hardware, IM channel accounts, external auditor) waived by the owner.
+  三平台安装/升级/回滚验收：macOS ARM64 真实 GUI 会话、Linux x64（amd64
+  Docker + Xvfb）、Linux ARM64（原生 aarch64 虚拟机）逐一跑通；8 个重建
+  产物 SHA256 证据刷新；矩阵翻转至 61/12/84/1。验收执行于 2026-07-31
+  收尾，剩余 BLOCKED 项（Windows 真机 / Intel Mac / 渠道账号 / 外部审计）
+  经负责人确认暂缓。
 
 ### Known Limitations / 已知限制
 

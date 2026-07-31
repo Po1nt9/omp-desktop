@@ -9,7 +9,7 @@ This document outlines the scope and key tasks for the remaining plans (4-10) in
 > - Plan 7: [`2026-07-29-plan-7-remote-hub.md`](./2026-07-29-plan-7-remote-hub.md) — ✅ Shipped (as local Runtime Bridge, not a remote Hub)
 > - Plan 8: [`2026-07-29-plan-8-channels.md`](./2026-07-29-plan-8-channels.md) — ✅ Shipped (14 adapters)
 > - Plan 9: [`2026-07-29-plan-9-os-packaging.md`](./2026-07-29-plan-9-os-packaging.md) — ✅ Complete (OS codesign deferred to optional)
-> - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — 🟡 Ready (codesign no longer blocking)
+> - Plan 10: [`2026-07-29-plan-10-1.0-acceptance.md`](./2026-07-29-plan-10-1.0-acceptance.md) — ✅ Closed 2026-07-31 (matrix 61 PASS / 12 PARTIAL / 84 BLOCKED, real FAIL=0; remaining external-resource items owner-waived — see `docs/release/1.0-acceptance-matrix.md` header)
 
 ## Plan 4: Config, Provider, MCP, Skills, and Secure Credentials
 
@@ -238,9 +238,13 @@ the target developer audience.
 
 ## Plan 10: 1.0 Acceptance Matrix
 
-**Status:** 🟡 Ready. OS code-signing is no longer a blocker (deferred to
-optional). Remaining deps: cross-platform testing infrastructure + performance
-benchmark baselines + security auditor.
+**Status:** ✅ Closed 2026-07-31. Execution exhausted all in-house
+environments (macOS ARM64 Aqua GUI, Linux x64 via amd64 Docker, Linux ARM64
+via native aarch64 VM, 3-platform CI packaging): 61 PASS / 12 PARTIAL /
+84 BLOCKED / real FAIL=0. Remaining items need Windows x64 / macOS Intel
+hardware, real IM channel accounts, an external security auditor, or
+Runtime-side v1 methods — the owner waived pursuing them on 2026-07-31.
+Authority: `docs/release/1.0-acceptance-matrix.md`.
 **Depends on:** Plans 1-9 (all ✅ Complete; Plan 9 OS code-signing deferred to optional)
 **Spec:** Master design §3 item 10, §5
 
@@ -278,10 +282,13 @@ benchmark baselines + security auditor.
 | 7. Remote Hub | ✅ Shipped (Runtime Bridge) | High | None (Hub dropped) |
 | 8. Channels | ✅ Shipped (14 adapters) | Very High | None |
 | 9. OS Packaging | ✅ Complete (codesign optional) | Very High | None (certs optional) |
-| 10. 1.0 Acceptance | 🟡 Ready | Medium | Test infra + benchmarks + auditor |
+| 10. 1.0 Acceptance | ✅ Closed 2026-07-31 (external-resource items waived) | Medium | Windows/Intel hw, IM accounts, auditor |
 
 Plans 1-9 are complete. Plan 9's OS code-signing (macOS notarization, Windows
 Authenticode, Winget/Scoop) is deferred to optional — existing workarounds
 (Homebrew, xattr, SmartScreen bypass) suffice for the developer audience.
-Plan 10 (1.0 acceptance) can proceed; remaining deps are cross-platform testing
-infrastructure, performance benchmark baselines, and a security auditor.
+Plan 10 (1.0 acceptance) executed and closed on 2026-07-31 at
+61 PASS / 12 PARTIAL / 84 BLOCKED (real FAIL=0); items requiring Windows x64 /
+macOS Intel hardware, IM channel accounts, or an external security auditor were
+waived by the owner. 1.0 release sign-off stays open in the acceptance matrix
+until those resources exist or rows are formally WAIVED.
