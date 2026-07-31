@@ -1318,6 +1318,8 @@ mod tests {
             content: "/p".into(),
             mentioned_bot: true,
             attachments: vec![],
+            timestamp: None,
+            nonce: None,
         };
         // Pre-fix: nested pending.lock() in or_else deadlocked forever here.
         tokio::time::timeout(Duration::from_secs(3), engine.handle(msg))
@@ -1341,6 +1343,8 @@ mod tests {
             content: "inspect this repository".into(),
             mentioned_bot: true,
             attachments: vec![],
+            timestamp: None,
+            nonce: None,
         };
         // Non-empty work_dir so run_agent_turn does not early-return for
         // "no project bound".
@@ -1390,6 +1394,8 @@ mod tests {
             content: "hello".into(),
             mentioned_bot: true,
             attachments: vec![],
+            timestamp: None,
+            nonce: None,
         };
         // First call: passes dedup, proceeds into downstream logic (will warn
         // about unknown instance but must not panic).
@@ -1416,6 +1422,8 @@ mod tests {
             content: "hi".into(),
             mentioned_bot: true,
             attachments: vec![],
+            timestamp: None,
+            nonce: None,
         };
         // Two distinct message_ids: dedup won't fire, and both are well under
         // the per-channel/per-scope rate limits (60/min, 10/min).
@@ -1462,6 +1470,8 @@ mod tests {
             content: "hello".into(),
             mentioned_bot: true,
             attachments: vec![],
+            timestamp: None,
+            nonce: None,
         };
         // A turn with a non-empty work_dir proceeds past the "no project
         // bound" guard into the spawn path, which fails closed (no binary).

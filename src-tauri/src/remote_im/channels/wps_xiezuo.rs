@@ -177,6 +177,8 @@ fn parse_event(inst: &ChannelInstance, v: &Value) -> Option<IncomingMessage> {
         content: text.into(),
         mentioned_bot: true,
         attachments: vec![],
+        timestamp: None,
+        nonce: None,
     })
 }
 

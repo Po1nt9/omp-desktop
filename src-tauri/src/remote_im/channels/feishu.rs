@@ -201,6 +201,8 @@ async fn run_once(
                                         content,
                                         mentioned_bot: true,
                                         attachments: vec![],
+                                        timestamp: None,
+                                        nonce: None,
                                     })
                                     .await
                                 {
@@ -413,6 +415,8 @@ fn parse_im_event(inst: &ChannelInstance, root: &Value) -> Option<IncomingMessag
         content: re_clean,
         mentioned_bot: mentioned_bot || chat_type == "p2p",
         attachments,
+        timestamp: None,
+        nonce: None,
     })
 }
 

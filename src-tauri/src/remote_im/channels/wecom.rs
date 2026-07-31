@@ -150,6 +150,8 @@ fn parse_ws_msg(inst: &ChannelInstance, v: &Value) -> Option<IncomingMessage> {
         content: text,
         mentioned_bot: true,
         attachments: vec![],
+        timestamp: None,
+        nonce: None,
     })
 }
 
@@ -290,6 +292,8 @@ async fn run_webhook(
                                 content: text.into(),
                                 mentioned_bot: true,
                                 attachments: vec![],
+                                timestamp: None,
+                                nonce: None,
                             }).await;
                         }
                     }

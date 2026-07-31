@@ -172,6 +172,8 @@ fn parse_dispatch(inst: &ChannelInstance, d: &Value) -> Option<IncomingMessage> 
         content,
         mentioned_bot: true,
         attachments: vec![],
+        timestamp: None,
+        nonce: None,
     })
 }
 

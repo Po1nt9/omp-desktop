@@ -132,6 +132,8 @@ fn parse_event(inst: &ChannelInstance, v: &Value) -> Option<IncomingMessage> {
         sender_id: user_id,
         mentioned_bot: chat_type == "p2p" || text.contains("[CQ:at"),
         attachments: vec![],
+        timestamp: None,
+        nonce: None,
         content: text,
     })
 }

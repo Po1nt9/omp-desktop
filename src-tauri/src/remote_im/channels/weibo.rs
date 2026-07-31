@@ -90,6 +90,8 @@ async fn run_once(
                             content: text.into(),
                             mentioned_bot: true,
                             attachments: vec![],
+                            timestamp: None,
+                            nonce: None,
                         }).await;
                     }
                     Some(Ok(Message::Close(_))) | None => return Ok(()),

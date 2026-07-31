@@ -174,6 +174,8 @@ async fn run_stream_once(
                                 content: format!("__card_action__:{action_id}"),
                                 mentioned_bot: true,
                                 attachments: vec![],
+                                timestamp: None,
+                                nonce: None,
                             }).await;
                             let ack = json!({ "code": 200 });
                             let _ = write.send(Message::Text(ack.to_string().into())).await;
@@ -268,6 +270,8 @@ fn parse_bot_callback(inst: &ChannelInstance, data: &Value) -> Option<IncomingMe
         content: text,
         mentioned_bot: true,
         attachments: vec![],
+        timestamp: None,
+        nonce: None,
     })
 }
 

@@ -128,6 +128,8 @@ pub async fn run(
                                     content: text.into(),
                                     mentioned_bot: true,
                                     attachments: vec![],
+                                    timestamp: None,
+                                    nonce: None,
                                 }).await;
                             }
                         }

@@ -27,6 +27,12 @@ pub struct IncomingMessage {
     pub content: String,
     pub mentioned_bot: bool,
     pub attachments: Vec<Attachment>,
+    /// AC-8.4 anti-replay: webhook-supplied unix timestamp (seconds).
+    /// `None` for WS / long-poll channels (platform-authenticated transport).
+    pub timestamp: Option<i64>,
+    /// AC-8.4 anti-replay: webhook-supplied nonce (or derived replay key,
+    /// e.g. LINE uses "sig:replyToken"). `None` for WS / long-poll channels.
+    pub nonce: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -260,6 +260,8 @@ fn parse_msg(inst: &ChannelInstance, m: &Value) -> Option<IncomingMessage> {
         content: text,
         mentioned_bot: true,
         attachments: vec![],
+        timestamp: None,
+        nonce: None,
     })
 }
 

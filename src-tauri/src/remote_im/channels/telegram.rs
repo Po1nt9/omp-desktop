@@ -149,6 +149,8 @@ pub async fn run(
                     content: text,
                     mentioned_bot,
                     attachments,
+                    timestamp: None,
+                    nonce: None,
                 })
                 .await;
         }
