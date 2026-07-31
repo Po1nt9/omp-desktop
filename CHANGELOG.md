@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (AC-12.2/12.4/12.5/12.6/12.7/12.8.)
   指南批量补齐（§12）：新增 Provider 配置、权限模型、远程访问风险、恢复边界、
   i18n 五篇指南，并在更新指南中补充 OS 签名警告表与签名成本。
+- **Acceptance gap closure (AC-3.4/8.3/8.7/8.14):** the i18n gate now
+  enforces `{var}` placeholder-set parity across locales; new remote_im
+  tests cover allow_from whitelist accept/reject, credential rotation +
+  revocation, and Discord attachment fetch against a mock HTTP server.
+  验收差距补齐：i18n 门新增占位符一致性校验；remote_im 新增白名单、
+  凭据轮换/吊销与 Discord 附件抓取测试。
 
 ### Known Limitations / 已知限制
 
