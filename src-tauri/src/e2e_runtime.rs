@@ -8,14 +8,19 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// Absolute path to the built mock binary. `cargo test` builds all bin
-/// targets of the package; `CARGO_BIN_EXE_*` covers the common case and the
-/// target-dir fallback keeps `cargo test --lib` usable everywhere.
+/// Absolute path to the built mock binary. `CARGO_BIN_EXE_*` is only set for
+/// integration tests, so unit (lib) tests rely on the target-dir fallback —
+/// CI builds the bin explicitly before `cargo test` for that reason.
 pub(crate) fn mock_runtime_path() -> PathBuf {
     if let Some(p) = option_env!("CARGO_BIN_EXE_mock_acp_runtime") {
         return PathBuf::from(p);
     }
-    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/mock_acp_runtime");
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/mock_acp_runtime");
+    let p = if base.exists() {
+        base
+    } else {
+        base.with_extension("exe") // Windows: mock_acp_runtime.exe
+    };
     assert!(
         p.exists(),
         "mock_acp_runtime not built; run `cargo build --bin mock_acp_runtime` first"
@@ -217,13 +222,11 @@ static HOME_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn test_home(tag: &str) -> (
     std::sync::MutexGuard<'static, ()>,
-    std::sync::MutexGuard<'static, ()>,
+    parking_lot::MutexGuard<'static, ()>,
     PathBuf,
 ) {
     let module = HOME_GUARD.lock().unwrap_or_else(|e| e.into_inner());
-    let env = crate::paths::APP_HOME_ENV_LOCK
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let env = crate::paths::APP_HOME_ENV_LOCK.lock();
     let dir = std::env::temp_dir().join(format!("omp-e2e-home-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

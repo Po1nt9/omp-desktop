@@ -144,8 +144,8 @@ mod tests {
 
     /// These tests use the real app data root; serialize against tests that
     /// temporarily point `OMP_DESKTOP_HOME` elsewhere.
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        crate::paths::APP_HOME_ENV_LOCK.lock().unwrap()
+    fn env_lock() -> parking_lot::MutexGuard<'static, ()> {
+        crate::paths::APP_HOME_ENV_LOCK.lock()
     }
 
     #[test]

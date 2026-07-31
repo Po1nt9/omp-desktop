@@ -1204,7 +1204,7 @@ mod tests {
 
     #[test]
     fn startup_migration_moves_both_sources_and_is_idempotent() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let tmp = std::env::temp_dir().join(format!("omp-startup-mig-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(tmp.join("remote")).unwrap();

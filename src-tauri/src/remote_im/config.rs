@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn save_instance_persists_secrets_via_store_without_plaintext() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let _g = guard();
         let tmp = test_home("save");
         std::env::set_var("OMP_DESKTOP_HOME", &tmp);
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn get_secrets_prefers_refs_and_falls_back_to_legacy_plaintext() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let _g = guard();
         let tmp = test_home("dual");
         std::env::set_var("OMP_DESKTOP_HOME", &tmp);
@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     fn get_secrets_fails_closed_when_store_unavailable() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let _g = guard();
         let tmp = test_home("closed");
         std::env::set_var("OMP_DESKTOP_HOME", &tmp);
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn delete_instance_removes_store_entries_refs_and_legacy_row() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let _g = guard();
         let tmp = test_home("delete");
         std::env::set_var("OMP_DESKTOP_HOME", &tmp);
@@ -551,7 +551,7 @@ mod tests {
     /// touches disk.
     #[test]
     fn save_instance_rotates_existing_secret_in_place() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let _g = guard();
         let tmp = test_home("rotate");
         std::env::set_var("OMP_DESKTOP_HOME", &tmp);

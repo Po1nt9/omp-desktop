@@ -5734,7 +5734,7 @@ mod session_routing_tests {
 
     #[test]
     fn journal_assistant_after_last_user_detects_answered_turn() {
-        let _lock = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _lock = crate::paths::APP_HOME_ENV_LOCK.lock();
         let tmp = std::env::temp_dir().join(format!(
             "grok-app-replay-gate-test-{}",
             std::process::id()

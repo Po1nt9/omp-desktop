@@ -463,7 +463,7 @@ mod tests {
 
     #[test]
     fn save_then_load_roundtrips_through_store_without_plaintext_on_disk() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let _g = strict_test_guard();
         let tmp = strict_test_home("roundtrip");
         std::env::set_var("OMP_DESKTOP_HOME", &tmp);
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn store_unavailable_blocks_save_and_fails_load_closed() {
-        let _env = crate::paths::APP_HOME_ENV_LOCK.lock().unwrap();
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let _g = strict_test_guard();
         let tmp = strict_test_home("unavailable");
         std::env::set_var("OMP_DESKTOP_HOME", &tmp);

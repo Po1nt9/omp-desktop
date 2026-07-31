@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use directories::ProjectDirs;
 
 #[cfg(test)]
-pub(crate) static APP_HOME_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static APP_HOME_ENV_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
 
 pub fn app_data_root() -> PathBuf {
     if let Ok(custom) = std::env::var("OMP_DESKTOP_HOME") {

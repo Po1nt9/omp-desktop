@@ -58,6 +58,12 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           shared-key: ci-${{ matrix.name }}-v5
+      # cargo test does not build bin targets for unit (lib) tests, so the
+      # E2E harness binary must exist first (e2e_runtime::mock_runtime_path).
+      - name: Build mock ACP runtime (E2E test binary)
+        if: matrix.name != 'Windows'
+        working-directory: src-tauri
+        run: cargo build --bin mock_acp_runtime
       # Includes ACP golden fixtures (tests/fixtures/acp + acp_golden_test).
       # Required green for any ACP / mock_acp / permission wire change (T06).
       - name: cargo test
@@ -101,6 +107,10 @@ jobs:
           } else {
             Write-Host "No PATH entry ships api-ms-win-*.dll"
           }
+
+          Write-Host "=== cargo build --bin mock_acp_runtime (E2E test binary) ==="
+          cargo build --bin mock_acp_runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           Write-Host "=== cargo test --no-run ==="
           cargo test --no-run

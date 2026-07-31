@@ -239,13 +239,11 @@ mod tests {
         tag: &str,
     ) -> (
         std::sync::MutexGuard<'static, ()>,
-        std::sync::MutexGuard<'static, ()>,
+        parking_lot::MutexGuard<'static, ()>,
         std::path::PathBuf,
     ) {
         let module = GUARD.lock().unwrap_or_else(|e| e.into_inner());
-        let env = crate::paths::APP_HOME_ENV_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let dir = std::env::temp_dir().join(format!(
             "omp-recovery-test-{tag}-{}",
             std::process::id()
