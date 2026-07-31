@@ -222,6 +222,10 @@ pub struct AppSettings {
     /// and independent mode writes `[subagents] enabled = false`.
     #[serde(default = "default_true")]
     pub subagents_enabled: bool,
+    /// AC-1.5: configured subagent policy ceiling (wire form). `None` =
+    /// inherit the parent session policy unchanged (clamped, never widened).
+    #[serde(default)]
+    pub subagent_policy: Option<String>,
     /// Preferred runtime agent definition for new agent processes
     /// (`explore` / `plan` / `general-purpose` / custom name under the runtime agents dir).
     /// Empty / `default` / `none` → omit top-level `--agent` (CLI default).
@@ -348,6 +352,7 @@ impl Default for AppSettings {
             startup_new_chat_default_migrated: true,
             plan_enabled: default_plan_enabled(),
             subagents_enabled: true,
+            subagent_policy: None,
             preferred_agent: String::new(),
             use_leader: false,
             voice_id: default_voice_id(),
@@ -1712,6 +1717,13 @@ mod tests {
     #[test]
     fn subagents_enabled_defaults_true_when_missing_from_json() {
         let s: AppSettings = serde_json::from_str(legacy_settings_json()).expect("deserialize");
+        assert!(s.subagents_enabled);
+    }
+
+    #[test]
+    fn subagent_policy_defaults_none_when_missing_from_json() {
+        let s: AppSettings = serde_json::from_str(legacy_settings_json()).expect("deserialize");
+        assert!(s.subagent_policy.is_none());
         assert!(s.subagents_enabled);
     }
 

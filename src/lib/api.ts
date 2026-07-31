@@ -865,6 +865,8 @@ export interface AppSettings {
   disableWebSearch?: boolean;
   planEnabled?: boolean;
   subagentsEnabled?: boolean;
+  /** AC-1.5: subagent policy ceiling (wire form). null/undefined = inherit parent. */
+  subagentPolicy?: string | null;
   useLeader?: boolean;
   /** Reopen last active chat once after launch (default false → draft new chat). */
   reopenLastSession?: boolean;
