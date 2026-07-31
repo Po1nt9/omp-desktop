@@ -444,6 +444,170 @@ impl MigrationSource for SecretsJsonSource {
     }
 }
 
+// ── channel-secrets.json adapter ───────────────────────────────────────────
+
+use std::collections::HashMap;
+
+/// Read the non-secret references file (instance → field → reference).
+pub fn read_channel_refs(path: &Path) -> HashMap<String, HashMap<String, String>> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+pub fn write_channel_refs(
+    path: &Path,
+    refs: &HashMap<String, HashMap<String, String>>,
+) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(refs).map_err(|e| e.to_string())?;
+    crate::store_lock::write_bytes_atomic(path, raw.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+/// Migrates every (instance, field) of `channel-secrets.json`. References go
+/// to `channel-secret-refs.json`; tombstoned values keep the file shape;
+/// when the last field cleans up, the legacy file is securely deleted
+/// (overwrite-then-remove, §8.2 step 6).
+pub struct ChannelSecretsSource {
+    pub secrets_path: PathBuf,
+    pub refs_path: PathBuf,
+}
+
+impl ChannelSecretsSource {
+    pub fn new(secrets_path: PathBuf, refs_path: PathBuf) -> Self {
+        Self {
+            secrets_path,
+            refs_path,
+        }
+    }
+
+    fn read_legacy_map(&self) -> HashMap<String, HashMap<String, String>> {
+        std::fs::read_to_string(&self.secrets_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str(&raw).ok())
+            .unwrap_or_default()
+    }
+
+    fn write_legacy_map(
+        &self,
+        map: &HashMap<String, HashMap<String, String>>,
+    ) -> Result<(), String> {
+        let raw = serde_json::to_string_pretty(map).map_err(|e| e.to_string())?;
+        crate::store_lock::write_bytes_atomic(&self.secrets_path, raw.as_bytes())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ =
+                std::fs::set_permissions(&self.secrets_path, std::fs::Permissions::from_mode(0o600));
+        }
+        Ok(())
+    }
+
+    fn split_key(key: &str) -> Option<(&str, &str)> {
+        // Instance ids contain no ':' in this codebase (uuid-ish); fields are
+        // camelCase. Split on the LAST ':' so either side may grow.
+        key.rsplit_once(':')
+    }
+
+    /// Overwrite with zeros then remove — best-effort secure delete.
+    fn secure_delete(path: &Path) -> Result<(), String> {
+        if let Ok(meta) = std::fs::metadata(path) {
+            let len = meta.len() as usize;
+            if len > 0 {
+                let _ = std::fs::write(path, vec![0u8; len]);
+            }
+        }
+        match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+}
+
+impl MigrationSource for ChannelSecretsSource {
+    fn enumerate(&self) -> Result<Vec<LegacyEntry>, String> {
+        let map = self.read_legacy_map();
+        let mut out = Vec::new();
+        for (instance, fields) in &map {
+            for (field, value) in fields {
+                if value.is_empty() || value == TOMBSTONE || is_reference(value) {
+                    continue;
+                }
+                let key = format!("{instance}:{field}");
+                out.push(LegacyEntry {
+                    migration_id: format!("remote:{key}"),
+                    namespace: super::store::NS_REMOTE,
+                    key,
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    fn read_legacy(&self, entry: &LegacyEntry) -> Result<Option<String>, String> {
+        let Some((instance, field)) = Self::split_key(&entry.key) else {
+            return Ok(None);
+        };
+        Ok(self
+            .read_legacy_map()
+            .get(instance)
+            .and_then(|f| f.get(field))
+            .cloned())
+    }
+
+    fn commit_reference(&self, entry: &LegacyEntry, reference: &str) -> Result<(), String> {
+        let Some((instance, field)) = Self::split_key(&entry.key) else {
+            return Err(format!("malformed channel key {}", entry.key));
+        };
+        let mut refs = read_channel_refs(&self.refs_path);
+        refs.entry(instance.to_string())
+            .or_default()
+            .insert(field.to_string(), reference.to_string());
+        write_channel_refs(&self.refs_path, &refs)
+    }
+
+    fn tombstone(&self, entry: &LegacyEntry) -> Result<(), String> {
+        let Some((instance, field)) = Self::split_key(&entry.key) else {
+            return Err(format!("malformed channel key {}", entry.key));
+        };
+        let mut map = self.read_legacy_map();
+        if let Some(fields) = map.get_mut(instance) {
+            if fields.contains_key(field) {
+                fields.insert(field.to_string(), TOMBSTONE.to_string());
+            }
+        }
+        self.write_legacy_map(&map)
+    }
+
+    fn cleanup(&self, entry: &LegacyEntry) -> Result<(), String> {
+        let Some((instance, field)) = Self::split_key(&entry.key) else {
+            return Err(format!("malformed channel key {}", entry.key));
+        };
+        let mut map = self.read_legacy_map();
+        if let Some(fields) = map.get_mut(instance) {
+            fields.remove(field);
+            if fields.is_empty() {
+                map.remove(instance);
+            }
+        }
+        if map.is_empty() {
+            Self::secure_delete(&self.secrets_path)
+        } else {
+            self.write_legacy_map(&map)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -853,6 +1017,119 @@ mod tests {
                 Some("rk-live")
             );
             let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(&ledger);
+        }
+    }
+
+    mod channel {
+        use super::*;
+        use crate::secrets::migration::{read_channel_refs, ChannelSecretsSource};
+        use crate::secrets::store::NS_REMOTE;
+        use std::collections::HashMap;
+
+        fn tmp_channel(tag: &str) -> (PathBuf, PathBuf) {
+            let dir = std::env::temp_dir().join(format!(
+                "omp-chan-src-{}-{}",
+                tag,
+                std::process::id()
+            ));
+            let _ = std::fs::create_dir_all(&dir);
+            (
+                dir.join("channel-secrets.json"),
+                dir.join("channel-secret-refs.json"),
+            )
+        }
+
+        fn write_legacy(path: &Path, map: &HashMap<String, HashMap<String, String>>) {
+            std::fs::write(path, serde_json::to_string_pretty(map).unwrap()).unwrap();
+        }
+
+        fn two_instance_map() -> HashMap<String, HashMap<String, String>> {
+            let mut fields_a = HashMap::new();
+            fields_a.insert("botToken".to_string(), "tg-token-a".to_string());
+            fields_a.insert("appSecret".to_string(), "app-secret-a".to_string());
+            let mut fields_b = HashMap::new();
+            fields_b.insert("appId".to_string(), "fs-app-id".to_string());
+            let mut map = HashMap::new();
+            map.insert("inst-a".to_string(), fields_a);
+            map.insert("inst-b".to_string(), fields_b);
+            map
+        }
+
+        #[test]
+        fn enumerates_instance_field_pairs() {
+            let (secrets, refs) = tmp_channel("enum");
+            write_legacy(&secrets, &two_instance_map());
+            let source = ChannelSecretsSource::new(secrets.clone(), refs);
+            let mut ids: Vec<String> = source
+                .enumerate()
+                .unwrap()
+                .into_iter()
+                .map(|e| e.migration_id)
+                .collect();
+            ids.sort();
+            assert_eq!(
+                ids,
+                vec![
+                    "remote:inst-a:appSecret".to_string(),
+                    "remote:inst-a:botToken".to_string(),
+                    "remote:inst-b:appId".to_string(),
+                ]
+            );
+            let _ = std::fs::remove_dir_all(secrets.parent().unwrap());
+        }
+
+        #[test]
+        fn full_run_tombstones_then_deletes_legacy_file() {
+            let store = MockStore::new();
+            let (secrets, refs) = tmp_channel("full");
+            write_legacy(&secrets, &two_instance_map());
+            let ledger = ledger_path_tmp("chan-full");
+            let source = ChannelSecretsSource::new(secrets.clone(), refs.clone());
+            let mig = Migrator::new(&store, &ledger);
+            let plan = mig.dry_run(&source).unwrap();
+            assert_eq!(plan.entries.len(), 3);
+            let report = mig.run(&source, &plan);
+            assert_eq!((report.cleaned, report.failed, report.pending), (3, 0, 0));
+            // Legacy file securely deleted; refs file holds all references;
+            // values live in the store under the remote namespace.
+            assert!(!secrets.exists());
+            let refs_map = read_channel_refs(&refs);
+            assert_eq!(
+                refs_map["inst-a"]["botToken"],
+                "keychain:v1:remote:inst-a:botToken"
+            );
+            assert_eq!(
+                store.get(NS_REMOTE, "inst-a:botToken").unwrap().as_deref(),
+                Some("tg-token-a")
+            );
+            assert_eq!(
+                store.get(NS_REMOTE, "inst-b:appId").unwrap().as_deref(),
+                Some("fs-app-id")
+            );
+            let _ = std::fs::remove_dir_all(secrets.parent().unwrap());
+            let _ = std::fs::remove_file(&ledger);
+        }
+
+        #[test]
+        fn cleanup_leaves_partial_map_when_fields_remain() {
+            let store = MockStore::new();
+            let (secrets, refs) = tmp_channel("partial");
+            // Two instances; only inst-b's single field cleans up last, so
+            // the file must survive (secure delete only when fully empty).
+            let mut map = HashMap::new();
+            let mut fields = HashMap::new();
+            fields.insert("botToken".to_string(), "tg-token".to_string());
+            map.insert("inst-a".to_string(), fields);
+            write_legacy(&secrets, &map);
+            let ledger = ledger_path_tmp("chan-partial");
+            let source = ChannelSecretsSource::new(secrets.clone(), refs.clone());
+            let mig = Migrator::new(&store, &ledger);
+            let plan = mig.dry_run(&source).unwrap();
+            let report = mig.run(&source, &plan);
+            assert_eq!(report.cleaned, 1);
+            assert!(!secrets.exists());
+            let _ = std::fs::remove_dir_all(secrets.parent().unwrap());
             let _ = std::fs::remove_file(&ledger);
         }
     }
