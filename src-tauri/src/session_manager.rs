@@ -2738,6 +2738,12 @@ impl SessionManager {
                         {
                             let method_count = cap.methods.len();
                             omp_extension.negotiate_capability(Some(cap)).await;
+                            // Install this session's AcpClient as the v1 transport so
+                            // advertised methods dispatch as real JSON-RPC calls.
+                            let transport: Arc<
+                                dyn crate::omp_desktop_v1::transport::V1Transport,
+                            > = client.clone();
+                            omp_extension.set_transport(Some(transport)).await;
                             tracing::info!(
                                 target: "session",
                                 session = %meta.id,
@@ -2751,6 +2757,7 @@ impl SessionManager {
                                 "OMP Runtime did not advertise _omp/desktop/v1 capability"
                             );
                             omp_extension.negotiate_capability(None).await;
+                            omp_extension.set_transport(None).await;
                         }
                     } else {
                         tracing::warn!(
@@ -2759,6 +2766,7 @@ impl SessionManager {
                             "ACP initialize result missing — cannot negotiate v1 capability"
                         );
                         omp_extension.negotiate_capability(None).await;
+                        omp_extension.set_transport(None).await;
                     }
                 }
                 // Native resume = full agent context. Fresh session + existing UI
