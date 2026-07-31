@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::acp_client::{
@@ -4605,6 +4606,8 @@ impl SessionManager {
         if text.is_empty() {
             return Err("empty message".into());
         }
+        // AC-1.13: one user-prompt turn = one trace unit (design §13).
+        let trace_id = crate::trace::new_trace_id();
         // Journal stores UI form when provided (skill chips); agent still receives `text`.
         let journal_content = display_text
             .map(|s| s.trim().to_string())
@@ -4799,27 +4802,36 @@ impl SessionManager {
         let mgr = Arc::clone(self);
         let app2 = app.clone();
         let turn_sid = app_sid.clone();
-        tokio::spawn(async move {
-            let outcome = acp.prompt(&agent_prompt).await;
-            if let Err(e) = outcome {
-                // Route by session id: this chat may have been demoted to
-                // background while the prompt ran, and the live slot now holds
-                // someone else's turn — recording the error there would blame
-                // the wrong chat.
-                mgr.with_session_mut(&turn_sid, |s| {
-                    // The RPC failed, so no authoritative PromptComplete will
-                    // arrive. Release the turn or the chat stays un-parkable
-                    // and refuses further sends.
-                    s.prompt_in_flight = false;
-                    // Skip if host already recorded a retry-exhausted error this turn.
-                    if !s.provider_retry_aborted {
-                        SessionManager::record_turn_error(s, &app2, &e);
-                        let _ = s.fsm.fail_with(e);
-                    }
-                });
-                mgr.emit_for_session(&app2, &turn_sid);
-            }
+        // AC-1.13: the whole turn task (prompt → terminal handling) runs
+        // inside the turn span; sync dispatch log shares the trace_id.
+        let span = crate::trace::turn_span(&trace_id, &turn_sid);
+        span.in_scope(|| {
+            tracing::info!(session_id = %turn_sid, "turn: prompt dispatched");
         });
+        tokio::spawn(
+            async move {
+                let outcome = acp.prompt(&agent_prompt).await;
+                if let Err(e) = outcome {
+                    // Route by session id: this chat may have been demoted to
+                    // background while the prompt ran, and the live slot now holds
+                    // someone else's turn — recording the error there would blame
+                    // the wrong chat.
+                    mgr.with_session_mut(&turn_sid, |s| {
+                        // The RPC failed, so no authoritative PromptComplete will
+                        // arrive. Release the turn or the chat stays un-parkable
+                        // and refuses further sends.
+                        s.prompt_in_flight = false;
+                        // Skip if host already recorded a retry-exhausted error this turn.
+                        if !s.provider_retry_aborted {
+                            SessionManager::record_turn_error(s, &app2, &e);
+                            let _ = s.fsm.fail_with(e);
+                        }
+                    });
+                    mgr.emit_for_session(&app2, &turn_sid);
+                }
+            }
+            .instrument(span),
+        );
 
         Ok(self.snapshot())
     }
@@ -5946,6 +5958,35 @@ mod session_routing_tests {
             Ok(_) => panic!("ready session must reject interjection"),
             Err(err) => assert_eq!(err, "interjection requires a streaming turn"),
         }
+    }
+
+    /// AC-1.13: the send_message turn task spawn site wraps its future in
+    /// `turn_span(trace_id, session_id)` via Instrument. The real task
+    /// needs an AppHandle (unavailable in unit tests — same precedent as
+    /// the permission host-gate tests), so this drives the identical
+    /// span + Instrument wiring the spawn site uses and asserts logs
+    /// emitted inside the task carry the trace_id.
+    #[tokio::test(flavor = "current_thread")]
+    async fn send_message_turn_logs_carry_trace_id() {
+        let events = crate::trace::test_capture::global_events();
+        let trace_id = crate::trace::new_trace_id();
+        let span = crate::trace::turn_span(&trace_id, "sess-host");
+        tokio::spawn(
+            async move {
+                tracing::info!("turn-task log");
+            }
+            .instrument(span),
+        )
+        .await
+        .unwrap();
+        let captured = events.lock().clone();
+        assert!(
+            captured
+                .iter()
+                .any(|e| e.message == "turn-task log"
+                    && e.trace_ids.iter().any(|t| t == &trace_id)),
+            "turn-task log missing trace_id {trace_id} (captured: {captured:?})"
+        );
     }
 }
 
