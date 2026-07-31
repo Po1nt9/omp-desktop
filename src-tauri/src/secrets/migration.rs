@@ -218,6 +218,144 @@ impl<'a> Migrator<'a> {
         }
         Ok(plan)
     }
+
+    /// Steps 2-6 per entry, resuming from each entry's ledger state.
+    /// Failure semantics (§8.2): copy/readback/reference failure rolls back
+    /// the store entry and keeps the legacy value readable; tombstone/cleanup
+    /// failure keeps the tombstone and retries next run. Verified entries are
+    /// never copied back to plaintext.
+    pub fn run(&self, source: &dyn MigrationSource, plan: &MigrationPlan) -> MigrationReport {
+        let mut report = MigrationReport::default();
+        let mut ledger = self.load_ledger();
+
+        for entry in &plan.entries {
+            let id = entry.migration_id.as_str();
+            // `Failed` sorts above `Cleaned` in the enum, so a failed entry
+            // must be normalized back to DryRun here — otherwise every
+            // `state < X` check short-circuits and re-runs silently no-op.
+            let mut state = ledger.state_of(id);
+            if state == MigrationState::Failed {
+                state = MigrationState::DryRun;
+            }
+
+            // Tombstoned legacy (crash after step 5, or resumed entry): the
+            // value is already safe in the store — jump to cleanup.
+            if state < MigrationState::Tombstoned {
+                if let Ok(Some(v)) = source.read_legacy(entry) {
+                    if v == TOMBSTONE {
+                        state = MigrationState::Tombstoned;
+                    }
+                }
+            }
+
+            // Steps 2-3: copy + readback.
+            if state < MigrationState::Verified {
+                let legacy = match source.read_legacy(entry) {
+                    Ok(Some(v)) if v != TOMBSTONE => v,
+                    Ok(_) => {
+                        // Nothing to migrate (vanished mid-run); mark cleaned.
+                        ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Cleaned, None);
+                        self.save_ledger(&ledger);
+                        report.cleaned += 1;
+                        continue;
+                    }
+                    Err(e) => {
+                        ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Failed, Some("legacy_read"));
+                        self.save_ledger(&ledger);
+                        tracing::warn!(target: "secrets::migration", migration_id = id, error = %e, "legacy read failed");
+                        report.failed += 1;
+                        continue;
+                    }
+                };
+                if state < MigrationState::Copied {
+                    if let Err(e) = self.store.set(entry.namespace, &entry.key, &legacy) {
+                        ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Failed, Some("store_copy"));
+                        self.save_ledger(&ledger);
+                        tracing::warn!(target: "secrets::migration", migration_id = id, error = %e, "store copy failed");
+                        report.failed += 1;
+                        continue;
+                    }
+                    ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Copied, None);
+                    self.save_ledger(&ledger);
+                }
+                // Readback + constant-time compare.
+                match self.store.get(entry.namespace, &entry.key) {
+                    Ok(Some(v)) if const_time_eq(&v, &legacy) => {
+                        ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Verified, None);
+                        self.save_ledger(&ledger);
+                    }
+                    _ => {
+                        // Rollback the uncommitted copy; legacy stays readable.
+                        let _ = self.store.delete(entry.namespace, &entry.key);
+                        ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Failed, Some("readback_mismatch"));
+                        self.save_ledger(&ledger);
+                        report.failed += 1;
+                        continue;
+                    }
+                }
+                state = MigrationState::Verified;
+            }
+
+            // Step 4: commit reference.
+            if state < MigrationState::Referenced {
+                let reference = make_reference(entry.namespace, &entry.key);
+                if let Err(e) = source.commit_reference(entry, &reference) {
+                    // Rollback: the reference was never committed, so the
+                    // store copy must not linger as an orphan.
+                    let _ = self.store.delete(entry.namespace, &entry.key);
+                    ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Failed, Some("reference_commit"));
+                    self.save_ledger(&ledger);
+                    tracing::warn!(target: "secrets::migration", migration_id = id, error = %e, "reference commit failed");
+                    report.failed += 1;
+                    continue;
+                }
+                ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Referenced, None);
+                self.save_ledger(&ledger);
+                state = MigrationState::Referenced;
+            }
+
+            // Step 5: tombstone the legacy value.
+            if state < MigrationState::Tombstoned {
+                if let Err(e) = source.tombstone(entry) {
+                    // Keep pre-tombstone state; value is safe in the store and
+                    // the reference is committed. Retry next run.
+                    self.save_ledger(&ledger);
+                    tracing::warn!(target: "secrets::migration", migration_id = id, error = %e, "tombstone failed; will retry");
+                    report.pending += 1;
+                    continue;
+                }
+                ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Tombstoned, None);
+                self.save_ledger(&ledger);
+                state = MigrationState::Tombstoned;
+            }
+
+            // Step 6: re-validate the reference resolves, then clean up.
+            if state < MigrationState::Cleaned {
+                match self.store.get(entry.namespace, &entry.key) {
+                    Ok(Some(v)) if !v.is_empty() => {}
+                    _ => {
+                        // Reference broken — never delete anything.
+                        ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Failed, Some("reference_unresolvable"));
+                        self.save_ledger(&ledger);
+                        report.failed += 1;
+                        continue;
+                    }
+                }
+                if let Err(e) = source.cleanup(entry) {
+                    // Keep tombstone; retry next run. No credential loss.
+                    self.save_ledger(&ledger);
+                    tracing::warn!(target: "secrets::migration", migration_id = id, error = %e, "cleanup failed; will retry");
+                    report.pending += 1;
+                    continue;
+                }
+                ledger.upsert(id, entry.namespace, &entry.key, MigrationState::Cleaned, None);
+                self.save_ledger(&ledger);
+                report.cleaned += 1;
+            }
+        }
+
+        report
+    }
 }
 
 #[cfg(test)]
@@ -360,6 +498,185 @@ mod tests {
         let mig = Migrator::new(&store, &path);
         let plan = mig.dry_run(&source).expect("dry run");
         assert!(plan.entries.is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn run_success_migrates_end_to_end() {
+        let store = MockStore::new();
+        let path = ledger_path_tmp("ok");
+        let source = MemSource::single(
+            "provider:official_api_key",
+            NS_PROVIDER,
+            "official_api_key",
+            "sk-live",
+        );
+        let mig = Migrator::new(&store, &path);
+        let plan = mig.dry_run(&source).unwrap();
+        let report = mig.run(&source, &plan);
+        assert_eq!(report.cleaned, 1);
+        assert_eq!(report.failed, 0);
+        // Value lives in the store; legacy removed; ledger terminal.
+        assert_eq!(
+            store.get(NS_PROVIDER, "official_api_key").unwrap().as_deref(),
+            Some("sk-live")
+        );
+        assert_eq!(source.values.lock().unwrap().get("official_api_key"), None);
+        let ledger = MigrationLedger::load(&path);
+        assert_eq!(
+            ledger.state_of("provider:official_api_key"),
+            MigrationState::Cleaned
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn rerun_after_success_is_noop() {
+        let store = MockStore::new();
+        let path = ledger_path_tmp("noop");
+        let source = MemSource::single(
+            "provider:official_api_key",
+            NS_PROVIDER,
+            "official_api_key",
+            "sk-live",
+        );
+        let mig = Migrator::new(&store, &path);
+        let plan = mig.dry_run(&source).unwrap();
+        mig.run(&source, &plan);
+        // Second run: plan empty (entry no longer enumerated after cleanup,
+        // and the ledger would skip it anyway).
+        let plan2 = mig.dry_run(&source).unwrap();
+        assert!(plan2.entries.is_empty());
+        let report2 = mig.run(&source, &plan2);
+        assert_eq!((report2.cleaned, report2.failed, report2.pending), (0, 0, 0));
+        assert_eq!(
+            store.get(NS_PROVIDER, "official_api_key").unwrap().as_deref(),
+            Some("sk-live")
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn readback_failure_rolls_back_store_and_keeps_legacy() {
+        let store = MockStore::new();
+        let path = ledger_path_tmp("rb");
+        let source = MemSource::single(
+            "provider:official_api_key",
+            NS_PROVIDER,
+            "official_api_key",
+            "sk-live",
+        );
+        let mig = Migrator::new(&store, &path);
+        let plan = mig.dry_run(&source).unwrap();
+        store.set_corrupt_get(true);
+        let report = mig.run(&source, &plan);
+        assert_eq!(report.failed, 1);
+        // Rollback: store entry deleted (best-effort), legacy intact.
+        store.set_corrupt_get(false);
+        assert_eq!(store.get(NS_PROVIDER, "official_api_key").unwrap(), None);
+        assert_eq!(
+            source.read_legacy(&plan.entries[0]).unwrap().as_deref(),
+            Some("sk-live")
+        );
+        let ledger = MigrationLedger::load(&path);
+        assert_eq!(
+            ledger.state_of("provider:official_api_key"),
+            MigrationState::Failed
+        );
+        // Re-run retries and succeeds.
+        let plan2 = mig.dry_run(&source).unwrap();
+        assert_eq!(plan2.entries.len(), 1);
+        let report2 = mig.run(&source, &plan2);
+        assert_eq!(report2.cleaned, 1);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn cleanup_failure_keeps_tombstone_and_retries() {
+        let store = MockStore::new();
+        let path = ledger_path_tmp("cl");
+        let source = MemSource::single(
+            "provider:official_api_key",
+            NS_PROVIDER,
+            "official_api_key",
+            "sk-live",
+        );
+        *source.fail_cleanup.lock().unwrap() = true;
+        let mig = Migrator::new(&store, &path);
+        let plan = mig.dry_run(&source).unwrap();
+        let report = mig.run(&source, &plan);
+        assert_eq!(report.pending, 1);
+        assert_eq!(report.failed, 0);
+        // Tombstone in place; value still resolvable from the store.
+        assert_eq!(
+            source
+                .values
+                .lock()
+                .unwrap()
+                .get("official_api_key")
+                .map(|s| s.as_str()),
+            Some(TOMBSTONE)
+        );
+        assert_eq!(
+            store.get(NS_PROVIDER, "official_api_key").unwrap().as_deref(),
+            Some("sk-live")
+        );
+        // Retry completes cleanup (resume: entry re-enters dry_run because
+        // its ledger state is Tombstoned and the store resolves it).
+        *source.fail_cleanup.lock().unwrap() = false;
+        let plan2 = mig.dry_run(&source).unwrap();
+        let report2 = mig.run(&source, &plan2);
+        assert_eq!(report2.cleaned, 1);
+        assert_eq!(
+            MigrationLedger::load(&path).state_of("provider:official_api_key"),
+            MigrationState::Cleaned
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn reference_commit_failure_rolls_back_store() {
+        let store = MockStore::new();
+        let path = ledger_path_tmp("rb7");
+        let source = MemSource::single(
+            "provider:official_api_key",
+            NS_PROVIDER,
+            "official_api_key",
+            "sk-live",
+        );
+        *source.fail_commit.lock().unwrap() = true;
+        let mig = Migrator::new(&store, &path);
+        let plan = mig.dry_run(&source).unwrap();
+        let report = mig.run(&source, &plan);
+        assert_eq!(report.failed, 1);
+        assert_eq!(store.get(NS_PROVIDER, "official_api_key").unwrap(), None);
+        assert_eq!(
+            source.read_legacy(&plan.entries[0]).unwrap().as_deref(),
+            Some("sk-live")
+        );
+        assert_eq!(
+            MigrationLedger::load(&path).state_of("provider:official_api_key"),
+            MigrationState::Failed
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn corrupted_ledger_recovers_to_dry_run() {
+        let store = MockStore::new();
+        let path = ledger_path_tmp("corrupt");
+        std::fs::write(&path, "{ not json").unwrap();
+        let source = MemSource::single(
+            "provider:official_api_key",
+            NS_PROVIDER,
+            "official_api_key",
+            "sk-live",
+        );
+        let mig = Migrator::new(&store, &path);
+        let plan = mig.dry_run(&source).unwrap();
+        assert_eq!(plan.entries.len(), 1);
+        let report = mig.run(&source, &plan);
+        assert_eq!(report.cleaned, 1);
         let _ = std::fs::remove_file(&path);
     }
 }
