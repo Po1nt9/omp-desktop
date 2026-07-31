@@ -1,14 +1,10 @@
 //! `OmpExtension` — Desktop-side client for the versioned `_omp/desktop/v1/*`
 //! Extension Protocol.
 //!
-//! Plan 2 scope: capability cache + method allow-list + fail-closed request
-//! surface. The struct always returns `runtime_unavailable` for the actual
-//! request dispatch because the real ACP transport is wired in Plan 3.
-//!
-//! Plan 3 will inject an `AcpClient` reference and replace the final
-//! `runtime_unavailable` return with a real JSON-RPC call. The capability
-//! negotiation, method allow-list, and error mapping implemented here will
-//! remain unchanged.
+//! Capability cache + method allow-list + fail-closed request surface, with a
+//! pluggable [`V1Transport`] injected once a session negotiates the
+//! `_omp/desktop/v1` capability. Without a transport the surface stays
+//! fail-closed (`runtime_unavailable`) even for advertised methods.
 
 pub mod capability;
 pub mod errors;
@@ -23,6 +19,7 @@ use errors::DesktopV1Error;
 use generated::DesktopV1Capability;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use transport::V1Transport;
 
 const NAMESPACE: &str = "_omp/desktop/v1/";
 
@@ -31,20 +28,20 @@ const NAMESPACE: &str = "_omp/desktop/v1/";
 /// Holds the negotiated capability (if any) and enforces the fail-closed
 /// contract from Plan 1: when no capability has been negotiated, every
 /// request returns [`DesktopV1Error::runtime_unavailable`] without touching
-/// the wire.
+/// the wire. Once a session negotiates the capability, the session manager
+/// injects the session's `AcpClient` as the [`V1Transport`] so advertised
+/// methods dispatch as real JSON-RPC calls.
 pub struct OmpExtension {
     capability: Arc<RwLock<Option<DesktopV1Capability>>>,
-    // When Plan 3 wires the real transport, this will hold a reference to the
-    // `AcpClient` so `request` can issue the actual JSON-RPC call. For Plan 2
-    // the field is intentionally absent and every advertised method also
-    // returns `runtime_unavailable`.
+    transport: Arc<RwLock<Option<Arc<dyn V1Transport>>>>,
 }
 
 impl OmpExtension {
-    /// Construct a fail-closed client with no capability negotiated.
+    /// Construct a fail-closed client with no capability and no transport.
     pub fn new() -> Self {
         Self {
             capability: Arc::new(RwLock::new(None)),
+            transport: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -52,6 +49,13 @@ impl OmpExtension {
     /// the OMP Runtime during ACP `initialize`.
     pub async fn negotiate_capability(&self, cap: Option<DesktopV1Capability>) {
         *self.capability.write().await = cap;
+    }
+
+    /// Install (or clear with `None`) the transport used to dispatch
+    /// advertised v1 methods. Called by the session manager alongside
+    /// capability negotiation; clearing keeps the client fail-closed.
+    pub async fn set_transport(&self, transport: Option<Arc<dyn V1Transport>>) {
+        *self.transport.write().await = transport;
     }
 
     /// Returns `true` when a capability descriptor has been negotiated.
@@ -66,10 +70,12 @@ impl OmpExtension {
 
     /// Dispatch a `_omp/desktop/v1/<method>` request.
     ///
-    /// Plan 2 behavior:
+    /// Fail-closed contract:
     /// 1. No capability → `runtime_unavailable`.
     /// 2. Method not in the capability's method list → `unknown_method`.
-    /// 3. Otherwise → `runtime_unavailable` (real transport lands in Plan 3).
+    /// 3. No transport installed → `runtime_unavailable`.
+    /// 4. Otherwise forward to the transport; a transport failure maps to
+    ///    `runtime_unavailable` with the underlying detail in `args.detail`.
     pub async fn request(
         &self,
         method: &str,
@@ -87,10 +93,19 @@ impl OmpExtension {
                 serde_json::json!({ "method": full_method }),
             ));
         }
-        // Plan 2 fail-closed: the real transport is not wired yet.
-        // Plan 3 will inject the AcpClient and dispatch the request here.
-        let _ = params; // params will be forwarded to the transport in Plan 3.
-        Err(DesktopV1Error::runtime_unavailable())
+        let transport = self.transport.read().await.clone();
+        let Some(transport) = transport else {
+            return Err(DesktopV1Error::runtime_unavailable());
+        };
+        transport
+            .dispatch_v1(&full_method, params)
+            .await
+            .map_err(|e| {
+                DesktopV1Error::new(
+                    "runtime_unavailable",
+                    serde_json::json!({ "detail": e }),
+                )
+            })
     }
 }
 

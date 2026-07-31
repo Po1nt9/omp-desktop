@@ -7,7 +7,10 @@
 
 use crate::omp_desktop_v1::generated::DesktopV1Capability;
 use crate::omp_desktop_v1::ids::id_patterns;
+use crate::omp_desktop_v1::transport::V1Transport;
 use crate::omp_desktop_v1::OmpExtension;
+use async_trait::async_trait;
+use std::sync::{Arc, Mutex};
 
 #[tokio::test]
 async fn extension_client_returns_unavailable_when_capability_absent() {
@@ -148,4 +151,97 @@ fn error_metadata_is_stable_for_known_codes() {
     assert_eq!(jg.message_key, "recovery.journalGap");
     assert!(jg.recoverable);
     assert!(jg.retryable);
+}
+
+/// Mock transport that records every dispatched call and replies with a
+/// canned result. Drives the v1 transport-injection contract tests without
+/// needing a real `AcpClient`.
+struct MockTransport {
+    calls: Mutex<Vec<(String, serde_json::Value)>>,
+    response: Result<serde_json::Value, String>,
+}
+
+impl MockTransport {
+    fn ok(value: serde_json::Value) -> Self {
+        Self {
+            calls: Mutex::new(Vec::new()),
+            response: Ok(value),
+        }
+    }
+
+    fn err(message: &str) -> Self {
+        Self {
+            calls: Mutex::new(Vec::new()),
+            response: Err(message.to_string()),
+        }
+    }
+}
+
+#[async_trait]
+impl V1Transport for MockTransport {
+    async fn dispatch_v1(
+        &self,
+        full_method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        self.calls
+            .lock()
+            .expect("mock calls poisoned")
+            .push((full_method.to_string(), params));
+        self.response.clone()
+    }
+}
+
+/// Negotiate a capability advertising a single `_omp/desktop/v1/<method>`.
+fn cap_with(method: &str) -> DesktopV1Capability {
+    DesktopV1Capability {
+        schema_version: 1,
+        schema_digest: "mock".to_string(),
+        methods: vec![format!("_omp/desktop/v1/{method}")],
+        notifications: vec![],
+        optional_features: vec![],
+    }
+}
+
+#[tokio::test]
+async fn request_dispatches_through_transport_when_present() {
+    let client = OmpExtension::new();
+    client
+        .negotiate_capability(Some(cap_with("sessions.listAll")))
+        .await;
+
+    let mock = Arc::new(MockTransport::ok(serde_json::json!({ "sessions": [] })));
+    let mock_calls = mock.calls.lock().expect("mock calls poisoned").clone();
+    assert!(mock_calls.is_empty());
+    drop(mock_calls);
+    client.set_transport(Some(mock.clone())).await;
+
+    let result = client
+        .request("sessions.listAll", serde_json::json!({ "projectId": "proj_x" }))
+        .await;
+    assert_eq!(result.expect("dispatch must succeed"), serde_json::json!({ "sessions": [] }));
+
+    let calls = mock.calls.lock().expect("mock calls poisoned");
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "_omp/desktop/v1/sessions.listAll");
+    assert_eq!(calls[0].1, serde_json::json!({ "projectId": "proj_x" }));
+}
+
+#[tokio::test]
+async fn request_maps_transport_error_to_runtime_unavailable() {
+    let client = OmpExtension::new();
+    client
+        .negotiate_capability(Some(cap_with("usage.reports")))
+        .await;
+    client
+        .set_transport(Some(Arc::new(MockTransport::err("boom"))))
+        .await;
+
+    let result = client.request("usage.reports", serde_json::json!({})).await;
+    let err = result.expect_err("transport error must map to runtime_unavailable");
+    assert_eq!(err.code, "runtime_unavailable");
+    assert_eq!(
+        err.args.get("detail").and_then(|v| v.as_str()),
+        Some("boom")
+    );
 }
