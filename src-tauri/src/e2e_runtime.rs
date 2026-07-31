@@ -274,3 +274,102 @@ async fn e2e_crash_journal_marks_interrupted_no_replay() {
         Some(crate::event_journal::recovery::RecoveryReport::Clean)
     );
 }
+
+/// Real-Runtime gate: only Some when OMP_E2E_REAL=1 and an omp binary exists.
+/// Never a CI gate — the default path skips with a log line (spec D4).
+fn real_omp_binary() -> Option<PathBuf> {
+    if std::env::var("OMP_E2E_REAL").ok().as_deref() != Some("1") {
+        return None;
+    }
+    if let Ok(p) = std::env::var("OMP_E2E_REAL_BINARY") {
+        let p = PathBuf::from(p);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    for cand in ["/opt/homebrew/bin/omp", "/usr/local/bin/omp"] {
+        let p = PathBuf::from(cand);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn spawn_real() -> Option<(Arc<AcpClient>, mpsc::UnboundedReceiver<AcpEvent>)> {
+    let bin = real_omp_binary()?;
+    let agent_dir = std::env::temp_dir().join(format!("omp-e2e-agent-{}", std::process::id()));
+    std::fs::create_dir_all(&agent_dir).ok()?;
+    let opts = SpawnOptions {
+        binary_path: Some(bin),
+        agent_dir: Some(agent_dir),
+        ..Default::default()
+    };
+    AcpClient::spawn_with_options(PathBuf::new(), std::env::temp_dir(), opts).ok()
+}
+
+/// AC-1.1 end-to-end leg: real capability negotiation against a live
+/// `omp acp --stdio` (no LLM — handshake + local session only).
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_real_handshake_capabilities() {
+    let Some((client, _rx)) = spawn_real() else {
+        eprintln!("SKIP e2e_real_handshake_capabilities: OMP_E2E_REAL!=1 or no omp binary");
+        return;
+    };
+    // initialize runs first inside initialize_and_open_session; session/new
+    // may legitimately fail on auth-less machines, so we assert on the
+    // cached initialize result regardless of the session outcome.
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        client.initialize_and_open_session(None),
+    )
+    .await;
+    let init = client
+        .initialize_result()
+        .expect("initialize result cached even if session/new failed");
+    assert_eq!(
+        init.get("protocolVersion").and_then(|v| v.as_u64()),
+        Some(1),
+        "real Runtime protocolVersion mismatch: {init}"
+    );
+    assert!(
+        init.get("agentCapabilities").is_some() || init.get("capabilities").is_some(),
+        "real Runtime advertised no capabilities: {init}"
+    );
+    client.kill().await;
+}
+
+/// AC-1.9 / AC-5.1 / AC-5.2 evidence probe: which `_omp/desktop/v1/*` methods
+/// does the installed Runtime actually answer? Results are recorded into the
+/// acceptance matrix by the docs task — the test itself only asserts the
+/// probes terminate with a structured outcome (never hang/panic).
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_real_v1_method_probe() {
+    use crate::omp_desktop_v1::transport::V1Transport;
+    let Some((client, _rx)) = spawn_real() else {
+        eprintln!("SKIP e2e_real_v1_method_probe: OMP_E2E_REAL!=1 or no omp binary");
+        return;
+    };
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        client.initialize_and_open_session(None),
+    )
+    .await;
+    for m in ["diagnostics.selfCheck", "providers.list", "sessionConfig.get"] {
+        let full = format!("_omp/desktop/v1/{m}");
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            client.dispatch_v1(&full, serde_json::json!({})),
+        )
+        .await;
+        match &outcome {
+            Ok(Ok(v)) => {
+                let s = v.to_string();
+                eprintln!("v1 probe {full}: OK {}", &s[..s.len().min(200)]);
+            }
+            Ok(Err(e)) => eprintln!("v1 probe {full}: ERR {e}"),
+            Err(_) => panic!("v1 probe {full} timed out after 15s"),
+        }
+    }
+    client.kill().await;
+}
