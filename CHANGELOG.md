@@ -63,6 +63,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CI 加固：mock E2E 二进制显式构建 + 锁改为无中毒 parking_lot 实现；
   store 磁盘测试自隔离临时 HOME；3 平台 CI 全绿，4 目标打包发布全绿，
   授权文件确认打包进 macOS 应用；矩阵翻转至 57/12/88/1。
+- **Release blocker fixed (`default-run`):** the 4-target packaging run
+  bundled the 385KB `mock_acp_runtime` test harness as the app executable
+  on all 3 platforms — Tauri picks the main binary by matching the package
+  name or `package > default-run`, and with two auto-discovered bins
+  neither matched. Added `default-run = "omp-desktop"`; rebuilt and verified
+  macOS (15.5MB), Linux AppImage (21MB) and Windows NSIS (`omp-desktop.exe`
+  GUI) all ship the real binary. Also completes AC-6.8: `strings` scan of
+  all 3 rebuilt binaries finds no `sk-` API keys / private keys / embedded
+  credentials. Matrix now 58/12/87/1.
+  发布阻塞修复：4 目标打包曾把测试用的 mock 二进制打成主程序（三平台
+  全坏）——为多 bin 项目补上 `default-run` 后重建并逐平台验证主程序
+  正确；同时对 3 平台产物完成密钥模式扫描（AC-6.8，无任何明文密钥）；
+  矩阵翻转至 58/12/87/1。
 
 ### Known Limitations / 已知限制
 
