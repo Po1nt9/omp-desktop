@@ -1582,6 +1582,21 @@ mod tests {
     use super::*;
     use chrono::TimeZone;
 
+    /// Isolate tests that touch the real on-disk store. Other modules' tests
+    /// (replay-gate, support-bundle, …) switch `OMP_DESKTOP_HOME` under
+    /// `APP_HOME_ENV_LOCK`; without the same lock these store tests race env
+    /// changes mid-test and see two different paths (seen as
+    /// `assert_eq!(a.path, b.path)` flaking on Windows CI, where the parallel
+    /// replay-gate test repoints HOME between the two ensure calls).
+    fn store_test_home(tag: &str) -> (parking_lot::MutexGuard<'static, ()>, PathBuf) {
+        let env = crate::paths::APP_HOME_ENV_LOCK.lock();
+        let dir = std::env::temp_dir().join(format!("omp-store-test-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("OMP_DESKTOP_HOME", &dir);
+        (env, dir)
+    }
+
     #[test]
     fn redact_scrubs_long_tokenish() {
         let s = "header Bearer sk-abcdefghijklmnopqrstuvwxyz123456 tail";
@@ -1753,7 +1768,7 @@ mod tests {
 
     #[test]
     fn ensure_general_project_is_idempotent_and_not_removable() {
-        let _ = ensure_app_dirs();
+        let (_env, _dir) = store_test_home("general");
         let a = ensure_general_project().expect("ensure");
         assert_eq!(a.id, GENERAL_PROJECT_ID);
         assert!(a.system);
@@ -1770,7 +1785,7 @@ mod tests {
 
     #[test]
     fn create_session_defaults_to_general_project() {
-        let _ = ensure_app_dirs();
+        let (_env, _dir) = store_test_home("create-session");
         let meta = create_session(None, Some("t".into()), false).expect("create");
         assert_eq!(meta.project_id.as_deref(), Some(GENERAL_PROJECT_ID));
         let _ = delete_session(&meta.id);
