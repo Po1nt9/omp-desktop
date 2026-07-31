@@ -10,6 +10,7 @@ use super::control_plane::{
 };
 use super::outbound::{self, OutboundRouter};
 use super::projects::{self, load_trusted_projects};
+use super::replay_guard::{ReplayGuard, ReplayVerdict};
 use super::session::SessionStore;
 use super::slash::{self, BuiltinCommand};
 use super::types::{ChannelInstance, IncomingMessage};
@@ -108,6 +109,15 @@ impl<F: FnOnce()> Drop for ReclaimOnDrop<F> {
     }
 }
 
+/// Current unix time in seconds (0 on clock-before-epoch, matching the
+/// recovery module's defensive style).
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 pub struct Engine {
     store: SessionStore,
     outbound: OutboundRouter,
@@ -134,6 +144,8 @@ pub struct Engine {
     dedup: super::dedup_store::DedupStore,
     /// Per-channel + per-scope request rate limiting (in-memory).
     rate_limiter: super::rate_limiter::RateLimiter,
+    /// AC-8.4: webhook freshness + nonce anti-replay (in-memory).
+    replay_guard: ReplayGuard,
 }
 
 impl Engine {
@@ -158,6 +170,7 @@ impl Engine {
             spawn_locks: Arc::new(Mutex::new(HashMap::new())),
             dedup: super::dedup_store::DedupStore::open_default(),
             rate_limiter: super::rate_limiter::RateLimiter::new_default(),
+            replay_guard: ReplayGuard::new(super::replay_guard::DEFAULT_FRESHNESS_WINDOW_SECS),
         }
     }
 
@@ -178,6 +191,7 @@ impl Engine {
             spawn_locks: Arc::new(Mutex::new(HashMap::new())),
             dedup: super::dedup_store::DedupStore::ephemeral(),
             rate_limiter: super::rate_limiter::RateLimiter::new_default(),
+            replay_guard: ReplayGuard::new(super::replay_guard::DEFAULT_FRESHNESS_WINDOW_SECS),
         }
     }
 
@@ -208,6 +222,24 @@ impl Engine {
             content_len = msg.content.len(),
             "remote_im: handle begin"
         );
+
+        // ── AC-8.4: anti-replay — webhook freshness window + nonce cache ──
+        match self
+            .replay_guard
+            .check(&msg.channel, msg.timestamp, msg.nonce.as_deref(), now_secs())
+        {
+            ReplayVerdict::Allow => {}
+            verdict => {
+                tracing::warn!(
+                    target: "remote_im::replay_guard",
+                    channel = %msg.channel,
+                    instance = %msg.instance_id,
+                    verdict = ?verdict,
+                    "message dropped by anti-replay guard"
+                );
+                return;
+            }
+        }
 
         // ── P1: 去重 (dedup) — drop messages already seen across restarts ──
         if !self.dedup.check_and_mark(&msg.channel, &msg.message_id) {
@@ -1523,6 +1555,91 @@ mod tests {
             engine.spawn_locks.lock().is_empty(),
             "spawn_locks must be empty after a failed spawn with no waiter, got: {} entries",
             engine.spawn_locks.lock().len()
+        );
+    }
+
+    /// AC-8.4: a webhook message with a stale timestamp must be dropped by
+    /// the anti-replay guard BEFORE the dedup gate (message_id never marked).
+    #[tokio::test]
+    async fn stale_webhook_message_dropped_before_dedup() {
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let now = now_secs();
+        let msg = IncomingMessage {
+            channel: "wecom".into(),
+            instance_id: "wc-1".into(),
+            message_id: "stale-1".into(),
+            chat_id: "u1".into(),
+            chat_type: "p2p".into(),
+            sender_id: "u1".into(),
+            content: "hi".into(),
+            mentioned_bot: true,
+            attachments: vec![],
+            timestamp: Some(now - 3600),
+            nonce: Some("n-stale".into()),
+        };
+        engine.handle(msg).await;
+        assert!(
+            engine.dedup.check_and_mark("wecom", "stale-1"),
+            "stale message must never reach the dedup gate"
+        );
+    }
+
+    /// AC-8.4: a replayed nonce (same sig/nonce, fresh message_id) must be
+    /// dropped by the guard; only the first delivery reaches dedup.
+    #[tokio::test]
+    async fn replayed_nonce_dropped_before_dedup() {
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let now = now_secs();
+        let mk = |id: &str| IncomingMessage {
+            channel: "wecom".into(),
+            instance_id: "wc-1".into(),
+            message_id: id.into(),
+            chat_id: "u1".into(),
+            chat_type: "p2p".into(),
+            sender_id: "u1".into(),
+            content: "hi".into(),
+            mentioned_bot: true,
+            attachments: vec![],
+            timestamp: Some(now),
+            nonce: Some("n-replay".into()),
+        };
+        engine.handle(mk("rep-1")).await;
+        engine.handle(mk("rep-2")).await;
+        assert!(
+            !engine.dedup.check_and_mark("wecom", "rep-1"),
+            "first delivery must have reached dedup"
+        );
+        assert!(
+            engine.dedup.check_and_mark("wecom", "rep-2"),
+            "replay must never reach the dedup gate"
+        );
+    }
+
+    /// AC-8.4: a fresh signed webhook message passes the guard into the
+    /// normal pipeline (reaches dedup).
+    #[tokio::test]
+    async fn fresh_signed_message_passes_replay_guard() {
+        let outbound = OutboundRouter::new();
+        let engine = Engine::new_ephemeral(outbound, false);
+        let msg = IncomingMessage {
+            channel: "wecom".into(),
+            instance_id: "wc-1".into(),
+            message_id: "ok-1".into(),
+            chat_id: "u1".into(),
+            chat_type: "p2p".into(),
+            sender_id: "u1".into(),
+            content: "hi".into(),
+            mentioned_bot: true,
+            attachments: vec![],
+            timestamp: Some(now_secs()),
+            nonce: Some("n-ok".into()),
+        };
+        engine.handle(msg).await;
+        assert!(
+            !engine.dedup.check_and_mark("wecom", "ok-1"),
+            "fresh message must reach the dedup gate"
         );
     }
 }

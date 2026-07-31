@@ -129,7 +129,10 @@ pub async fn run(
                                     mentioned_bot: true,
                                     attachments: vec![],
                                     timestamp: None,
-                                    nonce: None,
+                                    // AC-8.4: LINE signs only the body, and one
+                                    // POST may carry multiple events sharing the
+                                    // signature — derive a per-event replay key.
+                                    nonce: sig.as_ref().map(|s| format!("{s}:{reply_token}")),
                                 }).await;
                             }
                         }

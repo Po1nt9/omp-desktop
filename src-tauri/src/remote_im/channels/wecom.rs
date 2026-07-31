@@ -258,10 +258,12 @@ async fn run_webhook(
                         let _ = socket.write_all(b"HTTP/1.1 404\r\n\r\n").await;
                         return;
                     }
+                    // AC-8.4: parse sig/timestamp/nonce unconditionally so the
+                    // anti-replay guard sees them even without a callback token.
+                    let (sig, ts, nonce) = parse_wecom_sig(&req);
                     // When a callback token is configured, require a valid
                     // msg_signature so attackers cannot POST forged messages.
                     if let Some(token) = cb_token.as_deref() {
-                        let (sig, ts, nonce) = parse_wecom_sig(&req);
                         let encrypt = wecom_encrypt_field(body);
                         if !wecom_signature_ok(token, sig.as_deref(), ts.as_deref(), nonce.as_deref(), encrypt.as_deref()) {
                             tracing::warn!(instance = %inst.id, "wecom: bad or missing msg_signature");
@@ -292,8 +294,8 @@ async fn run_webhook(
                                 content: text.into(),
                                 mentioned_bot: true,
                                 attachments: vec![],
-                                timestamp: None,
-                                nonce: None,
+                                timestamp: ts.and_then(|s| s.parse::<i64>().ok()),
+                                nonce,
                             }).await;
                         }
                     }
