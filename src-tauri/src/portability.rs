@@ -142,8 +142,15 @@ mod tests {
         let _ = store::save_sessions_index(&list);
     }
 
+    /// These tests use the real app data root; serialize against tests that
+    /// temporarily point `OMP_DESKTOP_HOME` elsewhere.
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        crate::paths::APP_HOME_ENV_LOCK.lock().unwrap()
+    }
+
     #[test]
     fn test_import_too_many_messages_rejected() {
+        let _env = env_lock();
         let data = PortableSession {
             meta: test_meta("toomany"),
             messages: (0..MAX_MESSAGES_PER_SESSION + 1)
@@ -159,6 +166,7 @@ mod tests {
 
     #[test]
     fn test_import_skips_existing_session() {
+        let _env = env_lock();
         let id = format!("skip-test-{}", unique_suffix());
         let meta = test_meta(&id);
         store::save_messages(&id, &[]).unwrap();
@@ -176,6 +184,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_export_import() {
+        let _env = env_lock();
         let id = format!("rt-test-{}", unique_suffix());
         let msg = make_msg("user", "hello portability");
         let meta = test_meta(&id);
