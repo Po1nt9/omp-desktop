@@ -128,7 +128,7 @@ jobs:
           CROSS_TARGET: ${{ matrix.omp_target }}
         run: |
           bun install --frozen-lockfile
-          bun --cwd packages/coding-agent run build
+          bun --cwd=packages/coding-agent run build
 
       - name: Place omp binary at sidecar path
         shell: bash
