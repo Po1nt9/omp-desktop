@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship OMP Desktop with a bundled `omp` Runtime (works out of the box), keep the manual-path override, and add an in-app "检查 omp 更新" upgrade flow.
+**Goal:** Ship OMP Desktop with a bundled `omp` Runtime (works out of the box), keep the manual-path override, and add an in-app "检查 OMP 更新" upgrade flow.
 
 **Architecture:** Three-tier binary resolution at spawn (manual override → in-app upgraded copy at `<app_data>/runtime/omp` → bundled sidecar next to the main exe). CI compiles omp from the `runtime/oh-my-pi` submodule inside the existing release matrix job and places it at `src-tauri/binaries/omp-<triple>` for Tauri `externalBin`. Upgrades download from upstream `can1357/oh-my-pi` releases (TLS trust, SHA256 recorded) and atomically replace the writable copy.
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Product name is **OMP Desktop**; the Runtime is **omp** (lowercase, it is a name).
-- The upgrade button copy is **检查 omp 更新** — never "检查 Runtime 更新".
+- The upgrade button copy is **检查 OMP 更新** (en: "Check OMP update", zh-TW: 檢查 OMP 更新) — never "检查 Runtime 更新". (Shipped uppercase per master design §19 / `check:brand`: user-visible OMP is uppercase; §2.4 technical identifiers like the `omp` executable name excepted.)
 - No hardcoded user-facing English/Chinese — all UI strings via `createT(locale)` / `t()`, added to all 3 locales (`src/i18n/messages.ts` en + zh-CN blocks, `src/i18n/zh-tw.ts`).
 - Never use `window.confirm` / `window.prompt` / `window.alert` in Tauri UI.
 - Log metadata only — never prompt content, never secret values, never dump binary stdout to logs (SA-L.1 / AC-8.8).
@@ -22,7 +22,7 @@
 - README.md is Chinese (primary); README_EN.md is English. Keep both in sync.
 - Run `pnpm check:brand` before every commit that touches bundled artifacts or user-facing copy.
 - Full gates before the final commit: `cd src-tauri && cargo test --lib`, `pnpm test`, `pnpm typecheck`, `pnpm check:i18n`, `pnpm check:brand`, `pnpm check:provenance`, `pnpm check:legal`.
-- Rust env mutation in tests MUST hold `crate::paths::APP_HOME_ENV_LOCK` (parking_lot Mutex) and use `unsafe { std::env::set_var(...) }` (edition 2024).
+- Rust env mutation in tests MUST hold `crate::paths::APP_HOME_ENV_LOCK` (parking_lot Mutex); `std::env::set_var` is safe under this crate's edition 2021 (no `unsafe` block).
 
 ---
 
@@ -49,7 +49,6 @@ Create `src-tauri/src/omp_runtime.rs` with only the test module first (file won'
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn manual_wins_over_upgraded_and_bundled() {
@@ -509,7 +508,7 @@ pub(crate) fn http_client(user_agent: &str) -> Result<reqwest::Client, String> {
 Create `src-tauri/src/omp_update.rs` containing only:
 
 ```rust
-//! In-app independent omp Runtime upgrade ("检查 omp 更新").
+//! In-app independent omp Runtime upgrade ("检查 OMP 更新").
 //! Spec: docs/superpowers/specs/2026-08-01-bundle-omp-runtime-design.md
 
 #[cfg(test)]
@@ -560,8 +559,8 @@ mod tests {
     fn with_test_home() -> (parking_lot::MutexGuard<'static, ()>, tempfile::TempDir) {
         let guard = crate::paths::APP_HOME_ENV_LOCK.lock();
         let dir = tempfile::tempdir().unwrap();
-        // SAFETY: serialized by APP_HOME_ENV_LOCK (process-wide env mutation).
-        unsafe { std::env::set_var("OMP_DESKTOP_HOME", dir.path()) };
+        // Serialized by APP_HOME_ENV_LOCK (process-wide env mutation; edition 2021 — set_var is safe).
+        std::env::set_var("OMP_DESKTOP_HOME", dir.path());
         (guard, dir)
     }
 
@@ -861,7 +860,7 @@ git commit -m "feat(update): in-app omp Runtime upgrade (check + TLS download + 
 
 ---
 
-### Task 5: Settings UI ("检查 omp 更新") + i18n
+### Task 5: Settings UI ("检查 OMP 更新") + i18n
 
 **Files:**
 - Modify: `src/lib/api.ts` (near :324 `app_check_update` wrapper)
@@ -905,7 +904,7 @@ export function ompApplyUpdate(url: string): Promise<OmpUpdateApplied> {
 In `src/i18n/messages.ts`, en block (next to the `settings.releaseChannel*` keys ~:1003):
 
 ```ts
-  "settings.ompUpdate": "Check omp update",
+  "settings.ompUpdate": "Check OMP update",
   "settings.ompUpdateDesc":
     "Update the built-in omp engine independently of the app.",
   "settings.ompUpdateChecking": "Checking…",
@@ -922,7 +921,7 @@ In `src/i18n/messages.ts`, en block (next to the `settings.releaseChannel*` keys
 zh-CN block (same key order):
 
 ```ts
-  "settings.ompUpdate": "检查 omp 更新",
+  "settings.ompUpdate": "检查 OMP 更新",
   "settings.ompUpdateDesc": "独立于 App 更新内置的 omp 引擎。",
   "settings.ompUpdateChecking": "检查中…",
   "settings.ompUpdateAvailable": "发现新版 omp {version}",
@@ -1078,6 +1077,8 @@ git add src/lib/api.ts src/components/SettingsPage.tsx src/i18n/messages.ts src/
 git commit -m "feat(settings): 检查 omp 更新 row in About (3-locale i18n)"
 ```
 
+(Note: commit 6c53acb landed with the lowercase message above; the shipped button label itself is uppercase 「检查 OMP 更新」.)
+
 ---
 
 ### Task 6: Docs + full gates + memory
@@ -1098,18 +1099,34 @@ Locate the stale lines:
 grep -n -i "runtime" README.md README_EN.md | grep -i -E "install|安装|manual|手动|指定|CLI"
 ```
 
-Replace the "user must install omp first / point at CLI path" guidance with (keep the surrounding format/heading level):
+Replace the "user must install omp first / point at CLI path" guidance with (keep the surrounding format/heading level). Note: the shipped button label is uppercase 「检查 OMP 更新」 / "Check OMP update" (user-approved, forced by `check:brand` / master design §19 — user-visible OMP is uppercase; §2.4 technical identifiers like the `omp` executable name excepted). Since READMEs are user-visible per the brand policy, generic engine mentions are backticked lowercase `omp`.
 
-README.md (zh):
+README.md (zh) — as shipped:
 
 ```markdown
-OMP Desktop 自带 omp 引擎，开箱即用，无需单独安装。高级用户仍可在 设置 → 手动指定 CLI 路径 覆盖内置版本；设置 → 关于 里的「检查 omp 更新」可独立于 App 升级 omp。
+### 首次运行：内置 OMP 引擎
+
+OMP Desktop 自带由 `runtime/oh-my-pi` submodule 编译的 `omp` 引擎——开箱即用，无需单独安装 Runtime。
+
+1. 直接启动即可使用；无需手动安装 OMP CLI。
+2. 高级用户仍可在 **设置** 中将 **手动 CLI 路径（Manual CLI path）** 指向自己的 `omp`（或 `omp.exe`）二进制，覆盖内置版本。
+3. **设置** → **关于** 里的「检查 OMP 更新」可独立于 App 升级 `omp`。
 ```
 
-README_EN.md (en):
+README_EN.md (en) — as shipped:
 
 ```markdown
-OMP Desktop ships with the omp engine built in — no separate install needed. Advanced users can still override it via Settings → Manual CLI path; the "Check omp update" button under Settings → About upgrades omp independently of the app.
+### First run: bundled OMP engine
+
+OMP Desktop ships with the `omp` engine built in — compiled from the pinned
+`runtime/oh-my-pi` submodule — so it works out of the box with no separate
+Runtime install.
+
+1. Just launch the app — no manual OMP CLI install needed.
+2. Advanced users can still override the bundled engine in **Settings** by
+   pointing the **Manual CLI path** at their own `omp` (or `omp.exe`) binary.
+3. The "Check OMP update" button under **Settings** → **About** upgrades `omp`
+   independently of the app.
 ```
 
 - [ ] **Step 2: CHANGELOG entry**
@@ -1122,10 +1139,10 @@ At the top of `CHANGELOG.md` (after the title/intro, before the first existing v
 - **Bundled omp Runtime:** the app now ships with the omp engine compiled from
   the pinned `runtime/oh-my-pi` submodule — works out of the box, no manual CLI
   install. Resolution order: manual override → in-app upgraded copy → bundled
-  sidecar. Settings → About gains "检查 omp 更新" to upgrade omp independently
-  from upstream `can1357/oh-my-pi` releases.
+  sidecar. Settings → About gains "Check OMP update"（检查 OMP 更新）to upgrade
+  omp independently from upstream `can1357/oh-my-pi` releases.
 - **内置 omp 引擎：** App 现在自带由 `runtime/oh-my-pi` submodule 编译的 omp——开箱即用。
-  解析顺序：手动指定 → App 内升级副本 → 内置副本。设置 → 关于 新增「检查 omp 更新」，
+  解析顺序：手动指定 → App 内升级副本 → 内置副本。设置 → 关于 新增「检查 OMP 更新」，
   可独立于 App 从上游 `can1357/oh-my-pi` 升级 omp。
 ```
 
@@ -1149,7 +1166,7 @@ Expected: all green. (If the known flake `store::tests::ensure_general_project_i
 pnpm dev
 ```
 
-In the app: Settings → About → click 检查 omp 更新 → expect "发现新版 omp …" (bundled pin is behind upstream) → 下载并安装 → expect "已更新到 omp …——重启 App 后生效". Restart the app; welcome screen should advance past the CLI gate with zero manual config (bundled/upgraded binary resolves).
+In the app: Settings → About → click 检查 OMP 更新 → expect "发现新版 omp …" (bundled pin is behind upstream) → 下载并安装 → expect "已更新到 omp …——重启 App 后生效". Restart the app; welcome screen should advance past the CLI gate with zero manual config (bundled/upgraded binary resolves).
 
 - [ ] **Step 5: Commit + push**
 

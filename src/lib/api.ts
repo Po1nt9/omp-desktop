@@ -324,6 +324,29 @@ export async function appCheckUpdate() {
   return invoke<AppUpdateCheck>("app_check_update");
 }
 
+/** Built-in omp engine update check (Settings → About). Independent of app updates. */
+export interface OmpUpdateCheck {
+  currentVersion: string | null;
+  latestVersion: string;
+  updateAvailable: boolean;
+  downloadUrl: string | null;
+  releaseUrl: string;
+}
+
+export interface OmpUpdateApplied {
+  version: string | null;
+  sha256: string;
+  path: string;
+}
+
+export function ompCheckUpdate(): Promise<OmpUpdateCheck> {
+  return invoke<OmpUpdateCheck>("omp_check_update");
+}
+
+export function ompApplyUpdate(url: string): Promise<OmpUpdateApplied> {
+  return invoke<OmpUpdateApplied>("omp_apply_update", { url });
+}
+
 /** True when this install can apply Tauri in-app updates (Linux: AppImage only). */
 export async function isAutoUpdateSupported() {
   return invoke<boolean>("is_auto_update_supported");

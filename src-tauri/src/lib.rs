@@ -22,6 +22,8 @@ mod mirror;
 mod mock_acp;
 mod models_catalog;
 mod omp_desktop_v1;
+mod omp_runtime;
+mod omp_update;
 mod paths;
 mod process_util;
 mod process_limits;
@@ -225,6 +227,8 @@ pub fn run() {
             commands::pick_cli_binary,
             commands::open_external_url,
             commands::app_check_update,
+            commands::omp_check_update,
+            commands::omp_apply_update,
             updater::is_auto_update_supported,
             updater::is_updater_plugin_enabled,
             updater::updater_status,
@@ -434,6 +438,8 @@ fn registered_command_names() -> &'static [&'static str] {
         "pick_cli_binary",
         "open_external_url",
         "app_check_update",
+        "omp_check_update",
+        "omp_apply_update",
         "is_auto_update_supported",
         "is_updater_plugin_enabled",
         "updater_status",

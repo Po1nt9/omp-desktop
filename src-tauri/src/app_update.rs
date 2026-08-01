@@ -265,13 +265,13 @@ fn build_check_from_tag(current_version: &str, tag: &str, html_url: &str) -> App
     }
 }
 
-fn is_allowed_update_url(url: &str) -> bool {
+pub(crate) fn is_allowed_update_url(url: &str) -> bool {
     url.starts_with("https://")
         || url.starts_with("http://127.0.0.1")
         || url.starts_with("http://localhost")
 }
 
-fn format_http_error(status: u16, body: &str) -> String {
+pub(crate) fn format_http_error(status: u16, body: &str) -> String {
     let lower = body.to_ascii_lowercase();
     if status == 403 || status == 429 {
         if lower.contains("rate limit") {
@@ -293,7 +293,7 @@ fn format_http_error(status: u16, body: &str) -> String {
     format!("GitHub releases returned HTTP {status}")
 }
 
-fn http_client(user_agent: &str) -> Result<reqwest::Client, String> {
+pub(crate) fn http_client(user_agent: &str) -> Result<reqwest::Client, String> {
     crate::proxy::apply_to_reqwest(reqwest::Client::builder())
         .connect_timeout(CONNECT_TIMEOUT)
         .timeout(REQUEST_TIMEOUT)

@@ -142,14 +142,13 @@ curl -fsSL https://raw.githubusercontent.com/Po1nt9/omp-desktop/main/scripts/ins
 > OS 信任警告仅为外观问题——详见
 > [签名要求](./docs/release/signing-requirements.md) 了解 Plan 9 剩余工作及免费替代方案（SignPath、Homebrew）。
 
-### 首次运行：指定 OMP Runtime
+### 首次运行：内置 OMP 引擎
 
-OMP Desktop **不内置** Runtime——由你自行提供 OMP CLI，以便独立升级 Runtime。首次启动：
+OMP Desktop 自带由 `runtime/oh-my-pi` submodule 编译的 `omp` 引擎——开箱即用，无需单独安装 Runtime。
 
-1. 安装 [OMP Runtime](https://github.com/can1357/oh-my-pi) CLI。
-2. 在 OMP Desktop 中打开 **设置**。
-3. 将 **手动 CLI 路径（Manual CLI path）** 指向 `omp`（或 `omp.exe`）二进制位置。
-4. 此后 Agent 会话会启动你指定的 Runtime。
+1. 直接启动即可使用；无需手动安装 OMP CLI。
+2. 高级用户仍可在 **设置** 中将 **手动 CLI 路径（Manual CLI path）** 指向自己的 `omp`（或 `omp.exe`）二进制，覆盖内置版本。
+3. **设置** → **关于** 里的「检查 OMP 更新」可独立于 App 升级 `omp`。
 
 ## 来源
 

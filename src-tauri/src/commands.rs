@@ -239,6 +239,18 @@ pub async fn app_check_update() -> Result<crate::app_update::AppUpdateCheck, Str
     crate::app_update::check_app_update().await
 }
 
+/// Check upstream omp Runtime for a newer version (Settings → About).
+#[tauri::command]
+pub async fn omp_check_update() -> Result<crate::omp_update::OmpUpdateCheck, String> {
+    crate::omp_update::check_omp_update().await
+}
+
+/// Download + apply the newer omp Runtime into <app_data>/runtime/.
+#[tauri::command]
+pub async fn omp_apply_update(url: String) -> Result<crate::omp_update::OmpUpdateApplied, String> {
+    crate::omp_update::download_and_apply(url.trim()).await
+}
+
 /// Open a URL in the system browser (docs, install pages).
 #[tauri::command]
 pub async fn open_external_url(url: String) -> Result<(), String> {
