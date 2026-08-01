@@ -119,6 +119,28 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
+      # bundle-omp: bun --compile cross-downloads the baseline target tarball and
+      # then moves bun.exe from a temp dir under CWD (D:) into the cache under
+      # $HOME (C:) — that cross-volume move fails on GitHub Windows runners
+      # ("Failed to extract executable for 'bun-windows-x64-baseline-vX.Y.Z'").
+      # Pre-seed the cache from the same npm tarball bun would download
+      # (@oven/bun-windows-x64-baseline) so the download+move is skipped entirely.
+      # Cache filename must match bun's CompileTarget Display: <target>-v<version>.
+      - name: Pre-seed bun compile-target cache (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="$(bun --version)"
+          TARGET="bun-windows-x64-baseline"
+          TMP="$(mktemp -d)"
+          npm pack "@oven/${TARGET}@${VER}" --pack-destination "$TMP"
+          tar xzf "$TMP"/*.tgz -C "$TMP"
+          CACHE_DIR="${BUN_INSTALL:-$HOME/.bun}/install/cache"
+          mkdir -p "$CACHE_DIR"
+          cp "$TMP/package/bin/bun.exe" "$CACHE_DIR/${TARGET}-v${VER}"
+          ls -l "$CACHE_DIR"
+
       # bundle-omp: build-binary.ts embeds prebuilt pi_natives addons. Fetch
       # them from the @oh-my-pi/pi-natives-<platform> npm package at the
       # submodule's own version (native sources are unchanged at that pin).
@@ -233,8 +255,6 @@ jobs:
           OMP_DESKTOP_UPDATER_ENDPOINT: ${{ steps.updchan.outputs.endpoint }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # TEMP diagnostic: surface linuxdeploy stderr for the Linux bundling failure.
-          VERBOSE: "1"
         with:
           # Root package.json + src-tauri/ layout (create-tauri-app style)
           projectPath: .
@@ -249,6 +269,24 @@ jobs:
           args: ${{ matrix.args }}${{ steps.updater.outputs.enabled == 'true' && ' --config src-tauri/tauri.release.conf.json' || '' }}
           # We assemble a multi-platform latest.json in assemble-updater-manifest.
           includeUpdaterJson: false
+
+      # TEMP diagnostic: tauri-bundler captures linuxdeploy's stderr and reports
+      # only "failed to run linuxdeploy". Re-run linuxdeploy manually against the
+      # leftover AppDir so its real error reaches the log. Remove once fixed.
+      - name: Debug linuxdeploy failure (manual rerun)
+        if: failure() && matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          df -h .
+          APPDIR=$(echo src-tauri/target/release/bundle/appimage/*.AppDir)
+          du -sh "$APPDIR" || true
+          ls -la "$APPDIR/usr/bin/" || true
+          file "$APPDIR"/usr/bin/* || true
+          export PATH="$HOME/.cache/tauri:$PATH"
+          OUTPUT=/tmp/debug.AppImage ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 VERBOSE=1 \
+            "$HOME/.cache/tauri/linuxdeploy-x86_64.AppImage" \
+            --appimage-extract-and-run --verbosity 0 \
+            --appdir "$APPDIR" --plugin gtk --output appimage
 
       # 绿色版：免安装 zip（单文件 exe + 说明）。WebView2 仍由系统提供。
       - name: Windows portable zip (绿色版)
