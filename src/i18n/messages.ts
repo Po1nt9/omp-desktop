@@ -1005,6 +1005,18 @@ const en = {
   "settings.releaseChannel.nightly": "Release channel: nightly",
   "settings.releaseChannelDesc":
     "Channels are tied to the installed build — install a beta/nightly build to switch.",
+  "settings.ompUpdate": "Check OMP update",
+  "settings.ompUpdateDesc":
+    "Update the built-in OMP engine independently of the app.",
+  "settings.ompUpdateChecking": "Checking…",
+  "settings.ompUpdateAvailable": "OMP {version} available",
+  "settings.ompUpdateLatest": "OMP is up to date ({version})",
+  "settings.ompUpdateDownload": "Download & install",
+  "settings.ompUpdateDownloading": "Downloading…",
+  "settings.ompUpdateDone": "Updated to OMP {version} — restart the app to apply",
+  "settings.ompUpdateError": "OMP update failed: {error}",
+  "settings.ompUpdateUnavailable":
+    "No prebuilt OMP for this platform on the latest release",
   "settings.close": "Close",
   "settings.sharedConfirm":
     "Switch to shared ~/.grok? Data will not merge silently. Confirm?",
@@ -3107,6 +3119,16 @@ const zh: Record<MessageKey, string> = {
   "settings.releaseChannel.beta": "更新渠道：beta（测试版）",
   "settings.releaseChannel.nightly": "更新渠道：nightly（每日构建）",
   "settings.releaseChannelDesc": "渠道随安装包固定——安装 beta/nightly 安装包即可切换。",
+  "settings.ompUpdate": "检查 OMP 更新",
+  "settings.ompUpdateDesc": "独立于 App 更新内置的 OMP 引擎。",
+  "settings.ompUpdateChecking": "检查中…",
+  "settings.ompUpdateAvailable": "发现新版 OMP {version}",
+  "settings.ompUpdateLatest": "OMP 已是最新（{version}）",
+  "settings.ompUpdateDownload": "下载并安装",
+  "settings.ompUpdateDownloading": "下载中…",
+  "settings.ompUpdateDone": "已更新到 OMP {version}——重启 App 后生效",
+  "settings.ompUpdateError": "OMP 更新失败：{error}",
+  "settings.ompUpdateUnavailable": "最新 release 没有本平台的 OMP 预编译包",
   "settings.close": "关闭",
   "settings.sharedConfirm":
     "切换到共享 ~/.grok？数据不会静默合并，请确认。",

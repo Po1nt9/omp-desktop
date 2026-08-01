@@ -65,7 +65,11 @@ import {
   COMPOSER_PREFS_SCOPES,
   PERMISSION_POLICIES,
 } from "@/lib/modelOptions";
-import type { DetectedEditor } from "@/lib/api";
+import type {
+  DetectedEditor,
+  OmpUpdateApplied,
+  OmpUpdateCheck,
+} from "@/lib/api";
 import type { NeutralAccountStatus, NeutralSavedAccount } from "@/lib/displayIdentity";
 import * as api from "@/lib/api";
 import { AccountPanel } from "@/components/AccountPanel";
@@ -3010,6 +3014,7 @@ export function SettingsPage({
               </div>
             </div>
             <AboutUpdateRow t={t} />
+            <OmpUpdateRow t={t} />
           </div>
         )}
       </main>
@@ -3358,6 +3363,119 @@ function AboutUpdateRow({
         {assetNames && assetNames.length > 0 ? (
           <div className="settings-about-update__assets">
             {assetNames.slice(0, 6).join(" · ")}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Built-in OMP engine update row — independent of the app update row above. */
+function OmpUpdateRow({
+  t,
+}: {
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
+}) {
+  const [phase, setPhase] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "checked"; check: OmpUpdateCheck }
+    | { kind: "downloading" }
+    | { kind: "done"; applied: OmpUpdateApplied }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
+
+  const check = async () => {
+    setPhase({ kind: "checking" });
+    try {
+      setPhase({ kind: "checked", check: await api.ompCheckUpdate() });
+    } catch (e) {
+      setPhase({ kind: "error", message: String(e) });
+    }
+  };
+
+  const apply = async (url: string) => {
+    setPhase({ kind: "downloading" });
+    try {
+      setPhase({ kind: "done", applied: await api.ompApplyUpdate(url) });
+    } catch (e) {
+      setPhase({ kind: "error", message: String(e) });
+    }
+  };
+
+  const busy = phase.kind === "checking" || phase.kind === "downloading";
+  // Hoisted so the onClick closure gets a narrowed `string` (no `!`).
+  const downloadUrl =
+    phase.kind === "checked" &&
+    phase.check.updateAvailable &&
+    phase.check.downloadUrl
+      ? phase.check.downloadUrl
+      : null;
+  // Keep the button visible while downloading so the progress label shows.
+  const showDownload = downloadUrl !== null || phase.kind === "downloading";
+
+  return (
+    <div className="settings-row settings-row--stack">
+      <div className="settings-row__text">
+        <div className="settings-row__label">{t("settings.ompUpdate")}</div>
+        <div className="settings-row__desc">{t("settings.ompUpdateDesc")}</div>
+      </div>
+      <div className="settings-about-update">
+        <div className="settings-about-update__actions">
+          <button
+            type="button"
+            className="btn btn--solid"
+            disabled={busy}
+            onClick={() => void check()}
+          >
+            {phase.kind === "checking"
+              ? t("settings.ompUpdateChecking")
+              : t("settings.ompUpdate")}
+          </button>
+          {showDownload ? (
+            <button
+              type="button"
+              className="btn btn--solid"
+              disabled={busy}
+              onClick={() => {
+                if (downloadUrl) void apply(downloadUrl);
+              }}
+            >
+              {phase.kind === "downloading"
+                ? t("settings.ompUpdateDownloading")
+                : t("settings.ompUpdateDownload")}
+            </button>
+          ) : null}
+        </div>
+        {phase.kind === "checked" ? (
+          <div
+            className={
+              "settings-about-update__status" +
+              (phase.check.updateAvailable ? " is-available" : "")
+            }
+            role="status"
+          >
+            {phase.check.updateAvailable
+              ? phase.check.downloadUrl
+                ? t("settings.ompUpdateAvailable", {
+                    version: phase.check.latestVersion,
+                  })
+                : t("settings.ompUpdateUnavailable")
+              : t("settings.ompUpdateLatest", {
+                  version: phase.check.latestVersion,
+                })}
+          </div>
+        ) : null}
+        {phase.kind === "done" ? (
+          <div className="settings-about-update__status is-available" role="status">
+            {t("settings.ompUpdateDone", {
+              version: phase.applied.version ?? "",
+            })}
+          </div>
+        ) : null}
+        {phase.kind === "error" ? (
+          <div className="settings-about-update__err" role="alert">
+            {t("settings.ompUpdateError", { error: phase.message })}
           </div>
         ) : null}
       </div>
