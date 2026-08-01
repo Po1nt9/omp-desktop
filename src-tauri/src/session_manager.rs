@@ -2644,18 +2644,11 @@ impl SessionManager {
             return Ok(snap);
         }
 
-        // Plan 3 Task 5: discover the OMP Runtime binary. Prefer the user's
-        // manually-picked path (Settings → manual_cli_path); fall back to
-        // `None` to preserve the Plan 1 fail-closed behavior for environments
-        // without the runtime. The agent_dir is the independent runtime home
+        // Three-tier resolution (bundle-omp spec): manual override →
+        // in-app upgraded copy → bundled sidecar; None stays fail-closed.
+        // The agent_dir is the independent runtime home
         // (PI_CODING_AGENT_DIR) so the sidecar shares the host's auth/profile.
-        let binary_path = settings
-            .manual_cli_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(std::path::PathBuf::from)
-            .filter(|p| p.exists());
+        let binary_path = crate::omp_runtime::resolve_omp_binary(&settings);
         let agent_dir = Some(crate::agent_prefs::agent_grok_home(
             &settings.session_data_mode,
         ));

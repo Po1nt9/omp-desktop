@@ -22,6 +22,7 @@ mod mirror;
 mod mock_acp;
 mod models_catalog;
 mod omp_desktop_v1;
+mod omp_runtime;
 mod paths;
 mod process_util;
 mod process_limits;
