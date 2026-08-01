@@ -177,6 +177,89 @@ jobs:
              "src-tauri/binaries/${{ matrix.sidecar_name }}"
           "src-tauri/binaries/${{ matrix.sidecar_name }}" --version
 
+      # TEMP diagnostic: capture the real ldd/ld.so error on the bun sidecar
+      # (linuxdeploy's scan exits 1 on it). Runs BEFORE the ldd shim below is
+      # installed, so /usr/bin/ldd here is still the genuine glibc ldd.
+      - name: Diagnose ldd failure on omp sidecar (ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set +e
+          BIN="src-tauri/binaries/${{ matrix.sidecar_name }}"
+          ls -l "$BIN"
+          echo "--- readelf -d (NEEDED) ---"
+          readelf -d "$BIN" | grep -E "NEEDED|RPATH|RUNPATH"
+          echo "--- readelf -lW (INTERP) ---"
+          readelf -lW "$BIN" | grep -A1 INTERP
+          echo "--- which ldd ---"
+          type -a ldd
+          echo "--- env LD_* ---"
+          env | grep -i "^LD_" || echo "no LD_* env"
+          echo "--- /etc/ld.so.preload ---"
+          cat /etc/ld.so.preload 2>/dev/null || echo "no /etc/ld.so.preload"
+          echo "--- /usr/bin/ldd ---"
+          /usr/bin/ldd "$BIN" 2>&1; echo "ldd exit: $?"
+          echo "--- ld.so --verify ---"
+          /lib64/ld-linux-x86-64.so.2 --verify "$BIN" 2>&1; echo "verify exit: $?"
+          echo "--- ld.so trace ---"
+          LD_TRACE_LOADED_OBJECTS=1 /lib64/ld-linux-x86-64.so.2 "$BIN" 2>&1; echo "trace exit: $?"
+          exit 0
+
+      # TEMP: keep the exact runner-built binary for offline analysis.
+      - name: Upload omp linux sidecar (analysis)
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: omp-linux-sidecar
+          path: src-tauri/binaries/omp-x86_64-unknown-linux-gnu
+          retention-days: 1
+
+      # bundle-omp fix: linuxdeploy (invoked by tauri-bundler for the AppImage)
+      # runs `ldd` on every usr/bin executable and aborts when it exits non-zero
+      # ("Failed to run ldd: exited with code 1" on .../usr/bin/omp). On this
+      # runner glibc ldd fails on the bun-compiled sidecar although the binary
+      # itself executes fine (see the --version echo in the placement step).
+      # The sidecar's DT_NEEDED set is all system libs that linuxdeploy excludes
+      # from bundling, so an ldd shim that resolves NEEDED entries via readelf +
+      # ldconfig (and delegates every other file to the real ldd, backed up at
+      # /usr/bin/ldd.real) is safe. Installed over /usr/bin/ldd so both PATH and
+      # absolute-path invocations are intercepted.
+      - name: Install ldd shim for bun sidecar (ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f /usr/bin/ldd.real ]; then
+            sudo cp -a /usr/bin/ldd /usr/bin/ldd.real
+          fi
+          sudo tee /usr/bin/ldd >/dev/null <<'SHIM_EOF'
+          #!/bin/bash
+          # Shim over glibc ldd (real one at /usr/bin/ldd.real). Only the
+          # bun-compiled omp sidecar is intercepted; everything else delegates.
+          for last; do :; done
+          case "$last" in
+          */usr/bin/omp | */binaries/omp-*-unknown-linux-gnu)
+            printf '\tlinux-vdso.so.1 (0x00007ffff7fc0000)\n'
+            readelf -d "$last" | sed -n 's/.*NEEDED.*\[\(.*\)\].*/\1/p' | while read -r lib; do
+              path="$(ldconfig -p | awk -v n="$lib" '$1 == n {print $NF; exit}')"
+              if [ -n "$path" ]; then
+                printf '\t%s => %s (0x00007f0000000000)\n' "$lib" "$path"
+              else
+                printf '\t%s => not found\n' "$lib"
+              fi
+            done
+            printf '\t/lib64/ld-linux-x86-64.so.2 (0x00007f0000000000)\n'
+            exit 0
+            ;;
+          esac
+          exec /usr/bin/ldd.real "$@"
+          SHIM_EOF
+          sudo chmod 0755 /usr/bin/ldd
+          echo "--- shim output for sidecar ---"
+          /usr/bin/ldd "src-tauri/binaries/${{ matrix.sidecar_name }}"
+          echo "--- delegation check (main binary deps unchanged) ---"
+          /usr/bin/ldd --version | head -1
+
       # Release description = CHANGELOG.md section for this version (bilingual body).
       # Fails the job if `## [X.Y.Z]` is missing — write changelog before tagging.
       - name: Prepare release notes from CHANGELOG
@@ -272,21 +355,33 @@ jobs:
 
       # TEMP diagnostic: tauri-bundler captures linuxdeploy's stderr and reports
       # only "failed to run linuxdeploy". Re-run linuxdeploy manually against the
-      # leftover AppDir so its real error reaches the log. Remove once fixed.
+      # leftover AppDir so its real error reaches the log, and isolate whether
+      # the 190MB omp sidecar is the trigger (without it, then with it).
+      # Remove once the bundling failure is fixed.
       - name: Debug linuxdeploy failure (manual rerun)
         if: failure() && matrix.platform == 'ubuntu-22.04'
         shell: bash
         run: |
+          set +e
           df -h .
           APPDIR=$(echo src-tauri/target/release/bundle/appimage/*.AppDir)
-          du -sh "$APPDIR" || true
-          ls -la "$APPDIR/usr/bin/" || true
-          file "$APPDIR"/usr/bin/* || true
-          export PATH="$HOME/.cache/tauri:$PATH"
-          OUTPUT=/tmp/debug.AppImage ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 VERBOSE=1 \
-            "$HOME/.cache/tauri/linuxdeploy-x86_64.AppImage" \
-            --appimage-extract-and-run --verbosity 0 \
+          du -sh "$APPDIR"
+          ls -la "$APPDIR/usr/bin/"
+          file "$APPDIR"/usr/bin/*
+          LD_BIN="$HOME/.cache/tauri/linuxdeploy-x86_64.AppImage"
+          echo "=== linuxdeploy WITHOUT omp sidecar ==="
+          mv "$APPDIR/usr/bin/omp" /tmp/omp-sidecar-aside
+          OUTPUT=/tmp/debug-no-omp.AppImage ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 VERBOSE=1 \
+            "$LD_BIN" --verbosity 3 \
             --appdir "$APPDIR" --plugin gtk --output appimage
+          echo "RESULT-WITHOUT-OMP: exit=$?"
+          echo "=== linuxdeploy WITH omp sidecar ==="
+          mv /tmp/omp-sidecar-aside "$APPDIR/usr/bin/omp"
+          OUTPUT=/tmp/debug-with-omp.AppImage ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 VERBOSE=1 \
+            "$LD_BIN" --verbosity 3 \
+            --appdir "$APPDIR" --plugin gtk --output appimage
+          echo "RESULT-WITH-OMP: exit=$?"
+          exit 0
 
       # 绿色版：免安装 zip（单文件 exe + 说明）。WebView2 仍由系统提供。
       - name: Windows portable zip (绿色版)
