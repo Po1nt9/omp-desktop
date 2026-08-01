@@ -252,8 +252,8 @@ mod tests {
     fn with_test_home() -> (parking_lot::MutexGuard<'static, ()>, tempfile::TempDir) {
         let guard = crate::paths::APP_HOME_ENV_LOCK.lock();
         let dir = tempfile::tempdir().unwrap();
-        // SAFETY: serialized by APP_HOME_ENV_LOCK (process-wide env mutation).
-        unsafe { std::env::set_var("OMP_DESKTOP_HOME", dir.path()) };
+        // Serialized by APP_HOME_ENV_LOCK (process-wide env mutation; edition 2021 — set_var is safe).
+        std::env::set_var("OMP_DESKTOP_HOME", dir.path());
         (guard, dir)
     }
 

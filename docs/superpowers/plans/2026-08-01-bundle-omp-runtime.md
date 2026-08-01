@@ -22,7 +22,7 @@
 - README.md is Chinese (primary); README_EN.md is English. Keep both in sync.
 - Run `pnpm check:brand` before every commit that touches bundled artifacts or user-facing copy.
 - Full gates before the final commit: `cd src-tauri && cargo test --lib`, `pnpm test`, `pnpm typecheck`, `pnpm check:i18n`, `pnpm check:brand`, `pnpm check:provenance`, `pnpm check:legal`.
-- Rust env mutation in tests MUST hold `crate::paths::APP_HOME_ENV_LOCK` (parking_lot Mutex) and use `unsafe { std::env::set_var(...) }` (edition 2024).
+- Rust env mutation in tests MUST hold `crate::paths::APP_HOME_ENV_LOCK` (parking_lot Mutex); `std::env::set_var` is safe under this crate's edition 2021 (no `unsafe` block).
 
 ---
 
@@ -559,8 +559,8 @@ mod tests {
     fn with_test_home() -> (parking_lot::MutexGuard<'static, ()>, tempfile::TempDir) {
         let guard = crate::paths::APP_HOME_ENV_LOCK.lock();
         let dir = tempfile::tempdir().unwrap();
-        // SAFETY: serialized by APP_HOME_ENV_LOCK (process-wide env mutation).
-        unsafe { std::env::set_var("OMP_DESKTOP_HOME", dir.path()) };
+        // Serialized by APP_HOME_ENV_LOCK (process-wide env mutation; edition 2021 — set_var is safe).
+        std::env::set_var("OMP_DESKTOP_HOME", dir.path());
         (guard, dir)
     }
 
