@@ -148,15 +148,17 @@ Download from the [Releases page](https://github.com/Po1nt9/omp-desktop/releases
 > [signing requirements](./docs/release/signing-requirements.md) for the
 > remaining Plan 9 work and free alternatives (SignPath, Homebrew).
 
-### First run: point at the OMP Runtime
+### First run: bundled OMP engine
 
-OMP Desktop ships **without** a bundled Runtime — you provide the OMP CLI
-yourself so it can be upgraded independently. On first launch:
+OMP Desktop ships with the `omp` engine built in — compiled from the pinned
+`runtime/oh-my-pi` submodule — so it works out of the box with no separate
+Runtime install.
 
-1. Install the [OMP Runtime](https://github.com/can1357/oh-my-pi) CLI.
-2. Open **Settings** in OMP Desktop.
-3. Set the **Manual CLI path** to the `omp` (or `omp.exe`) binary location.
-4. Agent sessions now spawn the Runtime you pointed at.
+1. Just launch the app — no manual OMP CLI install needed.
+2. Advanced users can still override the bundled engine in **Settings** by
+   pointing the **Manual CLI path** at their own `omp` (or `omp.exe`) binary.
+3. The "Check OMP update" button under **Settings** → **About** upgrades `omp`
+   independently of the app.
 
 ## Provenance
 

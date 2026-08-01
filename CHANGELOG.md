@@ -5,6 +5,19 @@ All notable changes to OMP Desktop will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added / 新增
+
+- **Bundled omp Runtime:** the app now ships with the omp engine compiled from
+  the pinned `runtime/oh-my-pi` submodule — works out of the box, no manual CLI
+  install. Resolution order: manual override → in-app upgraded copy → bundled
+  sidecar. Settings → About gains "Check OMP update"（检查 OMP 更新）to upgrade
+  omp independently from upstream `can1357/oh-my-pi` releases.
+- **内置 omp 引擎：** App 现在自带由 `runtime/oh-my-pi` submodule 编译的 omp——开箱即用。
+  解析顺序：手动指定 → App 内升级副本 → 内置副本。设置 → 关于 新增「检查 OMP 更新」，
+  可独立于 App 从上游 `can1357/oh-my-pi` 升级 omp。
+
 ## [0.3.1-nightly] - 2026-07-31
 
 ### Changed / 变更
