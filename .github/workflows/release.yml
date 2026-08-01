@@ -45,15 +45,27 @@ jobs:
           - platform: macos-latest
             args: "--target aarch64-apple-darwin"
             name: macOS-ARM64
+            omp_target: darwin-arm64
+            omp_artifact: omp-darwin-arm64
+            sidecar_name: omp-aarch64-apple-darwin
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
             name: macOS-x64
+            omp_target: darwin-x64
+            omp_artifact: omp-darwin-x64
+            sidecar_name: omp-x86_64-apple-darwin
           - platform: windows-latest
             args: ""
             name: Windows-x64
+            omp_target: win32-x64
+            omp_artifact: omp-win32-x64.exe
+            sidecar_name: omp-x86_64-pc-windows-msvc.exe
           - platform: ubuntu-22.04
             args: ""
             name: Linux-x64
+            omp_target: linux-x64
+            omp_artifact: omp-linux-x64
+            sidecar_name: omp-x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.platform }}
     name: Build ${{ matrix.name }}
@@ -61,6 +73,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -101,6 +115,29 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      # bundle-omp: compile the pinned submodule Runtime for this target.
+      # build-binary.ts shells out to sibling workspace packages, so install
+      # and build run from the submodule workspace root.
+      - name: Build omp binary (submodule)
+        working-directory: runtime/oh-my-pi
+        env:
+          CROSS_TARGET: ${{ matrix.omp_target }}
+        run: |
+          bun install --frozen-lockfile
+          bun --cwd packages/coding-agent run build
+
+      - name: Place omp binary at sidecar path
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/binaries
+          cp "runtime/oh-my-pi/packages/coding-agent/dist/${{ matrix.omp_artifact }}" \
+             "src-tauri/binaries/${{ matrix.sidecar_name }}"
+          "src-tauri/binaries/${{ matrix.sidecar_name }}" --version
 
       # Release description = CHANGELOG.md section for this version (bilingual body).
       # Fails the job if `## [X.Y.Z]` is missing — write changelog before tagging.
