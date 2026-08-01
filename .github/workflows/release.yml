@@ -233,6 +233,8 @@ jobs:
           OMP_DESKTOP_UPDATER_ENDPOINT: ${{ steps.updchan.outputs.endpoint }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # TEMP diagnostic: surface linuxdeploy stderr for the Linux bundling failure.
+          VERBOSE: "1"
         with:
           # Root package.json + src-tauri/ layout (create-tauri-app style)
           projectPath: .
