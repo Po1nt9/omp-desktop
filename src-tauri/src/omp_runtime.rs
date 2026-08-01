@@ -59,7 +59,6 @@ pub fn resolve_omp_binary(settings: &crate::store::AppSettings) -> Option<PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn manual_wins_over_upgraded_and_bundled() {
