@@ -33,7 +33,7 @@ wins:
 ```
 1. settings.manual_cli_path        ← user manual override (existing, highest)
 2. <app_data>/runtime/omp[.exe]     ← in-app upgraded copy (writable, preferred over bundled)
-3. <bundle>/omp-<target>[.exe]      ← bundled sidecar copy (read-only, factory default, fallback)
+3. <bundle>/omp[.exe]                 ← bundled sidecar copy next to the main exe (read-only, factory default, fallback)
 ```
 
 - **Bundled copy:** compiled from submodule source in CI, named per Tauri
@@ -61,83 +61,116 @@ pinned, newer Runtime removes that version-skew class of error entirely.
 ### 1. Binary resolution (Rust)
 
 `session_manager.rs` — replace the inline `manual_cli_path` read with a new
-`resolve_omp_binary(settings, app_handle)`:
+`resolve_omp_binary(settings)`:
 
 ```rust
-fn resolve_omp_binary(settings, app_handle) -> Option<PathBuf> {
+fn resolve_omp_binary(settings: &AppSettings) -> Option<PathBuf> {
     // 1. manual override (existing logic)
     if manual_cli_path.exists() { return Some(that) }
     // 2. upgraded copy
     let upgraded = paths::app_data_root().join("runtime").join(omp_binary_name());
     if upgraded.exists() { return Some(upgraded) }
-    // 3. bundled sidecar
-    app_handle.sidecar("omp").ok().map(|cmd| cmd.path().into())
+    // 3. bundled sidecar — Tauri `externalBin` bundles it as plain `omp`
+    //    next to the main executable
+    std::env::current_exe().ok()
+        .and_then(|exe| exe.parent().map(|d| d.join(omp_binary_name())))
+        .filter(|p| p.exists())
 }
 ```
 
 - `omp_binary_name()` → `omp` (macOS/Linux) / `omp.exe` (Windows). The upgraded
   copy uses a single fixed name (no platform suffix) because each package only
   ever contains its own platform's binary.
-- Sidecar path via Tauri's `app_handle.sidecar("omp")` API — Tauri resolves the
-  correct `omp-<target>` suffix and sandboxed absolute path.
-- Change surface is this one function; `spawn_with_options` and the v1 env
-  injection are untouched.
+- Bundled path via `std::env::current_exe()` sibling lookup, NOT
+  `app_handle.sidecar()` — no `tauri-plugin-shell` dependency, and it works in
+  both spawn sites: `session_manager.rs` (has `AppHandle`) and
+  `remote_im/bridge.rs:170-176` (`start_async` has no `AppHandle`). Tauri
+  `externalBin = ["binaries/omp"]` bundles the per-target
+  `binaries/omp-<triple>` as plain `omp` (stripped suffix) next to the main
+  executable, so the sibling lookup finds it on all four targets.
+- Change surface is the new resolver plus swapping both binary-resolution
+  sites (`session_manager.rs:2652-2658`, `remote_im/bridge.rs:170-176`);
+  `spawn_with_options` and the v1 env injection are untouched.
 
 ### 2. CI compile step (release.yml)
 
-Each of the 4 existing build jobs (win-x64, mac-arm64, mac-x64, linux-x64)
-gains two steps **before** the Tauri build:
+The single `publish` matrix job (4 targets) in release.yml gains:
 
 ```yaml
+- uses: actions/checkout@v4
+  with:
+    submodules: true        # currently absent — releases build WITHOUT the submodule today
+
+- name: Setup Bun
+  uses: oven-sh/setup-bun@v2
+
 - name: Build omp binary (submodule)
-  working-directory: runtime/oh-my-pi/packages/coding-agent
+  working-directory: runtime/oh-my-pi
+  env:
+    CROSS_TARGET: ${{ matrix.omp_target }}
   run: |
     bun install --frozen-lockfile
-    bun run build
-  env:
-    OMP_COMPILE_TARGET: ${{ matrix.omp_target }}
+    bun --cwd packages/coding-agent run build
 
 - name: Place omp binary at sidecar path
+  shell: bash
   run: |
     mkdir -p src-tauri/binaries
-    cp runtime/oh-my-pi/packages/coding-agent/binaries/omp-* \
-       src-tauri/binaries/omp-${{ matrix.sidecar_target }}
+    cp "runtime/oh-my-pi/packages/coding-agent/dist/${{ matrix.omp_artifact }}" \
+       "src-tauri/binaries/${{ matrix.sidecar_name }}"
 ```
 
-- Matrix gains two fields per job: `omp_target` (Bun compile target, e.g.
-  `darwin-arm64`) and `sidecar_target` (Tauri target triple, e.g.
-  `aarch64-apple-darwin`).
-- Bun installed per-job via `oven-sh/setup-bun`.
-- `build-binary.ts` outputs to `packages/coding-agent/binaries/omp-<target>`;
-  copied to `src-tauri/binaries/omp-<sidecar_target>` where Tauri `externalBin`
-  finds it.
+- Matrix gains three fields per job (CROSS_TARGET / dist artifact / sidecar
+  name):
+  - mac-arm64: `darwin-arm64` → `omp-darwin-arm64` → `omp-aarch64-apple-darwin`
+  - mac-x64: `darwin-x64` → `omp-darwin-x64` → `omp-x86_64-apple-darwin`
+  - win-x64: `win32-x64` → `omp-win32-x64.exe` → `omp-x86_64-pc-windows-msvc.exe`
+  - linux-x64: `linux-x64` → `omp-linux-x64` → `omp-x86_64-unknown-linux-gnu`
+- The build must run from the **workspace root** of the submodule:
+  `build-binary.ts` shells out to sibling packages
+  (`gen:stats` / `gen:tool-views` / `gen:native` / `gen:mupdf`), so
+  `bun install --frozen-lockfile` runs in `runtime/oh-my-pi` and the build is
+  invoked as `bun --cwd packages/coding-agent run build`.
+- Output is `packages/coding-agent/dist/omp[-<CROSS_TARGET>]` (Bun appends
+  `.exe` for the win32 target) — NOT `binaries/`.
+- Each job compiles its own platform natively; `CROSS_TARGET` is still set so
+  the output carries the target suffix and `gen:native` gets the right
+  TARGET_PLATFORM/TARGET_ARCH.
+- `tauri.conf.json` gains `"externalBin": ["binaries/omp"]` under `bundle` —
+  Tauri picks up `binaries/omp-<triple>` per target and bundles it as plain
+  `omp` next to the main executable.
 - Current release already produces **separate single-arch** macOS packages
   (ARM64 DMG + x64 DMG as distinct artifacts), so sidecar per-arch naming works
   cleanly — no Universal-merge complication.
-- No new CI jobs; two extra steps in existing jobs.
+- No new CI jobs; extra steps inside the existing matrix job.
 
 ### 3. In-app omp upgrade ("检查 omp 更新")
 
 Flow:
 
 ```
-click "Check omp update"
-  → GET oh-my-pi releases/latest (tag + assets)
+click "检查 omp 更新"
+  → GET can1357/oh-my-pi releases/latest (tag + assets)
   → compare with current omp version (spawn `--version`, cached in Settings)
   → newer? no → "already up to date"
     yes → download omp-<target> to <app_data>/runtime/omp.new
-        → SHA256 vs release SHA256SUMS
-        → match? no → delete .new, "download corrupted"
-          yes → atomic rename .new → omp
-              → "update complete, restart to apply"
+        → executable-bit sanity check (+ SHA256 recorded to Settings)
+        → atomic rename .new → omp
+        → "update complete, restart to apply"
 ```
 
 - **Version detect:** spawn `<resolved omp> --version` once, cache result in
   Settings. No `--smoke-test` (too heavy).
-- **Download source:** GitHub API `repos/Po1nt9/oh-my-pi/releases/latest`;
-  pick `omp-<target>` asset + `SHA256SUMS`. SHA256 is sufficient today (omp
-  releases are not minisign-signed); signature check can be added later if omp
-  starts signing.
+- **Download source (decided 2026-08-01):** GitHub API
+  `repos/can1357/oh-my-pi/releases/latest` — the UPSTREAM repo; the
+  `Po1nt9/oh-my-pi` fork publishes no releases. Asset names per target:
+  `omp-darwin-arm64`, `omp-darwin-x64`, `omp-linux-x64`,
+  `omp-windows-x64.exe` (note: `windows`, not `win32`).
+- **Integrity:** upstream publishes no SHA256SUMS today (7 binary assets,
+  changelog-only body). Trust model is TLS + GitHub, same as installing omp
+  from npm/brew. The downloaded file's computed SHA256 is recorded in Settings
+  for audit; if a checksums asset ever appears on upstream releases, the
+  downloader verifies against it automatically (fail-closed on mismatch).
 - **Atomic replace:** write `.new`, verify, then `rename` (POSIX atomic;
   Windows `MoveFileEx` + `MOVEFILE_REPLACE_EXISTING`). On replace failure, keep
   the old copy — a failed upgrade never breaks availability.
@@ -155,7 +188,7 @@ click "Check omp update"
 | Bundled copy missing (packaging error) | Fall through to upgraded copy, then manual path, then fail-closed (existing "Runtime not configured") |
 | Upgraded copy corrupt (interrupted download / bad hash) | Delete `.new`, silently fall back to bundled; user unaffected |
 | Upgrade download network failure | "Network error, retry later"; bundled copy keeps working |
-| SHA256 mismatch | Delete `.new`, "downloaded file corrupted", no replace |
+| Checksums asset present but hash mismatch | Delete `.new`, "downloaded file corrupted", no replace |
 | Replace permission denied (Windows file lock) | Keep old copy, "close all sessions and retry" |
 | omp crashes on launch (version incompat) | Existing supervisor crash detection flips `unavailable` (`session_manager.rs:3636`); user reverts to bundled by deleting upgraded copy |
 | GitHub API rate limit | "update check failed, retry later"; App unaffected |
@@ -180,7 +213,7 @@ click "Check omp update"
                                                                 v
 [Package] omp-<target> embedded read-only ---------------> spawn fallback (tier 3)
 
-[User] "Check omp update" --> oh-my-pi Releases --> download+SHA256 --> atomic rename
+[User] "检查 omp 更新" --> can1357/oh-my-pi Releases --> download (TLS) --> atomic rename
                                                                 |
                                                                 v
                                               <app_data>/runtime/omp (tier 2)
@@ -195,8 +228,9 @@ click "Check omp update"
 - **Unit (Rust):** `omp_binary_name()` per-platform.
 - **Integration:** spawn resolves to bundled copy in a clean env (no manual
   path, no upgraded copy) — proves out-of-box path.
-- **Upgrade flow:** mock GitHub release server (fixture assets + SHA256SUMS) —
-  happy path download/replace; corrupt-hash rejection; rename-failure keeps old.
+- **Upgrade flow:** mock GitHub release server (fixture assets, optional
+  checksums) — happy path download/replace; checksum-mismatch rejection when a
+  checksums fixture is present; rename-failure keeps old.
 - **Rollback:** after placing an upgraded copy, delete it → next spawn resolves
   to bundled.
 - **CI:** each of the 4 build jobs produces a package whose bundled omp runs
@@ -205,6 +239,7 @@ click "Check omp update"
 ## Out of scope
 
 - Changing how `manual_cli_path` / Settings UI works today (kept as-is).
-- Signing the omp upgrade download beyond SHA256 (omp releases unsigned today).
+- Release-signing the omp upgrade download (upstream ships unsigned binaries;
+  integrity is TLS + GitHub, checksum auto-verify when upstream adds them).
 - Windows/macOS-Intel or IM-channel acceptance items (waived 2026-07-31, see
   `docs/release/1.0-acceptance-matrix.md` header).
