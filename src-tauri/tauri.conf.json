@@ -54,6 +54,9 @@
   },
   "bundle": {
     "active": true,
+    "externalBin": [
+      "binaries/omp"
+    ],
     "targets": [
       "app",
       "dmg",
