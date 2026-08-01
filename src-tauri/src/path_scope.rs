@@ -137,6 +137,11 @@ mod tests {
 
     fn with_isolated_roots(project: &Path, app: &Path, include_temp: bool, f: impl FnOnce()) {
         let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // Also hold the process-wide app-home lock: every other test module
+        // that overrides OMP_DESKTOP_HOME serializes on APP_HOME_ENV_LOCK, so
+        // mutating the same env var under only our private TEST_LOCK races
+        // them (flaky journal/recovery/omp-update suite failures).
+        let _env = crate::paths::APP_HOME_ENV_LOCK.lock();
         let prev = std::env::var("OMP_DESKTOP_HOME").ok();
         std::env::set_var("OMP_DESKTOP_HOME", app);
         let _ = fs::create_dir_all(app);
