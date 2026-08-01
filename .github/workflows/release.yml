@@ -119,6 +119,22 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
+      # bundle-omp: build-binary.ts embeds prebuilt pi_natives addons. Fetch
+      # them from the @oh-my-pi/pi-natives-<platform> npm package at the
+      # submodule's own version (native sources are unchanged at that pin).
+      - name: Fetch prebuilt pi-natives addon (npm)
+        shell: bash
+        run: |
+          set -euo pipefail
+          NATIVES_DIR="runtime/oh-my-pi/packages/natives/native"
+          VER="$(node -p "require('./runtime/oh-my-pi/packages/natives/package.json').version")"
+          TMP="$(mktemp -d)"
+          npm pack "@oh-my-pi/pi-natives-${{ matrix.omp_target }}@${VER}" --pack-destination "$TMP"
+          tar xzf "$TMP"/*.tgz -C "$TMP"
+          mkdir -p "$NATIVES_DIR"
+          cp "$TMP"/package/*.node "$NATIVES_DIR"/
+          ls -l "$NATIVES_DIR"
+
       # bundle-omp: compile the pinned submodule Runtime for this target.
       # build-binary.ts shells out to sibling workspace packages, so install
       # and build run from the submodule workspace root.
