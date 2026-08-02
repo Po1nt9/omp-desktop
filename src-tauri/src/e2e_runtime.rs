@@ -1,6 +1,6 @@
 //! E2E harness + tests driving a real spawned mock ACP Runtime process
-//! (AC-2.9 happy-path, AC-7.1 crash injection). The mock binary
-//! (`src/bin/mock_acp_runtime.rs`) speaks newline-delimited JSON-RPC over
+//! (AC-2.9 happy-path, AC-7.1 crash injection). The mock
+//! (`examples/mock_acp_runtime.rs`) speaks newline-delimited JSON-RPC over
 //! stdio and sources replies from the golden fixtures.
 
 use crate::acp_client::{AcpClient, AcpEvent, SpawnOptions, StreamKind};
@@ -8,14 +8,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-/// Absolute path to the built mock binary. `CARGO_BIN_EXE_*` is only set for
-/// integration tests, so unit (lib) tests rely on the target-dir fallback —
-/// CI builds the bin explicitly before `cargo test` for that reason.
+/// Absolute path to the built mock. The mock is a cargo **example** (not a
+/// bin) so Tauri's bundler never ships it in release packages; `cargo test`
+/// does not build examples, so CI builds it explicitly beforehand.
 pub(crate) fn mock_runtime_path() -> PathBuf {
-    if let Some(p) = option_env!("CARGO_BIN_EXE_mock_acp_runtime") {
-        return PathBuf::from(p);
-    }
-    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/mock_acp_runtime");
+    let base =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/examples/mock_acp_runtime");
     let p = if base.exists() {
         base
     } else {
@@ -23,7 +21,7 @@ pub(crate) fn mock_runtime_path() -> PathBuf {
     };
     assert!(
         p.exists(),
-        "mock_acp_runtime not built; run `cargo build --bin mock_acp_runtime` first"
+        "mock_acp_runtime not built; run `cargo build --example mock_acp_runtime` first"
     );
     p
 }

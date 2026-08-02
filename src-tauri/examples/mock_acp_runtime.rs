@@ -15,10 +15,10 @@
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 
-const HANDSHAKE: &str = include_str!("../../tests/fixtures/acp/handshake_initialize.json");
-const STREAM: &str = include_str!("../../tests/fixtures/acp/stream_chunks.json");
-const PERMISSION: &str = include_str!("../../tests/fixtures/acp/permission_request.json");
-const TOOLCALL: &str = include_str!("../../tests/fixtures/acp/tool_call_updates.json");
+const HANDSHAKE: &str = include_str!("../tests/fixtures/acp/handshake_initialize.json");
+const STREAM: &str = include_str!("../tests/fixtures/acp/stream_chunks.json");
+const PERMISSION: &str = include_str!("../tests/fixtures/acp/permission_request.json");
+const TOOLCALL: &str = include_str!("../tests/fixtures/acp/tool_call_updates.json");
 
 fn fixture(raw: &str) -> Value {
     serde_json::from_str(raw).expect("fixture parses")
